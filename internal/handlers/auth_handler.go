@@ -46,7 +46,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := h.authService.Login(r.Context(), services.LoginInput{
-		Email:    req.Email,
+		Login:    req.Login,
 		Password: req.Password,
 	})
 	if err != nil {

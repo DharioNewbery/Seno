@@ -14,6 +14,7 @@ type userResponse struct {
 	ID        uuid.UUID `json:"id"`
 	FullName  string    `json:"full_name"`
 	Email     string    `json:"email"`
+	Username  *string   `json:"username,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -22,6 +23,7 @@ func toUserResponse(u models.User) userResponse {
 		ID:        u.ID,
 		FullName:  u.FullName,
 		Email:     u.Email,
+		Username:  u.Username,
 		CreatedAt: u.CreatedAt,
 	}
 }
@@ -41,7 +43,7 @@ type registerRequest struct {
 }
 
 type loginRequest struct {
-	Email    string `json:"email"`
+	Login    string `json:"login"`
 	Password string `json:"password"`
 }
 

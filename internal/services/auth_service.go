@@ -108,8 +108,9 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (*Register
 	return &RegisterResult{User: *user}, nil
 }
 
+// LoginInput aceita email ou nome de usuário como identificador de login.
 type LoginInput struct {
-	Email    string
+	Login    string
 	Password string
 }
 
@@ -120,13 +121,25 @@ type LoginResult struct {
 }
 
 func (in LoginInput) validate() *ValidationError {
-	if !isValidEmail(in.Email) {
-		return NewValidationError("email inválido")
+	login := normalizeLogin(in.Login)
+	if login == "" {
+		return NewValidationError("login é obrigatório")
+	}
+	if strings.Contains(login, "@") {
+		if !isValidEmail(login) {
+			return NewValidationError("email inválido")
+		}
+	} else if !isValidUsername(login) {
+		return NewValidationError("nome de usuário deve ter entre 3 e 100 caracteres, sem espaços")
 	}
 	if in.Password == "" {
 		return NewValidationError("senha é obrigatória")
 	}
 	return nil
+}
+
+func normalizeLogin(login string) string {
+	return strings.ToLower(strings.TrimSpace(login))
 }
 
 // Login valida as credenciais, controla tentativas falhas e emite o par de tokens.
@@ -135,7 +148,7 @@ func (s *AuthService) Login(ctx context.Context, in LoginInput) (*LoginResult, e
 		return nil, vErr
 	}
 
-	user, err := s.userRepo.GetByEmail(ctx, in.Email)
+	user, err := s.userRepo.GetByLogin(ctx, normalizeLogin(in.Login))
 	if err != nil {
 		if errors.Is(err, repositories.ErrUserNotFound) {
 			return nil, ErrInvalidCredentials
@@ -259,4 +272,14 @@ func isValidEmail(email string) bool {
 		return false
 	}
 	return strings.Contains(email[at+1:], ".")
+}
+
+// isValidUsername verifica o formato básico de nome de usuário: 3 a 100
+// caracteres, sem espaços. A comparação é case-insensitive (normalização
+// para lowercase em normalizeLogin).
+func isValidUsername(u string) bool {
+	if len(u) < 3 || len(u) > 100 {
+		return false
+	}
+	return !strings.ContainsAny(u, " \t\r\n")
 }
