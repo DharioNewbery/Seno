@@ -1,0 +1,26 @@
+# Binários
+/bin/
+*.exe
+*.exe~
+seno-api
+
+# Ambiente
+.env
+*.local
+.env.local
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/
+
+# Logs
+*.log
