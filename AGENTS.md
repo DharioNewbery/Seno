@@ -92,6 +92,7 @@ web/                       # Interface web estática (embed em web.go) + STYLEGU
 - `ChangePassword`: verifica senha atual, atualiza e **revoga todos os refresh tokens** (outras sessões caem).
 - Cadastro de professores: transação única em `professors` (composição 1:1 com `users`) — `ProfessorRepository.CreateWithAccount`.
 - Criação de contas com perfil (professores/alunos) compartilha o helper transacional `repositories/account.go` (`createProfiledAccount`).
+- **Turmas:** professor cria (`POST /classes`) com `join_code` gerado pelo serviço (6 caracteres, sem ambíguos, retry em colisão); aluno ingressa via `POST /classes/join` (valida papel `student`, idempotente); listagens por papel (`GET /classes` do professor, `GET /classes/mine` do aluno). Associação N:M em `class_members`.
 
 ## Padrão de resposta HTTP
 
@@ -139,6 +140,10 @@ go build -o bin/seno-api ./cmd/api
 | GET    | /api/v1/users/{id}    | Bearer | Obter usuário por id            |
 | POST   | /api/v1/professors   | Bearer (super) | Cadastrar professor (senha temporária) |
 | GET    | /api/v1/professors   | Bearer (super) | Listar professores              |
+| POST   | /api/v1/classes      | Bearer (professor) | Criar turma (gera join_code) |
+| GET    | /api/v1/classes      | Bearer (professor) | Listar turmas do professor   |
+| POST   | /api/v1/classes/join | Bearer | Ingressar em turma por código     |
+| GET    | /api/v1/classes/mine | Bearer | Turmas do aluno autenticado       |
 
 ## Como adicionar uma feature (ex.: entidade Product)
 
