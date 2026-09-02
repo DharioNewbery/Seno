@@ -15,6 +15,7 @@ import (
 	appmw "seno/internal/middleware"
 	"seno/internal/utils/jwt"
 	"seno/pkg/response"
+	"seno/web"
 )
 
 type Server struct {
@@ -73,6 +74,9 @@ func New(
 		// 		Get("/admin", adminHandler.Dashboard)
 		// })
 	})
+
+	// Interface web (arquivos estáticos embutidos em web/static)
+	r.Handle("/*", web.Handler())
 
 	_ = roleChecker // disponível para rotas protegidas por papel/permissão
 
