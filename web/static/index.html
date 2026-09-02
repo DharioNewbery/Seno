@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seno — Entrar</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="auth-wrap">
+    <section id="view-login" class="card">
+      <header class="auth-header">
+        <h1>Seno</h1>
+        <p class="muted">Sistema de entrega de tarefas de programação</p>
+      </header>
+
+      <form id="login-form" novalidate>
+        <div class="field">
+          <label for="login">Login</label>
+          <input type="text" id="login" name="login" autocomplete="username"
+                 placeholder="Email ou nome de usuário" required>
+        </div>
+
+        <div class="field">
+          <label for="password">Senha</label>
+          <input type="password" id="password" name="password"
+                 autocomplete="current-password" required>
+        </div>
+
+        <p id="login-error" class="alert alert--error hidden" role="alert"></p>
+
+        <button type="submit" id="login-submit" class="btn btn--primary btn--block">Entrar</button>
+      </form>
+    </section>
+
+    <section id="view-me" class="card hidden">
+      <header class="auth-header">
+        <h1>Seno</h1>
+        <p class="muted">Sessão iniciada</p>
+      </header>
+
+      <dl class="profile">
+        <dt>Nome</dt>
+        <dd id="me-name"></dd>
+        <dt>Email</dt>
+        <dd id="me-email"></dd>
+        <dt>Usuário</dt>
+        <dd id="me-username"></dd>
+        <dt>Papéis</dt>
+        <dd id="me-roles"></dd>
+      </dl>
+
+      <button type="button" id="logout" class="btn btn--block">Sair</button>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
