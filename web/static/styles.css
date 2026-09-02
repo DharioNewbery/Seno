@@ -14,6 +14,7 @@
   --color-success-bg: #e6f4ea;
   --color-badge-bg: #dff0ee;
   --color-badge-text: #0b5d56;
+  --color-code-bg: #f6f9f9;
 
   --radius: 8px;
   --space-1: 4px;
@@ -133,6 +134,30 @@ body {
   box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
 }
 
+/* Textarea e select seguem o mesmo estilo de input */
+.field textarea,
+.field select {
+  width: 100%;
+  padding: 10px var(--space-3);
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.field textarea:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+}
+
 /* Botões */
 .btn {
   display: inline-block;
@@ -179,6 +204,62 @@ body {
   color: var(--color-badge-text);
   border-radius: 4px;
   padding: 2px var(--space-2);
+}
+
+/* Tarefa: enunciado e código de submissões */
+.statement {
+  white-space: pre-wrap;
+}
+
+.code-block {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3);
+  overflow-x: auto;
+  background: var(--color-code-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace;
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
+}
+
+/* IDE (CodeMirror) */
+.editor-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.CodeMirror {
+  height: 480px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace;
+  font-size: var(--font-size-md);
+  line-height: 1.45;
+}
+
+/* Histórico de submissões */
+.submission-item {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.submission-item:last-child {
+  border-bottom: none;
+}
+
+.submission-item .btn--small {
+  margin-top: var(--space-2);
+}
+
+.submission-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
 }
 
 .btn:disabled {

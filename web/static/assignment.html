@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seno — Tarefa</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/vendor/codemirror.min.css">
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <h1 id="assignment-title">Tarefa</h1>
+      <a class="btn" href="#" id="back-link">Voltar</a>
+    </header>
+
+    <section class="card">
+      <p class="muted" id="assignment-meta"></p>
+      <div id="assignment-statement" class="statement"></div>
+    </section>
+
+    <section class="card" id="editor-card">
+      <div class="editor-toolbar">
+        <span class="muted" id="draft-status">Rascunho salvo automaticamente</span>
+        <span class="muted" id="editor-language"></span>
+      </div>
+      <textarea id="editor" aria-label="Editor de código"></textarea>
+      <p id="submit-error" class="alert alert--error hidden" role="alert"></p>
+      <p id="submit-success" class="alert alert--success hidden" role="status"></p>
+      <button type="button" id="submit-code" class="btn btn--primary btn--block">Enviar submissão</button>
+    </section>
+
+    <section class="card">
+      <h2 id="submissions-title">Submissões</h2>
+      <div id="submissions-list"></div>
+      <p id="submissions-empty" class="muted hidden">Nenhuma submissão ainda.</p>
+    </section>
+  </main>
+
+  <script src="/vendor/codemirror.min.js"></script>
+  <script src="/vendor/mode/python.min.js"></script>
+  <script src="/vendor/mode/clike.min.js"></script>
+  <script src="/common.js"></script>
+  <script src="/assignment.js"></script>
+</body>
+</html>
