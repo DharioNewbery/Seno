@@ -41,6 +41,24 @@ func main() {
 
 	jwtMgr := jwt.NewManager(cfg.JWT)
 
+	// Email sintético do superusuário (conta de sistema, não vinculada a uma pessoa).
+	superInput := services.SuperUserInput{
+		Login:    cfg.Super.Login,
+		Email:    "super@seno.local",
+		FullName: "SUPER",
+		Password: cfg.Super.Password,
+	}
+	seedService := services.NewSeedService(userRepo, credentialRepo, roleRepo)
+	created, err := seedService.EnsureSuperUser(context.Background(), superInput)
+	if err != nil {
+		log.Fatalf("Falha ao garantir superusuário: %v", err)
+	}
+	if created {
+		log.Printf("Superusuário criado (login: %s). Senha temporária: troque após o primeiro login.", superInput.Login)
+	} else {
+		log.Printf("Superusuário já existente (login: %s); seed ignorado.", superInput.Login)
+	}
+
 	authService := services.NewAuthService(userRepo, credentialRepo, roleRepo, refreshRepo, jwtMgr)
 	userService := services.NewUserService(userRepo, roleRepo)
 
