@@ -70,7 +70,7 @@ type ClassRepository interface {
 
 // AssignmentRepository define o contrato de acesso a dados de tarefas e submissões.
 type AssignmentRepository interface {
-	Create(ctx context.Context, a *models.Assignment) error
+	CreateWithTests(ctx context.Context, a *models.Assignment, tests []models.AssignmentTest) error
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Assignment, error)
 	GetDetail(ctx context.Context, id uuid.UUID) (*models.AssignmentDetail, error)
 	ListByClass(ctx context.Context, classID uuid.UUID) ([]models.AssignmentSummary, error)
@@ -82,6 +82,31 @@ type AssignmentRepository interface {
 	ListSubmissionsByStudent(ctx context.Context, assignmentID, studentUserID uuid.UUID) ([]models.SubmissionView, error)
 	UpsertDraft(ctx context.Context, d *models.Draft) error
 	GetDraft(ctx context.Context, assignmentID, studentUserID uuid.UUID) (*models.Draft, error)
+	ListTests(ctx context.Context, assignmentID uuid.UUID) ([]models.AssignmentTest, error)
+	ListPendingSubmissions(ctx context.Context, limit int) ([]models.Submission, error)
+	UpdateSubmissionResult(ctx context.Context, id uuid.UUID, status, result string) error
+}
+
+// RunRequest é uma execução isolada de código (um caso de teste).
+type RunRequest struct {
+	Language   string
+	SourceCode string
+	Stdin      string
+}
+
+// RunResult é a saída de uma execução isolada.
+type RunResult struct {
+	Stdout     string
+	Stderr     string
+	ExitCode   int
+	TimedOut   bool
+	DurationMs int64
+}
+
+// CodeRunner executa código em ambiente isolado (container efêmero),
+// implementado por internal/runner.
+type CodeRunner interface {
+	Run(ctx context.Context, req RunRequest) (RunResult, error)
 }
 
 // JWTManager define o contrato do emissor/validador de tokens.
