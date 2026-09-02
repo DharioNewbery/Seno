@@ -9,7 +9,7 @@ import (
 var (
 	ErrUserNotFound         = errors.New("usuário não encontrado")
 	ErrCredentialNotFound   = errors.New("credencial não encontrada")
-	ErrUserAlreadyExists    = errors.New("usuário já cadastrado com este email")
+	ErrUserAlreadyExists    = errors.New("usuário já cadastrado com este email ou nome de usuário")
 	ErrRoleNotFound         = errors.New("papel não encontrado")
 	ErrPermissionNotFound   = errors.New("permissão não encontrada")
 	ErrRefreshTokenNotFound = errors.New("token de atualização não encontrado")
