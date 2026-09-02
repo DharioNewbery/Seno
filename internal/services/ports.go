@@ -68,6 +68,20 @@ type ClassRepository interface {
 	AddMember(ctx context.Context, classID, studentUserID uuid.UUID) (bool, error)
 }
 
+// AssignmentRepository define o contrato de acesso a dados de tarefas e submissões.
+type AssignmentRepository interface {
+	Create(ctx context.Context, a *models.Assignment) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Assignment, error)
+	GetDetail(ctx context.Context, id uuid.UUID) (*models.AssignmentDetail, error)
+	ListByClass(ctx context.Context, classID uuid.UUID) ([]models.AssignmentSummary, error)
+	ListByStudent(ctx context.Context, studentUserID uuid.UUID) ([]models.AssignmentSummary, error)
+	IsClassOwner(ctx context.Context, classID, professorUserID uuid.UUID) (bool, error)
+	IsClassMember(ctx context.Context, classID, studentUserID uuid.UUID) (bool, error)
+	CreateSubmission(ctx context.Context, s *models.Submission) error
+	ListSubmissionsByAssignment(ctx context.Context, assignmentID uuid.UUID) ([]models.SubmissionView, error)
+	ListSubmissionsByStudent(ctx context.Context, assignmentID, studentUserID uuid.UUID) ([]models.SubmissionView, error)
+}
+
 // JWTManager define o contrato do emissor/validador de tokens.
 type JWTManager interface {
 	GenerateTokenPair(userID uuid.UUID, email string) (*jwt.TokenPair, error)
