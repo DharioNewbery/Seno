@@ -12,6 +12,9 @@ import (
 // professorRoleName é o papel atribuído a toda conta de professor (migration 003).
 const professorRoleName = "professor"
 
+// professorProfileTable é a tabela de composição 1:1 do perfil de professor.
+const professorProfileTable = "professors"
+
 type ProfessorRepository struct {
 	db *sqlx.DB
 }
@@ -21,52 +24,9 @@ func NewProfessorRepository(db *sqlx.DB) *ProfessorRepository {
 }
 
 // CreateWithAccount cria a conta completa de professor (usuário, credencial,
-// vínculo e papel) em uma única transação: ou tudo existe, ou nada.
+// vínculo e papel) em uma única transação.
 func (r *ProfessorRepository) CreateWithAccount(ctx context.Context, user *models.User, passwordHash string) error {
-	tx, err := r.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("erro ao iniciar transação: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }() // no-op após Commit
-
-	if err := tx.QueryRowxContext(ctx,
-		`INSERT INTO users (full_name, email, username)
-		VALUES ($1, $2, $3)
-		RETURNING id, full_name, email, username, created_at, updated_at`,
-		user.FullName, user.Email, user.Username).StructScan(user); err != nil {
-		if isUniqueViolation(err) {
-			return ErrUserAlreadyExists
-		}
-		return fmt.Errorf("erro ao criar usuário: %w", err)
-	}
-
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO user_credentials (user_id, password_hash) VALUES ($1, $2)`,
-		user.ID, passwordHash); err != nil {
-		return fmt.Errorf("erro ao criar credencial: %w", err)
-	}
-
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO professors (user_id) VALUES ($1)`,
-		user.ID); err != nil {
-		return fmt.Errorf("erro ao criar vínculo de professor: %w", err)
-	}
-
-	res, err := tx.ExecContext(ctx,
-		`INSERT INTO user_roles (user_id, role_id)
-		SELECT $1, id FROM roles WHERE name = $2`,
-		user.ID, professorRoleName)
-	if err != nil {
-		return fmt.Errorf("erro ao atribuir papel de professor: %w", err)
-	}
-	if rows, _ := res.RowsAffected(); rows == 0 {
-		return ErrRoleNotFound
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("erro ao confirmar transação: %w", err)
-	}
-	return nil
+	return createProfiledAccount(ctx, r.db, user, passwordHash, professorProfileTable, professorRoleName)
 }
 
 // List retorna os professores ativos com seus dados públicos, ordenados
