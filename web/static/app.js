@@ -1,11 +1,6 @@
 "use strict";
 
-// Seno — comportamento da página de login (MVP).
-// Convenções em web/STYLEGUIDE.md.
-
-var API = "/api/v1";
-var ACCESS_KEY = "seno.access";
-var REFRESH_KEY = "seno.refresh";
+// Seno — página de login e sessão (MVP). Utilitários em common.js.
 
 var viewLogin = document.getElementById("view-login");
 var viewMe = document.getElementById("view-me");
@@ -13,71 +8,19 @@ var loginForm = document.getElementById("login-form");
 var loginInput = document.getElementById("login");
 var passwordInput = document.getElementById("password");
 var loginError = document.getElementById("login-error");
+var loginNotice = document.getElementById("login-notice");
 var loginSubmit = document.getElementById("login-submit");
 var logoutButton = document.getElementById("logout");
-
-function accessToken() {
-  return localStorage.getItem(ACCESS_KEY);
-}
-
-function clearSession() {
-  localStorage.removeItem(ACCESS_KEY);
-  localStorage.removeItem(REFRESH_KEY);
-}
-
-// request injeta o Bearer, interpreta o envelope padrao da API e repete a
-// chamada uma unica vez caso o access token tenha expirado (refresh).
-async function request(path, options, retried) {
-  options = options || {};
-  var headers = { "Content-Type": "application/json" };
-  if (accessToken()) {
-    headers["Authorization"] = "Bearer " + accessToken();
-  }
-
-  var resp = await fetch(API + path, {
-    method: options.method || "GET",
-    headers: headers,
-    body: options.body
-  });
-  var payload = await resp.json().catch(function () { return null; });
-
-  if (resp.status === 401 && !retried && path !== "/auth/login" && path !== "/auth/refresh") {
-    if (await tryRefresh()) {
-      return request(path, options, true);
-    }
-  }
-
-  if (!resp.ok) {
-    throw new Error((payload && payload.error) || "Falha de comunicação com o servidor");
-  }
-  return payload && payload.data;
-}
-
-async function tryRefresh() {
-  var refreshToken = localStorage.getItem(REFRESH_KEY);
-  if (!refreshToken) {
-    return false;
-  }
-
-  var resp = await fetch(API + "/auth/refresh", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token: refreshToken })
-  });
-  if (!resp.ok) {
-    clearSession();
-    return false;
-  }
-
-  var payload = await resp.json();
-  localStorage.setItem(ACCESS_KEY, payload.data.access_token);
-  localStorage.setItem(REFRESH_KEY, payload.data.refresh_token);
-  return true;
-}
+var linkProfessors = document.getElementById("link-professors");
+var changePasswordForm = document.getElementById("change-password-form");
+var currentPasswordInput = document.getElementById("current-password");
+var newPasswordInput = document.getElementById("new-password");
+var changePasswordError = document.getElementById("change-password-error");
+var changePasswordSubmit = document.getElementById("change-password-submit");
 
 async function handleLogin(event) {
   event.preventDefault();
-  hideLoginError();
+  hideLoginMessages();
 
   var login = loginInput.value.trim();
   var password = passwordInput.value;
@@ -105,25 +48,37 @@ async function handleLogin(event) {
 async function showMe() {
   try {
     var data = await request("/auth/me");
-    document.getElementById("me-name").textContent = data.user.full_name;
-    document.getElementById("me-email").textContent = data.user.email;
-    document.getElementById("me-username").textContent = data.user.username || "—";
-
-    var roles = document.getElementById("me-roles");
-    roles.innerHTML = "";
-    (data.roles || []).forEach(function (role) {
-      var badge = document.createElement("span");
-      badge.className = "badge";
-      badge.textContent = role.name;
-      roles.appendChild(badge);
-    });
-
+    var user = {
+      full_name: data.user.full_name,
+      email: data.user.email,
+      username: data.user.username || null,
+      roles: (data.roles || []).map(function (role) { return role.name; })
+    };
+    saveUser(user);
+    renderMe(user);
     viewLogin.classList.add("hidden");
     viewMe.classList.remove("hidden");
   } catch (err) {
     clearSession();
     showLoginView();
   }
+}
+
+function renderMe(user) {
+  document.getElementById("me-name").textContent = user.full_name;
+  document.getElementById("me-email").textContent = user.email;
+  document.getElementById("me-username").textContent = user.username || "—";
+
+  var roles = document.getElementById("me-roles");
+  roles.innerHTML = "";
+  (user.roles || []).forEach(function (name) {
+    var badge = document.createElement("span");
+    badge.className = "badge";
+    badge.textContent = name;
+    roles.appendChild(badge);
+  });
+
+  linkProfessors.classList.toggle("hidden", !hasRole(user, "super"));
 }
 
 function showLoginView() {
@@ -136,8 +91,14 @@ function showLoginError(message) {
   loginError.classList.remove("hidden");
 }
 
-function hideLoginError() {
+function showLoginNotice(message) {
+  loginNotice.textContent = message;
+  loginNotice.classList.remove("hidden");
+}
+
+function hideLoginMessages() {
   loginError.classList.add("hidden");
+  loginNotice.classList.add("hidden");
 }
 
 function setLoading(loading) {
@@ -145,7 +106,46 @@ function setLoading(loading) {
   loginSubmit.textContent = loading ? "Entrando..." : "Entrar";
 }
 
+async function handleChangePassword(event) {
+  event.preventDefault();
+  changePasswordError.classList.add("hidden");
+
+  var currentPassword = currentPasswordInput.value;
+  var newPassword = newPasswordInput.value;
+  if (!currentPassword || !newPassword) {
+    showChangePasswordError("Preencha os dois campos.");
+    return;
+  }
+
+  changePasswordSubmit.disabled = true;
+  try {
+    await request("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword
+      })
+    });
+    // O servidor revogou os refresh tokens: encerra a sessão para
+    // entrar novamente com a nova senha.
+    clearSession();
+    changePasswordForm.reset();
+    showLoginView();
+    showLoginNotice("Senha alterada com sucesso. Entre com a nova senha.");
+  } catch (err) {
+    showChangePasswordError(err.message);
+  } finally {
+    changePasswordSubmit.disabled = false;
+  }
+}
+
+function showChangePasswordError(message) {
+  changePasswordError.textContent = message;
+  changePasswordError.classList.remove("hidden");
+}
+
 loginForm.addEventListener("submit", handleLogin);
+changePasswordForm.addEventListener("submit", handleChangePassword);
 
 logoutButton.addEventListener("click", function () {
   clearSession();
@@ -153,7 +153,7 @@ logoutButton.addEventListener("click", function () {
   passwordInput.value = "";
 });
 
-// Restaura sessao existente (se o token ainda for valido)
+// Restaura sessão existente (se o token ainda for válido)
 if (accessToken()) {
   showMe();
 } else {

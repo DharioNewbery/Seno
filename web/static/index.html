@@ -28,6 +28,7 @@
                  autocomplete="current-password" required>
         </div>
 
+        <p id="login-notice" class="alert alert--success hidden" role="status"></p>
         <p id="login-error" class="alert alert--error hidden" role="alert"></p>
 
         <button type="submit" id="login-submit" class="btn btn--primary btn--block">Entrar</button>
@@ -51,10 +52,34 @@
         <dd id="me-roles"></dd>
       </dl>
 
+      <a id="link-professors" class="btn btn--block hidden" href="/professors.html">Gerenciar professores</a>
+
+      <h2>Alterar senha</h2>
+      <form id="change-password-form" novalidate>
+        <div class="field">
+          <label for="current-password">Senha atual</label>
+          <input type="password" id="current-password" name="current_password"
+                 autocomplete="current-password" required>
+        </div>
+
+        <div class="field">
+          <label for="new-password">Nova senha</label>
+          <input type="password" id="new-password" name="new_password"
+                 autocomplete="new-password" minlength="8" required>
+        </div>
+
+        <p id="change-password-error" class="alert alert--error hidden" role="alert"></p>
+
+        <button type="submit" id="change-password-submit" class="btn btn--block">Alterar senha</button>
+      </form>
+
+      <hr class="divider">
+
       <button type="button" id="logout" class="btn btn--block">Sair</button>
     </section>
   </main>
 
+  <script src="/common.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
