@@ -8,6 +8,8 @@ var (
 	ErrTokenInvalid            = errors.New("token inválido ou expirado")
 	ErrTokenRevoked            = errors.New("token de atualização revogado")
 	ErrCurrentPasswordMismatch = errors.New("senha atual incorreta")
+	ErrNotStudent              = errors.New("apenas alunos podem ingressar em turmas")
+	ErrAlreadyClassMember      = errors.New("você já está nesta turma")
 )
 
 // ValidationError representa um erro de validação de entrada, mapeado para HTTP 400.
