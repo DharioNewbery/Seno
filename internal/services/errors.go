@@ -10,6 +10,9 @@ var (
 	ErrCurrentPasswordMismatch = errors.New("senha atual incorreta")
 	ErrNotStudent              = errors.New("apenas alunos podem ingressar em turmas")
 	ErrAlreadyClassMember      = errors.New("você já está nesta turma")
+	ErrNotClassOwner           = errors.New("você não é o professor desta turma")
+	ErrNotClassMember          = errors.New("você não é membro desta turma")
+	ErrUnsupportedLanguage     = errors.New("linguagem não suportada")
 )
 
 // ValidationError representa um erro de validação de entrada, mapeado para HTTP 400.
