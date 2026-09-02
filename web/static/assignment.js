@@ -26,6 +26,7 @@ if (!isProfessor && !isStudent) {
 var titleEl = document.getElementById("assignment-title");
 var metaEl = document.getElementById("assignment-meta");
 var statementEl = document.getElementById("assignment-statement");
+var testsList = document.getElementById("tests-list");
 var editorCard = document.getElementById("editor-card");
 var editorLanguage = document.getElementById("editor-language");
 var draftStatus = document.getElementById("draft-status");
@@ -44,8 +45,10 @@ var lastSyncedCode = null;
 
 var LOCAL_SAVE_DELAY = 800;
 var SERVER_SYNC_DELAY = 3000;
+var POLL_INTERVAL = 3000;
 var saveTimer = null;
 var syncTimer = null;
+var pollTimer = null;
 
 function languageMode(language) {
   if (language === "python") {
@@ -62,6 +65,29 @@ function languageMode(language) {
 
 function languageLabel(language) {
   return { python: "Python", c: "C", cpp: "C++" }[language] || language;
+}
+
+function statusLabel(status) {
+  return { pending: "Pendente", passed: "Aprovado", failed: "Falhou", error: "Erro" }[status] || status;
+}
+
+function statusClass(status) {
+  return "badge--" + status;
+}
+
+// parseResult decodifica o campo result (texto JSON) da submissão.
+function parseResult(raw) {
+  if (!raw) {
+    return null;
+  }
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw);
+    } catch (err) {
+      return null;
+    }
+  }
+  return raw;
 }
 
 // setupEditor cria a IDE uma única vez; o conteúdo inicial vem de
@@ -217,6 +243,25 @@ function renderAssignment(data) {
 
   statementEl.textContent = data.statement;
 
+  // Para o aluno, a coluna "Você obteve" reflete a saída da submissão
+  // corrigida mais recente. As submissões vêm ordenadas por created_at DESC.
+  var lastResult = null;
+  if (!isProfessor && data.submissions && data.submissions.length) {
+    var latest = null;
+    data.submissions.forEach(function (s) {
+      if (s.status === "pending") {
+        return;
+      }
+      if (!latest || new Date(s.created_at) > new Date(latest.created_at)) {
+        latest = s;
+      }
+    });
+    if (latest) {
+      lastResult = parseResult(latest.result);
+    }
+  }
+  renderTests(data.tests, lastResult);
+
   submissionsTitle.textContent = isProfessor ? "Submissões recebidas" : "Minhas submissões";
   renderSubmissions(data.submissions);
 
@@ -230,6 +275,67 @@ function renderAssignment(data) {
   } else {
     editorCard.classList.add("hidden");
   }
+}
+
+// renderTests mostra os casos de teste da tarefa. Para o aluno, a coluna
+// "Você obteve" traz a saída da última submissão corrigida (por posição).
+function renderTests(tests, lastResult) {
+  testsList.innerHTML = "";
+
+  if (!tests || tests.length === 0) {
+    var p = document.createElement("p");
+    p.className = "muted";
+    p.textContent = "Sem casos de teste definidos para esta tarefa.";
+    testsList.appendChild(p);
+    return;
+  }
+
+  var gotByPos = {};
+  if (lastResult && lastResult.tests) {
+    lastResult.tests.forEach(function (r) {
+      gotByPos[r.position] = r;
+    });
+  }
+
+  var table = document.createElement("table");
+  table.className = "table";
+
+  var thead = document.createElement("thead");
+  var headRow = document.createElement("tr");
+  ["#", "Entrada", "Saída esperada", "Você obteve"].forEach(function (text) {
+    var th = document.createElement("th");
+    th.textContent = text;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  var tbody = document.createElement("tbody");
+  tests.forEach(function (t, idx) {
+    var tr = document.createElement("tr");
+    tr.appendChild(preCell(String(idx + 1)));
+    tr.appendChild(preCell(t.input));
+    tr.appendChild(preCell(t.expected_output));
+
+    var match = gotByPos[idx + 1];
+    var got = "—";
+    if (match) {
+      got = match.got || "(sem saída)";
+    }
+    tr.appendChild(preCell(got));
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  testsList.appendChild(table);
+}
+
+function preCell(text) {
+  var td = document.createElement("td");
+  var pre = document.createElement("pre");
+  pre.className = "pre-cell";
+  pre.textContent = text;
+  td.appendChild(pre);
+  return td;
 }
 
 function renderSubmissions(submissions) {
@@ -252,11 +358,22 @@ function renderSubmissions(submissions) {
     left.textContent = (isProfessor ? s.student_name + " · " : "") +
       new Date(s.created_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
     var status = document.createElement("span");
-    status.className = "badge";
-    status.textContent = s.status === "pending" ? "pendente" : s.status;
+    status.className = "badge " + statusClass(s.status);
+    status.textContent = statusLabel(s.status);
     meta.appendChild(left);
     meta.appendChild(status);
     item.appendChild(meta);
+
+    var result = parseResult(s.result);
+    if (s.status === "pending") {
+      var pending = document.createElement("p");
+      pending.className = "muted";
+      pending.textContent = "Correção automática em andamento...";
+      item.appendChild(pending);
+    } else if (result) {
+      item.appendChild(renderResultSummary(result));
+      item.appendChild(renderResultTable(result));
+    }
 
     var details = document.createElement("details");
     var summary = document.createElement("summary");
@@ -286,6 +403,98 @@ function renderSubmissions(submissions) {
 
     submissionsList.appendChild(item);
   });
+
+  if (submissions.some(function (s) { return s.status === "pending"; })) {
+    schedulePoll();
+  } else {
+    stopPoll();
+  }
+}
+
+// renderResultSummary mostra o placar (ex.: 2/3 casos) logo abaixo do status.
+function renderResultSummary(result) {
+  var p = document.createElement("p");
+  p.className = "muted";
+  var summary = result.summary || {};
+  p.textContent = summary.passed + "/" + summary.total + " casos aprovados";
+  return p;
+}
+
+// renderResultTable detalha cada caso: entrada, esperado, obtido, duração
+// e erro (stderr/timeout/exit code).
+function renderResultTable(result) {
+  var table = document.createElement("table");
+  table.className = "table";
+
+  var thead = document.createElement("thead");
+  var headRow = document.createElement("tr");
+  ["#", "Entrada", "Esperado", "Obtido", "Duração", ""].forEach(function (text) {
+    var th = document.createElement("th");
+    th.textContent = text;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  var tbody = document.createElement("tbody");
+  (result.tests || []).forEach(function (t) {
+    var tr = document.createElement("tr");
+    tr.appendChild(preCell(String((t.position || 0))));
+    tr.appendChild(preCell(t.input));
+    tr.appendChild(preCell(t.expected));
+    tr.appendChild(preCell(t.got || ""));
+    tr.appendChild(cellText(t.duration_ms + " ms"));
+    var statusTd = document.createElement("td");
+    if (t.timed_out) {
+      statusTd.appendChild(badge("timeout", "erro"));
+    } else if (t.exit_code !== 0) {
+      statusTd.appendChild(badge("exit " + t.exit_code, "erro"));
+    } else if (t.passed) {
+      statusTd.appendChild(badge("ok", "success"));
+    } else {
+      statusTd.appendChild(badge("difere", "failed"));
+    }
+    tr.appendChild(statusTd);
+    tbody.appendChild(tr);
+
+    if (t.stderr) {
+      var errTr = document.createElement("tr");
+      var errTd = document.createElement("td");
+      errTd.colSpan = 6;
+      errTd.className = "stderr-cell";
+      errTd.textContent = "stderr: " + t.stderr;
+      errTr.appendChild(errTd);
+      tbody.appendChild(errTr);
+    }
+  });
+  table.appendChild(tbody);
+  return table;
+}
+
+function badge(label, mod) {
+  var span = document.createElement("span");
+  span.className = "badge badge--" + mod;
+  span.textContent = label;
+  return span;
+}
+
+function cellText(text) {
+  var td = document.createElement("td");
+  td.textContent = text;
+  return td;
+}
+
+// schedulePoll re-carrega a página enquanto houver submissão pendente.
+function schedulePoll() {
+  clearTimeout(pollTimer);
+  if (document.hidden) {
+    return;
+  }
+  pollTimer = setTimeout(loadAssignment, POLL_INTERVAL);
+}
+
+function stopPoll() {
+  clearTimeout(pollTimer);
 }
 
 async function handleSubmit() {

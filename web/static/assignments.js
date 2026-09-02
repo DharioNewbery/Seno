@@ -38,9 +38,77 @@ var titleInput = document.getElementById("as-title");
 var statementInput = document.getElementById("as-statement");
 var languageSelect = document.getElementById("as-language");
 var dueInput = document.getElementById("as-due");
+var testsContainer = document.getElementById("tests-container");
+var addTestButton = document.getElementById("as-add-test");
 var asError = document.getElementById("as-error");
 var asSuccess = document.getElementById("as-success");
 var asSubmit = document.getElementById("as-submit");
+
+function addTestRow(input, expected) {
+  var row = document.createElement("div");
+  row.className = "test-case";
+
+  var inputWrap = document.createElement("div");
+  inputWrap.className = "test-case-col";
+  var inputLabel = document.createElement("label");
+  inputLabel.textContent = "Entrada";
+  var inputArea = document.createElement("textarea");
+  inputArea.className = "test-input";
+  inputArea.rows = 3;
+  inputArea.placeholder = "Ex.: 5";
+  if (input !== undefined) {
+    inputArea.value = input;
+  }
+  inputWrap.appendChild(inputLabel);
+  inputWrap.appendChild(inputArea);
+
+  var expectedWrap = document.createElement("div");
+  expectedWrap.className = "test-case-col";
+  var expectedLabel = document.createElement("label");
+  expectedLabel.textContent = "Saída esperada";
+  var expectedArea = document.createElement("textarea");
+  expectedArea.className = "test-expected";
+  expectedArea.rows = 3;
+  expectedArea.placeholder = "Ex.: 120";
+  if (expected !== undefined) {
+    expectedArea.value = expected;
+  }
+  expectedWrap.appendChild(expectedLabel);
+  expectedWrap.appendChild(expectedArea);
+
+  var remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "btn btn--ghost test-remove";
+  remove.textContent = "Remover";
+  remove.addEventListener("click", function () {
+    row.remove();
+  });
+
+  row.appendChild(inputWrap);
+  row.appendChild(expectedWrap);
+  row.appendChild(remove);
+  testsContainer.appendChild(row);
+  return row;
+}
+
+addTestButton.addEventListener("click", function () {
+  addTestRow();
+});
+
+function collectTests() {
+  var tests = [];
+  var rows = testsContainer.querySelectorAll(".test-case");
+  rows.forEach(function (row) {
+    var input = row.querySelector(".test-input").value;
+    var expected = row.querySelector(".test-expected").value;
+    if (!input && !expected) {
+      return;
+    }
+    tests.push({ input: input, expected_output: expected });
+  });
+  return tests;
+}
+
 
 function setupMode() {
   if (mode === "professor") {
@@ -48,6 +116,7 @@ function setupMode() {
     listTitle.textContent = "Tarefas publicadas";
     newAssignmentCard.classList.remove("hidden");
     assignmentsHead.innerHTML = "<tr><th>Título</th><th>Linguagem</th><th>Prazo</th><th>Publicada em</th><th></th></tr>";
+    addTestRow();
   } else {
     pageTitle.textContent = "Minhas tarefas";
     listTitle.textContent = "Tarefas das suas turmas";
@@ -67,7 +136,17 @@ async function handleCreate(event) {
     return;
   }
 
-  var body = { title: title, statement: statement, language: language };
+  var tests = collectTests();
+  if (tests.length === 0) {
+    showError("Adicione pelo menos um caso de teste.");
+    return;
+  }
+  if (tests.some(function (t) { return !t.expected_output.trim(); })) {
+    showError("Toda saída esperada deve estar preenchida.");
+    return;
+  }
+
+  var body = { title: title, statement: statement, language: language, tests: tests };
   if (dueInput.value) {
     body.due_at = new Date(dueInput.value).toISOString();
   }
@@ -80,6 +159,8 @@ async function handleCreate(event) {
       body: JSON.stringify(body)
     });
     assignmentForm.reset();
+    testsContainer.innerHTML = "";
+    addTestRow();
     showSuccess("Tarefa publicada com sucesso.");
     await loadAssignments();
   } catch (err) {
