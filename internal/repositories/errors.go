@@ -13,6 +13,9 @@ var (
 	ErrRoleNotFound         = errors.New("papel não encontrado")
 	ErrPermissionNotFound   = errors.New("permissão não encontrada")
 	ErrRefreshTokenNotFound = errors.New("token de atualização não encontrado")
+	ErrClassNotFound        = errors.New("turma não encontrada")
+	// ErrJoinCodeCollision é interno: o service gera outro código e repete.
+	ErrJoinCodeCollision = errors.New("colisão de código de turma")
 )
 
 // isUniqueViolation verifica se o erro representa uma violação de unicidade (código 23505).

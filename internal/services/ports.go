@@ -59,6 +59,15 @@ type StudentRepository interface {
 	CreateWithAccount(ctx context.Context, user *models.User, passwordHash string) error
 }
 
+// ClassRepository define o contrato de acesso a dados de turmas.
+type ClassRepository interface {
+	Create(ctx context.Context, class *models.Class) error
+	GetByJoinCode(ctx context.Context, code string) (*models.Class, error)
+	ListByProfessor(ctx context.Context, professorUserID uuid.UUID) ([]models.ClassSummary, error)
+	ListByStudent(ctx context.Context, studentUserID uuid.UUID) ([]models.StudentClass, error)
+	AddMember(ctx context.Context, classID, studentUserID uuid.UUID) (bool, error)
+}
+
 // JWTManager define o contrato do emissor/validador de tokens.
 type JWTManager interface {
 	GenerateTokenPair(userID uuid.UUID, email string) (*jwt.TokenPair, error)
