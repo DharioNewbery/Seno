@@ -1,0 +1,147 @@
+# Diretrizes de desenvolvimento — Seno API
+
+Projeto: API RESTful em Go para autenticação, usuários e controle de acesso baseado em papéis (RBAC).
+
+## Stack
+
+- **Linguagem:** Go 1.26+
+- **Roteador:** `github.com/go-chi/chi/v5`
+- **Banco de dados:** PostgreSQL 17 (via Docker)
+- **Acesso a dados:** `github.com/jmoiron/sqlx` + driver `github.com/jackc/pgx/v5/stdlib` (nome do driver: `pgx`)
+- **Autenticação:** JWT (`github.com/golang-jwt/jwt/v5`) + bcrypt (`golang.org/x/crypto/bcrypt`)
+- **UUIDs:** `github.com/google/uuid`
+
+## Regra de idioma (OBRIGATÓRIA)
+
+- **Inglês:** nomes de variáveis, funções, tipos, structs, tabelas, colunas, pacotes, mensagens de log estruturado/erro interno (`fmt.Errorf`).
+- **Português:** mensagens de erro de domínio expostas ao usuário, respostas da API, mensagens em `log.Printf` voltadas ao operador, comentários.
+
+Exemplo:
+```go
+// CORRETO
+func (r *UserRepository) GetByEmail(...) error {
+    return fmt.Errorf("erro ao buscar usuário por email: %w", err) // msg interna em PT, wrapper em EN
+}
+// Erro de domínio (exposto ao usuário) em PT:
+var ErrUserNotFound = errors.New("usuário não encontrado")
+```
+
+## Estrutura de camadas (desacoplamento)
+
+Fluxo obrigatório: **handler → service → repository**. Nunca pular camadas.
+
+```
+cmd/api/main.go            # Composição de dependências (DI) e bootstrap
+internal/
+  config/                  # Carregamento de configuração (.env)
+  database/                # Pool de conexão + runner de migrações (embed)
+    migrations/*.sql       # Scripts SQL versionados
+  models/                  # Entidades de domínio (structs + tags db/json)
+  repositories/            # Acesso a dados (sqlx). Implementam interfaces de services.
+  services/                # Regras de negócio. Definem as interfaces (ports.go).
+    ports.go               # Interfaces de repositórios (consumer-defined)
+  handlers/                # Camada HTTP: parse, validação leve, mapeamento de erros
+  middleware/              # Auth (RequireAuth), RBAC (RequireRole/RequirePermission)
+  server/                  # Montagem do chi router + middlewares + rotas
+  utils/                   # jwt, password (bcrypt), hash (sha256)
+pkg/response/              # Helper de resposta JSON padrão (Body{success,message,data,error})
+```
+
+### Princípios
+
+- **Services dependem de interfaces** definidas em `services/ports.go`, nunca de structs concretos de `repositories`.
+- **Handlers não acessam repositórios** nem o banco diretamente; só services.
+- **Repositories não conhecem HTTP** nem regras de negócio.
+- **Models** são compartilhados entre camadas (sem dependência de infraestrutura).
+- Erros sentinelas ficam em `repositories/errors.go` (dados) e `services/errors.go` (negócio).
+
+## Convenções de código
+
+- Pacote `internal` para tudo que não deve ser importado externamente; `pkg/` só para utilitários reutilizáveis.
+- Receptor ponteiro (`*Type`) em métodos que mutam estado ou acessam `db`.
+- Nomes: `UserRepository`, `NewUserRepository`, `GetByEmail`, `toUserResponse`.
+- Funções de conversão DTO: `toXxxResponse`. DTOs em `handlers/dto.go`.
+- Sem comentários explicativos óbvios; comentar apenas decisões não triviais (em PT).
+- Sem `panic` em camadas de domínio; usar `log.Fatalf` só em `main.go`.
+- Sem segredos no código; carregar de variáveis de ambiente (`.env` local via godotenv).
+
+## Banco de dados
+
+- Chaves primárias: `UUID DEFAULT gen_random_uuid()`.
+- Timestamps: `TIMESTAMPTZ NOT NULL DEFAULT NOW()`. Soft delete via `deleted_at TIMESTAMPTZ`.
+- Nomes de tabela em plural inglês: `users`, `user_credentials`, `roles`, `permissions`, `role_permissions`, `user_roles`, `refresh_tokens`.
+- Colunas em snake_case inglês: `full_name`, `created_at`, `failed_login_attempts`.
+- Queries em arquivos `.sql` com indentação consistente; usar `$1, $2...` para placeholders.
+### Migrações
+
+- Arquivos em `internal/database/migrations/`, nomeados `NNN_descricao.sql` (ex.: `001_init.sql`).
+- Aplicadas automaticamente no startup via `database.Migrate` (embed + tabela `schema_migrations`).
+- O runner divide o script por `;` e remove comentários `--` (suficiente para DDL; **não usar funções PL/pgSQL** com `;` internos nessas migrações).
+- Para adicionar uma migration: criar novo arquivo `NNN_xxx.sql` seguindo a numeração. Não editar migrations já aplicadas em produção.
+
+## Autenticação e RBAC
+
+- `Register`: cria usuário + credencial (bcrypt) + atribui papel `user`.
+- `Login`: valida senha, controla `failed_login_attempts` (bloqueia após 5), emite par de tokens (access + refresh).
+- `Refresh`: valida o refresh token (JWT + tabela `refresh_tokens`), revoga o antigo e emite novo par (rotação).
+- Refresh tokens são armazenados como **hash SHA-256** (revogáveis sem expor o token).
+- Middlewares: `RequireAuth` (Bearer), `RequireRole(roleChecker, "admin")`, `RequirePermission(roleChecker, "users:read")`.
+
+## Padrão de resposta HTTP
+
+Todo endpoint usa `pkg/response`:
+```go
+{ "success": true, "message": "...", "data": {...} }   // 2xx
+{ "success": false, "error": "..." }                   // 4xx/5xx
+```
+Mapeamento de erro de domínio → status HTTP centralized em `handlers/errors.go` (`mapError`).
+
+## Comandos
+
+```bash
+# Dependências
+go mod tidy
+
+# Formatar e validar
+gofmt -w .
+go build ./...
+go vet ./...
+
+# Subir o banco (requer Docker Desktop em execução)
+docker compose up -d postgres
+
+# Rodar a API (carrega .env se existir; há defaults de dev)
+go run ./cmd/api
+
+# Build do binário
+go build -o bin/seno-api ./cmd/api
+```
+
+## Endpoints iniciais
+
+| Método | Rota               | Auth  | Descrição                          |
+|--------|--------------------|-------|-----------------------------------|
+| GET    | /health            | —     | Healthcheck                       |
+| GET    | /routes            | —     | Lista todas as rotas registradas  |
+| POST   | /api/v1/auth/register | —  | Cadastrar usuário                 |
+| POST   | /api/v1/auth/login    | —  | Autenticar e obter tokens         |
+| POST   | /api/v1/auth/refresh  | —  | Renovar tokens                    |
+| GET    | /api/v1/auth/me       | Bearer | Dados do usuário autenticado   |
+| GET    | /api/v1/users         | Bearer | Listar usuários                 |
+| GET    | /api/v1/users/{id}    | Bearer | Obter usuário por id            |
+
+## Como adicionar uma feature (ex.: entidade Product)
+
+1. **Migration:** `internal/database/migrations/002_products.sql`.
+2. **Model:** `internal/models/product.go` (struct com tags `db`/`json`).
+3. **Repository:** `internal/repositories/product_repository.go` + sentinelas em `repositories/errors.go` se necessário.
+4. **Interface:** adicionar `ProductRepository` em `services/ports.go`.
+5. **Service:** `internal/services/product_service.go` com regras de negócio + DTOs de entrada (`XxxInput`).
+6. **Handler:** `internal/handlers/product_handler.go` + DTOs em `handlers/dto.go`; mapear erros em `handlers/errors.go`.
+7. **Rotas:** registrar em `internal/server/server.go` (grupo público ou autenticado).
+8. **Wiring:** instanciar repo/service/handler em `cmd/api/main.go`.
+9. **Validar:** `gofmt -w . && go build ./... && go vet ./...`.
+
+## Variáveis de ambiente
+
+Ver `.env.example`. Defaults de desenvolvimento permitem `go run` sem `.env`, exceto que `JWT_SECRET` usa um valor de dev que **deve** ser redefinido em produção (`APP_ENV=production` valida isso).
