@@ -80,6 +80,8 @@ type AssignmentRepository interface {
 	CreateSubmission(ctx context.Context, s *models.Submission) error
 	ListSubmissionsByAssignment(ctx context.Context, assignmentID uuid.UUID) ([]models.SubmissionView, error)
 	ListSubmissionsByStudent(ctx context.Context, assignmentID, studentUserID uuid.UUID) ([]models.SubmissionView, error)
+	UpsertDraft(ctx context.Context, d *models.Draft) error
+	GetDraft(ctx context.Context, assignmentID, studentUserID uuid.UUID) (*models.Draft, error)
 }
 
 // JWTManager define o contrato do emissor/validador de tokens.

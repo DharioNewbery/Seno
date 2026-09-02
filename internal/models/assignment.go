@@ -31,6 +31,7 @@ type AssignmentSummary struct {
 
 // AssignmentDetail é a tarefa completa (enunciado) com as submissões visíveis
 // ao solicitante: as próprias (aluno) ou todas (professor dono da turma).
+// Para o aluno, Draft carrega o rascunho salvo do editor online (backup).
 type AssignmentDetail struct {
 	ID          uuid.UUID        `db:"id" json:"id"`
 	ClassID     uuid.UUID        `db:"class_id" json:"class_id"`
@@ -42,6 +43,15 @@ type AssignmentDetail struct {
 	CreatedAt   time.Time        `db:"created_at" json:"created_at"`
 	UpdatedAt   time.Time        `db:"updated_at" json:"updated_at"`
 	Submissions []SubmissionView `db:"-" json:"submissions"`
+	Draft       *Draft           `db:"-" json:"draft,omitempty"`
+}
+
+// Draft é o rascunho de um aluno numa tarefa (backup do editor online).
+type Draft struct {
+	AssignmentID  uuid.UUID `db:"assignment_id" json:"assignment_id"`
+	StudentUserID uuid.UUID `db:"student_user_id" json:"student_user_id"`
+	SourceCode    string    `db:"source_code" json:"source_code"`
+	UpdatedAt     time.Time `db:"updated_at" json:"updated_at"`
 }
 
 // Submission é o código entregue por um aluno numa tarefa.

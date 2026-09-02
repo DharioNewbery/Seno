@@ -15,6 +15,7 @@ var (
 	ErrRefreshTokenNotFound = errors.New("token de atualização não encontrado")
 	ErrClassNotFound        = errors.New("turma não encontrada")
 	ErrAssignmentNotFound   = errors.New("tarefa não encontrada")
+	ErrDraftNotFound        = errors.New("rascunho não encontrado")
 	// ErrJoinCodeCollision é interno: o service gera outro código e repete.
 	ErrJoinCodeCollision = errors.New("colisão de código de turma")
 )

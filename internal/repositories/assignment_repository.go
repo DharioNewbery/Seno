@@ -161,3 +161,33 @@ func (r *AssignmentRepository) ListSubmissionsByStudent(ctx context.Context, ass
 	}
 	return submissions, nil
 }
+
+// UpsertDraft cria ou atualiza o rascunho do aluno na tarefa (backup do editor).
+func (r *AssignmentRepository) UpsertDraft(ctx context.Context, d *models.Draft) error {
+	query := `INSERT INTO drafts (assignment_id, student_user_id, source_code)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (assignment_id, student_user_id)
+		DO UPDATE SET source_code = EXCLUDED.source_code, updated_at = NOW()
+		RETURNING assignment_id, student_user_id, source_code, updated_at`
+
+	if err := r.db.QueryRowxContext(ctx, query,
+		d.AssignmentID, d.StudentUserID, d.SourceCode).
+		StructScan(d); err != nil {
+		return fmt.Errorf("erro ao salvar rascunho: %w", err)
+	}
+	return nil
+}
+
+func (r *AssignmentRepository) GetDraft(ctx context.Context, assignmentID, studentUserID uuid.UUID) (*models.Draft, error) {
+	var d models.Draft
+	query := `SELECT assignment_id, student_user_id, source_code, updated_at
+		FROM drafts WHERE assignment_id = $1 AND student_user_id = $2`
+
+	if err := r.db.GetContext(ctx, &d, query, assignmentID, studentUserID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrDraftNotFound
+		}
+		return nil, fmt.Errorf("erro ao buscar rascunho: %w", err)
+	}
+	return &d, nil
+}
