@@ -48,6 +48,12 @@ type RefreshTokenRepository interface {
 	RevokeAllByUserID(ctx context.Context, userID uuid.UUID) error
 }
 
+// ProfessorRepository define o contrato de acesso a dados de professores.
+type ProfessorRepository interface {
+	CreateWithAccount(ctx context.Context, user *models.User, passwordHash string) error
+	List(ctx context.Context) ([]models.ProfessorUser, error)
+}
+
 // JWTManager define o contrato do emissor/validador de tokens.
 type JWTManager interface {
 	GenerateTokenPair(userID uuid.UUID, email string) (*jwt.TokenPair, error)
