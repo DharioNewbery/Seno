@@ -1,7 +1,8 @@
 "use strict";
 
 // Seno — página da tarefa: enunciado, IDE (CodeMirror) com rascunho salvo
-// automaticamente, submissão e histórico. Utilitários em common.js.
+// automaticamente em duas camadas (localStorage + servidor) e submissão.
+// Utilitários em common.js.
 
 var currentUser = sessionUser();
 if (!currentUser) {
@@ -38,7 +39,13 @@ var backLink = document.getElementById("back-link");
 
 var editor = null;
 var draftKey = "seno.draft." + assignmentId;
+var draftRestored = false;
+var lastSyncedCode = null;
+
+var LOCAL_SAVE_DELAY = 800;
+var SERVER_SYNC_DELAY = 3000;
 var saveTimer = null;
+var syncTimer = null;
 
 function languageMode(language) {
   if (language === "python") {
@@ -57,7 +64,8 @@ function languageLabel(language) {
   return { python: "Python", c: "C", cpp: "C++" }[language] || language;
 }
 
-// setupEditor cria a IDE uma única vez e restaura o rascunho salvo.
+// setupEditor cria a IDE uma única vez; o conteúdo inicial vem de
+// restoreDraft (rascunho do servidor ou local, o mais recente).
 function setupEditor(language) {
   if (editor) {
     return;
@@ -70,20 +78,124 @@ function setupEditor(language) {
     matchBrackets: true
   });
 
-  var draft = localStorage.getItem(draftKey);
-  if (draft) {
-    editor.setValue(draft);
-  }
-
   editor.on("change", function () {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(function () {
-      localStorage.setItem(draftKey, editor.getValue());
-      draftStatus.textContent = "Rascunho salvo às " +
-        new Date().toLocaleTimeString("pt-BR");
-    }, 800);
+    saveTimer = setTimeout(saveLocalDraft, LOCAL_SAVE_DELAY);
   });
 }
+
+// Rascunho local: {code, savedAt}; o formato legado (string pura) é aceito.
+function readLocalDraft() {
+  var raw = localStorage.getItem(draftKey);
+  if (!raw) {
+    return null;
+  }
+  try {
+    var parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.code === "string") {
+      return parsed;
+    }
+  } catch (err) {
+    // formato legado: string pura
+  }
+  return { code: raw, savedAt: 0 };
+}
+
+function writeLocalDraft(code, savedAt) {
+  localStorage.setItem(draftKey, JSON.stringify({ code: code, savedAt: savedAt }));
+}
+
+// restoreDraft escolhe entre o rascunho do servidor e o local pelo mais
+// recente. Se o local vencer (sync anterior falhou), agenda novo envio.
+function restoreDraft(serverDraft) {
+  var local = readLocalDraft();
+  var server = serverDraft
+    ? { code: serverDraft.source_code, savedAt: new Date(serverDraft.updated_at).getTime() }
+    : null;
+
+  var useLocal = local && (!server || local.savedAt > server.savedAt);
+
+  if (useLocal) {
+    editor.setValue(local.code);
+    writeLocalDraft(local.code, local.savedAt);
+    lastSyncedCode = null;
+    scheduleServerSync();
+  } else if (server) {
+    editor.setValue(server.code);
+    writeLocalDraft(server.code, server.savedAt);
+    lastSyncedCode = server.code;
+  }
+}
+
+function saveLocalDraft() {
+  var code = editor.getValue();
+  writeLocalDraft(code, Date.now());
+  draftStatus.textContent = "Rascunho salvo às " + new Date().toLocaleTimeString("pt-BR");
+  scheduleServerSync();
+}
+
+function scheduleServerSync() {
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncDraftToServer, SERVER_SYNC_DELAY);
+}
+
+async function syncDraftToServer() {
+  if (!editor || !isStudent) {
+    return;
+  }
+  var code = editor.getValue();
+  if (code === lastSyncedCode) {
+    return;
+  }
+
+  try {
+    await request("/assignments/" + assignmentId + "/draft", {
+      method: "PUT",
+      body: JSON.stringify({ source_code: code })
+    });
+    lastSyncedCode = code;
+    draftStatus.textContent = "Backup salvo no servidor às " + new Date().toLocaleTimeString("pt-BR");
+  } catch (err) {
+    draftStatus.textContent = "Offline: rascunho salvo apenas localmente";
+    // a próxima edição reagendará a sincronização
+  }
+}
+
+// flushDraft salva imediatamente; usado ao sair da página. O fetch com
+// keepalive sobrevive ao descarregamento nos navegadores modernos.
+function flushDraft() {
+  if (!editor || !isStudent) {
+    return;
+  }
+  var code = editor.getValue();
+  writeLocalDraft(code, Date.now());
+  if (code === lastSyncedCode) {
+    return;
+  }
+
+  var token = accessToken();
+  if (!token) {
+    return;
+  }
+  fetch(API + "/assignments/" + assignmentId + "/draft", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + token
+    },
+    body: JSON.stringify({ source_code: code }),
+    keepalive: true
+  }).catch(function () { });
+}
+
+window.addEventListener("pagehide", flushDraft);
+
+document.addEventListener("visibilitychange", function () {
+  if (document.visibilityState === "hidden") {
+    clearTimeout(syncTimer);
+    syncDraftToServer();
+  }
+});
 
 async function loadAssignment() {
   try {
@@ -111,6 +223,10 @@ function renderAssignment(data) {
   if (isStudent) {
     editorLanguage.textContent = "Linguagem: " + languageLabel(data.language);
     setupEditor(data.language);
+    if (!draftRestored) {
+      draftRestored = true;
+      restoreDraft(data.draft);
+    }
   } else {
     editorCard.classList.add("hidden");
   }
@@ -159,7 +275,9 @@ function renderSubmissions(submissions) {
       loadBtn.textContent = "Carregar no editor";
       loadBtn.addEventListener("click", function () {
         editor.setValue(s.source_code);
-        localStorage.setItem(draftKey, s.source_code);
+        writeLocalDraft(s.source_code, Date.now());
+        lastSyncedCode = null;
+        scheduleServerSync();
         editorCard.scrollIntoView({ behavior: "smooth" });
         editor.focus();
       });
@@ -186,8 +304,9 @@ async function handleSubmit() {
       method: "POST",
       body: JSON.stringify({ source_code: code })
     });
-    // Submetido: o rascunho não é mais necessário.
-    localStorage.removeItem(draftKey);
+    // Submetido: o rascunho (local e servidor) passa a ser o código entregue.
+    writeLocalDraft(code, Date.now());
+    await syncDraftToServer();
     showSubmitSuccess("Submissão enviada com sucesso.");
     await loadAssignment();
   } catch (err) {
