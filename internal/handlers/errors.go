@@ -20,6 +20,8 @@ func mapError(err error) (int, string) {
 	}
 
 	switch {
+	case errors.Is(err, services.ErrCurrentPasswordMismatch):
+		return http.StatusBadRequest, err.Error()
 	case errors.Is(err, repositories.ErrUserNotFound),
 		errors.Is(err, repositories.ErrCredentialNotFound),
 		errors.Is(err, repositories.ErrRoleNotFound),

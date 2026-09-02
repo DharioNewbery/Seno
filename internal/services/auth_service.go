@@ -56,14 +56,14 @@ type RegisterResult struct {
 }
 
 func (in RegisterInput) validate() *ValidationError {
-	if strings.TrimSpace(in.FullName) == "" {
-		return NewValidationError("nome completo é obrigatório")
+	if vErr := validateFullName(in.FullName); vErr != nil {
+		return vErr
 	}
-	if !isValidEmail(in.Email) {
-		return NewValidationError("email inválido")
+	if vErr := validateEmail(in.Email); vErr != nil {
+		return vErr
 	}
-	if len(in.Password) < MinPasswordLength {
-		return NewValidationError(fmt.Sprintf("a senha deve ter no mínimo %d caracteres", MinPasswordLength))
+	if vErr := validatePassword(in.Password); vErr != nil {
+		return vErr
 	}
 	return nil
 }
@@ -203,6 +203,50 @@ func (s *AuthService) Login(ctx context.Context, in LoginInput) (*LoginResult, e
 	return &LoginResult{User: *user, Roles: roleNames, Tokens: tokens}, nil
 }
 
+type ChangePasswordInput struct {
+	UserID          uuid.UUID
+	CurrentPassword string
+	NewPassword     string
+}
+
+func (in ChangePasswordInput) validate() *ValidationError {
+	if in.CurrentPassword == "" {
+		return NewValidationError("senha atual é obrigatória")
+	}
+	if vErr := validatePassword(in.NewPassword); vErr != nil {
+		return vErr
+	}
+	return nil
+}
+
+// ChangePassword verifica a senha atual, define a nova e revoga todos os
+// refresh tokens existentes (sessões de outros dispositivos perdem o acesso).
+func (s *AuthService) ChangePassword(ctx context.Context, in ChangePasswordInput) error {
+	if vErr := in.validate(); vErr != nil {
+		return vErr
+	}
+
+	credential, err := s.credentialRepo.GetByUserID(ctx, in.UserID)
+	if err != nil {
+		return err
+	}
+
+	if err := password.Compare(credential.PasswordHash, in.CurrentPassword); err != nil {
+		return ErrCurrentPasswordMismatch
+	}
+
+	hashed, err := password.Hash(in.NewPassword)
+	if err != nil {
+		return fmt.Errorf("erro ao proteger senha: %w", err)
+	}
+
+	if err := s.credentialRepo.UpdatePassword(ctx, in.UserID, hashed); err != nil {
+		return err
+	}
+
+	return s.refreshRepo.RevokeAllByUserID(ctx, in.UserID)
+}
+
 // Refresh valida e rotaciona um refresh token, emitindo um novo par de tokens.
 func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*jwt.TokenPair, error) {
 	claims, err := s.jwt.Parse(refreshToken)
@@ -263,23 +307,4 @@ func (s *AuthService) GetMe(ctx context.Context, userID uuid.UUID) (*MeResult, e
 		return nil, err
 	}
 	return &MeResult{User: *user, Roles: roles}, nil
-}
-
-func isValidEmail(email string) bool {
-	email = strings.ToLower(strings.TrimSpace(email))
-	at := strings.IndexByte(email, '@')
-	if at <= 0 || at == len(email)-1 {
-		return false
-	}
-	return strings.Contains(email[at+1:], ".")
-}
-
-// isValidUsername verifica o formato básico de nome de usuário: 3 a 100
-// caracteres, sem espaços. A comparação é case-insensitive (normalização
-// para lowercase em normalizeLogin).
-func isValidUsername(u string) bool {
-	if len(u) < 3 || len(u) > 100 {
-		return false
-	}
-	return !strings.ContainsAny(u, " \t\r\n")
 }

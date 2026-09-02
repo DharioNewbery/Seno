@@ -51,6 +51,33 @@ type refreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+type changePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+type createProfessorRequest struct {
+	FullName string `json:"full_name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type professorResponse struct {
+	UserID    uuid.UUID `json:"user_id"`
+	FullName  string    `json:"full_name"`
+	Email     string    `json:"email"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func toProfessorResponse(p models.ProfessorUser) professorResponse {
+	return professorResponse{
+		UserID:    p.UserID,
+		FullName:  p.FullName,
+		Email:     p.Email,
+		CreatedAt: p.CreatedAt,
+	}
+}
+
 type loginResponse struct {
 	User   userResponse  `json:"user"`
 	Roles  []string      `json:"roles"`

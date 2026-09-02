@@ -100,6 +100,33 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, "Token atualizado com sucesso", resp)
 }
 
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		response.JSON(w, http.StatusUnauthorized, response.Error("Autenticação necessária"))
+		return
+	}
+
+	var req changePasswordRequest
+	if err := decodeJSON(r, &req); err != nil {
+		response.JSON(w, http.StatusBadRequest, response.Error("JSON inválido: "+err.Error()))
+		return
+	}
+
+	err := h.authService.ChangePassword(r.Context(), services.ChangePasswordInput{
+		UserID:          userID,
+		CurrentPassword: req.CurrentPassword,
+		NewPassword:     req.NewPassword,
+	})
+	if err != nil {
+		status, msg := mapError(err)
+		response.JSON(w, status, response.Error(msg))
+		return
+	}
+
+	response.OK(w, "Senha alterada com sucesso", nil)
+}
+
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
