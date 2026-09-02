@@ -93,7 +93,8 @@ web/                       # Interface web estática (embed em web.go) + STYLEGU
 - Cadastro de professores: transação única em `professors` (composição 1:1 com `users`) — `ProfessorRepository.CreateWithAccount`.
 - Criação de contas com perfil (professores/alunos) compartilha o helper transacional `repositories/account.go` (`createProfiledAccount`).
 - **Turmas:** professor cria (`POST /classes`) com `join_code` gerado pelo serviço (6 caracteres, sem ambíguos, retry em colisão); aluno ingressa via `POST /classes/join` (valida papel `student`, idempotente); listagens por papel (`GET /classes` do professor, `GET /classes/mine` do aluno). Associação N:M em `class_members`.
-- **Tarefas e submissões:** professor publica em `POST /classes/{id}/assignments` (título, enunciado, linguagem `python|c|cpp`, prazo opcional RFC3339); aluno vê feed (`GET /assignments/mine`), detalhe (`GET /assignments/{id}` — submissões embutidas conforme papel) e submete código pela IDE web (`POST /assignments/{id}/submissions`, linguagem herdada da tarefa, status inicial `pending`). IDE: CodeMirror 5 embutido em `web/static/vendor` (sem build), rascunho com auto-save em `localStorage` (`seno.draft.<id>`). Execução/correção automática usará o campo `status` (milestone 6).
+- **Tarefas e submissões:** professor publica em `POST /classes/{id}/assignments` (título, enunciado, linguagem `python|c|cpp`, prazo opcional RFC3339); aluno vê feed (`GET /assignments/mine`), detalhe (`GET /assignments/{id}` — submissões embutidas conforme papel) e submete código pela IDE web (`POST /assignments/{id}/submissions`, linguagem herdada da tarefa, status inicial `pending`). IDE: CodeMirror 5 embutido em `web/static/vendor` (sem build). Execução/correção automática usará o campo `status` (milestone 6).
+- **Editor com backup em tempo real:** rascunho do aluno salvado em duas camadas — `localStorage` (`seno.draft.<id>`, debounce 800ms, formato `{code, savedAt}`) e servidor (`PUT /assignments/{id}/draft`, upsert em `drafts`, sync debounced 3s + `keepalive` no `pagehide`). Restauração usa o mais recente das duas fontes; "Carregar no editor" também sincroniza.
 
 ## Padrão de resposta HTTP
 
@@ -149,6 +150,7 @@ go build -o bin/seno-api ./cmd/api
 | GET    | /api/v1/classes/{id}/assignments | Bearer (professor) | Listar tarefas da turma   |
 | GET    | /api/v1/assignments/mine | Bearer | Feed de tarefas do aluno     |
 | GET    | /api/v1/assignments/{id} | Bearer | Detalhe da tarefa (submissões conforme papel) |
+| PUT    | /api/v1/assignments/{id}/draft | Bearer | Salvar rascunho do editor (backup) |
 | POST   | /api/v1/assignments/{id}/submissions | Bearer | Submeter código (IDE web) |
 
 ## Como adicionar uma feature (ex.: entidade Product)
