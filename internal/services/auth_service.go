@@ -16,7 +16,6 @@ import (
 )
 
 const (
-	DefaultUserRole        = "user"
 	MaxFailedLoginAttempts = 5
 	MinPasswordLength      = 8
 )
@@ -26,6 +25,7 @@ type AuthService struct {
 	credentialRepo CredentialRepository
 	roleRepo       RoleRepository
 	refreshRepo    RefreshTokenRepository
+	studentRepo    StudentRepository
 	jwt            JWTManager
 }
 
@@ -34,6 +34,7 @@ func NewAuthService(
 	credentialRepo CredentialRepository,
 	roleRepo RoleRepository,
 	refreshRepo RefreshTokenRepository,
+	studentRepo StudentRepository,
 	jwt JWTManager,
 ) *AuthService {
 	return &AuthService{
@@ -41,6 +42,7 @@ func NewAuthService(
 		credentialRepo: credentialRepo,
 		roleRepo:       roleRepo,
 		refreshRepo:    refreshRepo,
+		studentRepo:    studentRepo,
 		jwt:            jwt,
 	}
 }
@@ -68,7 +70,9 @@ func (in RegisterInput) validate() *ValidationError {
 	return nil
 }
 
-// Register cria um novo usuário, sua credencial e atribui o papel padrão.
+// Register é o autocadastro público de aluno: cria usuário, credencial,
+// vínculo em students e papel student em transação única. Professores são
+// cadastrados pelo superusuário via /api/v1/professors.
 func (s *AuthService) Register(ctx context.Context, in RegisterInput) (*RegisterResult, error) {
 	if vErr := in.validate(); vErr != nil {
 		return nil, vErr
@@ -88,20 +92,7 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (*Register
 	}
 
 	user := &models.User{FullName: strings.TrimSpace(in.FullName), Email: strings.ToLower(strings.TrimSpace(in.Email))}
-	if err := s.userRepo.Create(ctx, user); err != nil {
-		return nil, err
-	}
-
-	credential := &models.UserCredential{UserID: user.ID, PasswordHash: hashed}
-	if err := s.credentialRepo.Create(ctx, credential); err != nil {
-		return nil, err
-	}
-
-	role, err := s.roleRepo.GetByName(ctx, DefaultUserRole)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.roleRepo.AssignToUser(ctx, user.ID, role.ID); err != nil {
+	if err := s.studentRepo.CreateWithAccount(ctx, user, hashed); err != nil {
 		return nil, err
 	}
 

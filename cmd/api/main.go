@@ -38,6 +38,7 @@ func main() {
 	credentialRepo := repositories.NewCredentialRepository(db)
 	roleRepo := repositories.NewRoleRepository(db)
 	refreshRepo := repositories.NewRefreshTokenRepository(db)
+	studentRepo := repositories.NewStudentRepository(db)
 
 	jwtMgr := jwt.NewManager(cfg.JWT)
 
@@ -59,7 +60,7 @@ func main() {
 		log.Printf("Superusuário já existente (login: %s); seed ignorado.", superInput.Login)
 	}
 
-	authService := services.NewAuthService(userRepo, credentialRepo, roleRepo, refreshRepo, jwtMgr)
+	authService := services.NewAuthService(userRepo, credentialRepo, roleRepo, refreshRepo, studentRepo, jwtMgr)
 	userService := services.NewUserService(userRepo, roleRepo)
 	professorRepo := repositories.NewProfessorRepository(db)
 	professorService := services.NewProfessorService(professorRepo)
