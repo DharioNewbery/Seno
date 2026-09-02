@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -15,6 +16,8 @@ import (
 const (
 	assignmentTitleMinLen = 3
 	sourceCodeMaxLen      = 64000
+	maxAssignmentTests    = 20
+	maxTestIOLen          = 8000
 )
 
 // supportedLanguages define as linguagens aceitas no MVP (execução no milestone 6).
@@ -46,6 +49,12 @@ func NewAssignmentService(assignmentRepo AssignmentRepository) *AssignmentServic
 	return &AssignmentService{assignmentRepo: assignmentRepo}
 }
 
+// TestInput é um caso de teste informado pelo professor na publicação.
+type TestInput struct {
+	Input          string
+	ExpectedOutput string
+}
+
 type CreateAssignmentInput struct {
 	ProfessorUserID uuid.UUID
 	ClassID         uuid.UUID
@@ -53,6 +62,7 @@ type CreateAssignmentInput struct {
 	Statement       string
 	Language        string
 	DueAt           *time.Time
+	Tests           []TestInput
 }
 
 func (in CreateAssignmentInput) validate() *ValidationError {
@@ -65,10 +75,25 @@ func (in CreateAssignmentInput) validate() *ValidationError {
 	if !supportedLanguages[in.Language] {
 		return NewValidationError("linguagem não suportada (use python, c ou cpp)")
 	}
+	if len(in.Tests) < 1 {
+		return NewValidationError("pelo menos um caso de teste é obrigatório")
+	}
+	if len(in.Tests) > maxAssignmentTests {
+		return NewValidationError(fmt.Sprintf("máximo de %d casos de teste por tarefa", maxAssignmentTests))
+	}
+	for _, t := range in.Tests {
+		if strings.TrimSpace(t.ExpectedOutput) == "" {
+			return NewValidationError("saída esperada é obrigatória em todos os casos de teste")
+		}
+		if len(t.Input) > maxTestIOLen || len(t.ExpectedOutput) > maxTestIOLen {
+			return NewValidationError("entrada/saída de teste excedem 8.000 caracteres")
+		}
+	}
 	return nil
 }
 
-// CreateAssignment valida e publica uma tarefa na turma do professor.
+// CreateAssignment valida e publica uma tarefa (com casos de teste) na
+// turma do professor, em transação única.
 func (s *AssignmentService) CreateAssignment(ctx context.Context, in CreateAssignmentInput) (*models.Assignment, error) {
 	if vErr := in.validate(); vErr != nil {
 		return nil, vErr
@@ -89,7 +114,13 @@ func (s *AssignmentService) CreateAssignment(ctx context.Context, in CreateAssig
 		Language:  in.Language,
 		DueAt:     in.DueAt,
 	}
-	if err := s.assignmentRepo.Create(ctx, assignment); err != nil {
+
+	tests := make([]models.AssignmentTest, len(in.Tests))
+	for i, t := range in.Tests {
+		tests[i] = models.AssignmentTest{Input: t.Input, ExpectedOutput: t.ExpectedOutput}
+	}
+
+	if err := s.assignmentRepo.CreateWithTests(ctx, assignment, tests); err != nil {
 		return nil, err
 	}
 	return assignment, nil
@@ -116,6 +147,11 @@ func (s *AssignmentService) ListMine(ctx context.Context, studentUserID uuid.UUI
 // todas (professor dono da turma) ou apenas as próprias (aluno membro).
 func (s *AssignmentService) GetDetail(ctx context.Context, requesterID, assignmentID uuid.UUID) (*models.AssignmentDetail, error) {
 	detail, err := s.assignmentRepo.GetDetail(ctx, assignmentID)
+	if err != nil {
+		return nil, err
+	}
+
+	detail.Tests, err = s.assignmentRepo.ListTests(ctx, assignmentID)
 	if err != nil {
 		return nil, err
 	}
