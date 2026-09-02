@@ -93,6 +93,7 @@ web/                       # Interface web estática (embed em web.go) + STYLEGU
 - Cadastro de professores: transação única em `professors` (composição 1:1 com `users`) — `ProfessorRepository.CreateWithAccount`.
 - Criação de contas com perfil (professores/alunos) compartilha o helper transacional `repositories/account.go` (`createProfiledAccount`).
 - **Turmas:** professor cria (`POST /classes`) com `join_code` gerado pelo serviço (6 caracteres, sem ambíguos, retry em colisão); aluno ingressa via `POST /classes/join` (valida papel `student`, idempotente); listagens por papel (`GET /classes` do professor, `GET /classes/mine` do aluno). Associação N:M em `class_members`.
+- **Tarefas e submissões:** professor publica em `POST /classes/{id}/assignments` (título, enunciado, linguagem `python|c|cpp`, prazo opcional RFC3339); aluno vê feed (`GET /assignments/mine`), detalhe (`GET /assignments/{id}` — submissões embutidas conforme papel) e submete código pela IDE web (`POST /assignments/{id}/submissions`, linguagem herdada da tarefa, status inicial `pending`). IDE: CodeMirror 5 embutido em `web/static/vendor` (sem build), rascunho com auto-save em `localStorage` (`seno.draft.<id>`). Execução/correção automática usará o campo `status` (milestone 6).
 
 ## Padrão de resposta HTTP
 
@@ -144,6 +145,11 @@ go build -o bin/seno-api ./cmd/api
 | GET    | /api/v1/classes      | Bearer (professor) | Listar turmas do professor   |
 | POST   | /api/v1/classes/join | Bearer | Ingressar em turma por código     |
 | GET    | /api/v1/classes/mine | Bearer | Turmas do aluno autenticado       |
+| POST   | /api/v1/classes/{id}/assignments | Bearer (professor) | Publicar tarefa na turma |
+| GET    | /api/v1/classes/{id}/assignments | Bearer (professor) | Listar tarefas da turma   |
+| GET    | /api/v1/assignments/mine | Bearer | Feed de tarefas do aluno     |
+| GET    | /api/v1/assignments/{id} | Bearer | Detalhe da tarefa (submissões conforme papel) |
+| POST   | /api/v1/assignments/{id}/submissions | Bearer | Submeter código (IDE web) |
 
 ## Como adicionar uma feature (ex.: entidade Product)
 
