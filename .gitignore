@@ -19,8 +19,8 @@ seno-api
 .DS_Store
 Thumbs.db
 
-# Go
-vendor/
+# Go (vendor na raiz do módulo; web/static/vendor é embutido no binário)
+/vendor/
 
 # Logs
 *.log
