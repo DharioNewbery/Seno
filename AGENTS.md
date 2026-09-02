@@ -45,6 +45,7 @@ internal/
   server/                  # Montagem do chi router + middlewares + rotas
   utils/                   # jwt, password (bcrypt), hash (sha256)
 pkg/response/              # Helper de resposta JSON padrão (Body{success,message,data,error})
+web/                       # Interface web estática (embed em web.go) + STYLEGUIDE.md
 ```
 
 ### Princípios
@@ -86,6 +87,10 @@ pkg/response/              # Helper de resposta JSON padrão (Body{success,messa
 - `Refresh`: valida o refresh token (JWT + tabela `refresh_tokens`), revoga o antigo e emite novo par (rotação).
 - Refresh tokens são armazenados como **hash SHA-256** (revogáveis sem expor o token).
 - Middlewares: `RequireAuth` (Bearer), `RequireRole(roleChecker, "admin")`, `RequirePermission(roleChecker, "users:read")`.
+- **Superusuário:** `SeedService.EnsureSuperUser` roda no startup (após `Migrate`) e garante o usuário SUPER (login via `SUPER_LOGIN`, senha temporária via `SUPER_PASSWORD`). Idempotente: não sobrescreve senha.
+- Login aceita **email ou username** (`users.username`, normalizado lowercase). SUPER é a única conta com username no MVP.
+- `ChangePassword`: verifica senha atual, atualiza e **revoga todos os refresh tokens** (outras sessões caem).
+- Cadastro de professores: transação única em `professors` (composição 1:1 com `users`) — `ProfessorRepository.CreateWithAccount`.
 
 ## Padrão de resposta HTTP
 
@@ -123,12 +128,16 @@ go build -o bin/seno-api ./cmd/api
 |--------|--------------------|-------|-----------------------------------|
 | GET    | /health            | —     | Healthcheck                       |
 | GET    | /routes            | —     | Lista todas as rotas registradas  |
+| GET    | /                  | —     | Interface web (login)             |
 | POST   | /api/v1/auth/register | —  | Cadastrar usuário                 |
-| POST   | /api/v1/auth/login    | —  | Autenticar e obter tokens         |
+| POST   | /api/v1/auth/login    | —  | Autenticar (email ou username)    |
 | POST   | /api/v1/auth/refresh  | —  | Renovar tokens                    |
 | GET    | /api/v1/auth/me       | Bearer | Dados do usuário autenticado   |
+| POST   | /api/v1/auth/change-password | Bearer | Trocar a própria senha (revoga sessões) |
 | GET    | /api/v1/users         | Bearer | Listar usuários                 |
 | GET    | /api/v1/users/{id}    | Bearer | Obter usuário por id            |
+| POST   | /api/v1/professors   | Bearer (super) | Cadastrar professor (senha temporária) |
+| GET    | /api/v1/professors   | Bearer (super) | Listar professores              |
 
 ## Como adicionar uma feature (ex.: entidade Product)
 
