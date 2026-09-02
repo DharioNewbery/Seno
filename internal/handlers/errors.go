@@ -26,12 +26,16 @@ func mapError(err error) (int, string) {
 		errors.Is(err, repositories.ErrCredentialNotFound),
 		errors.Is(err, repositories.ErrRoleNotFound),
 		errors.Is(err, repositories.ErrPermissionNotFound),
-		errors.Is(err, repositories.ErrClassNotFound):
+		errors.Is(err, repositories.ErrClassNotFound),
+		errors.Is(err, repositories.ErrAssignmentNotFound):
 		return http.StatusNotFound, err.Error()
 	case errors.Is(err, repositories.ErrUserAlreadyExists),
 		errors.Is(err, services.ErrAlreadyClassMember):
 		return http.StatusConflict, err.Error()
-	case errors.Is(err, services.ErrNotStudent):
+	case errors.Is(err, services.ErrNotStudent),
+		errors.Is(err, services.ErrNotClassOwner),
+		errors.Is(err, services.ErrNotClassMember),
+		errors.Is(err, services.ErrUnsupportedLanguage):
 		return http.StatusForbidden, err.Error()
 	case errors.Is(err, repositories.ErrRefreshTokenNotFound),
 		errors.Is(err, services.ErrInvalidCredentials),

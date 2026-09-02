@@ -71,6 +71,129 @@ type joinClassRequest struct {
 	Code string `json:"code"`
 }
 
+type createAssignmentRequest struct {
+	Title     string  `json:"title"`
+	Statement string  `json:"statement"`
+	Language  string  `json:"language"`
+	DueAt     *string `json:"due_at"`
+}
+
+type submitRequest struct {
+	SourceCode string `json:"source_code"`
+}
+
+type assignmentResponse struct {
+	ID        uuid.UUID  `json:"id"`
+	ClassID   uuid.UUID  `json:"class_id"`
+	Title     string     `json:"title"`
+	Statement string     `json:"statement"`
+	Language  string     `json:"language"`
+	DueAt     *time.Time `json:"due_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
+func toAssignmentResponse(a models.Assignment) assignmentResponse {
+	return assignmentResponse{
+		ID:        a.ID,
+		ClassID:   a.ClassID,
+		Title:     a.Title,
+		Statement: a.Statement,
+		Language:  a.Language,
+		DueAt:     a.DueAt,
+		CreatedAt: a.CreatedAt,
+	}
+}
+
+type assignmentSummaryResponse struct {
+	ID        uuid.UUID  `json:"id"`
+	ClassID   uuid.UUID  `json:"class_id"`
+	ClassName string     `json:"class_name"`
+	Title     string     `json:"title"`
+	Language  string     `json:"language"`
+	DueAt     *time.Time `json:"due_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
+func toAssignmentSummaryResponse(a models.AssignmentSummary) assignmentSummaryResponse {
+	return assignmentSummaryResponse{
+		ID:        a.ID,
+		ClassID:   a.ClassID,
+		ClassName: a.ClassName,
+		Title:     a.Title,
+		Language:  a.Language,
+		DueAt:     a.DueAt,
+		CreatedAt: a.CreatedAt,
+	}
+}
+
+type assignmentDetailResponse struct {
+	ID          uuid.UUID                   `json:"id"`
+	ClassID     uuid.UUID                   `json:"class_id"`
+	ClassName   string                      `json:"class_name"`
+	Title       string                      `json:"title"`
+	Statement   string                      `json:"statement"`
+	Language    string                      `json:"language"`
+	DueAt       *time.Time                  `json:"due_at,omitempty"`
+	CreatedAt   time.Time                   `json:"created_at"`
+	Submissions []submissionSummaryResponse `json:"submissions"`
+}
+
+func toAssignmentDetailResponse(d models.AssignmentDetail) assignmentDetailResponse {
+	resp := assignmentDetailResponse{
+		ID:          d.ID,
+		ClassID:     d.ClassID,
+		ClassName:   d.ClassName,
+		Title:       d.Title,
+		Statement:   d.Statement,
+		Language:    d.Language,
+		DueAt:       d.DueAt,
+		CreatedAt:   d.CreatedAt,
+		Submissions: make([]submissionSummaryResponse, 0, len(d.Submissions)),
+	}
+	for _, s := range d.Submissions {
+		resp.Submissions = append(resp.Submissions, toSubmissionSummaryResponse(s))
+	}
+	return resp
+}
+
+type submissionResponse struct {
+	ID           uuid.UUID `json:"id"`
+	AssignmentID uuid.UUID `json:"assignment_id"`
+	Language     string    `json:"language"`
+	Status       string    `json:"status"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+func toSubmissionResponse(s models.Submission) submissionResponse {
+	return submissionResponse{
+		ID:           s.ID,
+		AssignmentID: s.AssignmentID,
+		Language:     s.Language,
+		Status:       s.Status,
+		CreatedAt:    s.CreatedAt,
+	}
+}
+
+type submissionSummaryResponse struct {
+	ID          uuid.UUID `json:"id"`
+	StudentName string    `json:"student_name"`
+	Language    string    `json:"language"`
+	SourceCode  string    `json:"source_code"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+func toSubmissionSummaryResponse(s models.SubmissionView) submissionSummaryResponse {
+	return submissionSummaryResponse{
+		ID:          s.ID,
+		StudentName: s.StudentName,
+		Language:    s.Language,
+		SourceCode:  s.SourceCode,
+		Status:      s.Status,
+		CreatedAt:   s.CreatedAt,
+	}
+}
+
 type classResponse struct {
 	ID          uuid.UUID `json:"id"`
 	Name        string    `json:"name"`
