@@ -1,8 +1,10 @@
 "use strict";
 
-// Seno — página de login e sessão (MVP). Utilitários em common.js.
+// Seno — página de login, autocadastro de aluno e sessão (MVP).
+// Utilitários em common.js.
 
 var viewLogin = document.getElementById("view-login");
+var viewRegister = document.getElementById("view-register");
 var viewMe = document.getElementById("view-me");
 var loginForm = document.getElementById("login-form");
 var loginInput = document.getElementById("login");
@@ -17,6 +19,14 @@ var currentPasswordInput = document.getElementById("current-password");
 var newPasswordInput = document.getElementById("new-password");
 var changePasswordError = document.getElementById("change-password-error");
 var changePasswordSubmit = document.getElementById("change-password-submit");
+var registerForm = document.getElementById("register-form");
+var regFullNameInput = document.getElementById("reg-full-name");
+var regEmailInput = document.getElementById("reg-email");
+var regPasswordInput = document.getElementById("reg-password");
+var registerError = document.getElementById("register-error");
+var registerSubmit = document.getElementById("register-submit");
+var showRegisterLink = document.getElementById("show-register");
+var showLoginLink = document.getElementById("show-login");
 
 async function handleLogin(event) {
   event.preventDefault();
@@ -45,6 +55,38 @@ async function handleLogin(event) {
   }
 }
 
+async function handleRegister(event) {
+  event.preventDefault();
+  registerError.classList.add("hidden");
+
+  var fullName = regFullNameInput.value.trim();
+  var email = regEmailInput.value.trim();
+  var password = regPasswordInput.value;
+  if (!fullName || !email || !password) {
+    showRegisterError("Preencha todos os campos.");
+    return;
+  }
+
+  registerSubmit.disabled = true;
+  registerSubmit.textContent = "Criando...";
+  try {
+    await request("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ full_name: fullName, email: email, password: password })
+    });
+    registerForm.reset();
+    showLoginView();
+    loginInput.value = email;
+    passwordInput.focus();
+    showLoginNotice("Conta criada com sucesso. Entre com seu email e senha.");
+  } catch (err) {
+    showRegisterError(err.message);
+  } finally {
+    registerSubmit.disabled = false;
+    registerSubmit.textContent = "Criar conta";
+  }
+}
+
 async function showMe() {
   try {
     var data = await request("/auth/me");
@@ -57,6 +99,7 @@ async function showMe() {
     saveUser(user);
     renderMe(user);
     viewLogin.classList.add("hidden");
+    viewRegister.classList.add("hidden");
     viewMe.classList.remove("hidden");
   } catch (err) {
     clearSession();
@@ -83,7 +126,14 @@ function renderMe(user) {
 
 function showLoginView() {
   viewMe.classList.add("hidden");
+  viewRegister.classList.add("hidden");
   viewLogin.classList.remove("hidden");
+}
+
+function showRegisterView() {
+  viewLogin.classList.add("hidden");
+  viewRegister.classList.remove("hidden");
+  hideLoginMessages();
 }
 
 function showLoginError(message) {
@@ -99,6 +149,11 @@ function showLoginNotice(message) {
 function hideLoginMessages() {
   loginError.classList.add("hidden");
   loginNotice.classList.add("hidden");
+}
+
+function showRegisterError(message) {
+  registerError.textContent = message;
+  registerError.classList.remove("hidden");
 }
 
 function setLoading(loading) {
@@ -145,7 +200,18 @@ function showChangePasswordError(message) {
 }
 
 loginForm.addEventListener("submit", handleLogin);
+registerForm.addEventListener("submit", handleRegister);
 changePasswordForm.addEventListener("submit", handleChangePassword);
+
+showRegisterLink.addEventListener("click", function (event) {
+  event.preventDefault();
+  showRegisterView();
+});
+
+showLoginLink.addEventListener("click", function (event) {
+  event.preventDefault();
+  showLoginView();
+});
 
 logoutButton.addEventListener("click", function () {
   clearSession();
