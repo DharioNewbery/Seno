@@ -58,6 +58,14 @@ func (h *AssignmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tests := make([]services.TestInput, 0, len(req.Tests))
+	for _, t := range req.Tests {
+		tests = append(tests, services.TestInput{
+			Input:          t.Input,
+			ExpectedOutput: t.ExpectedOutput,
+		})
+	}
+
 	assignment, err := h.assignmentService.CreateAssignment(r.Context(), services.CreateAssignmentInput{
 		ProfessorUserID: userID,
 		ClassID:         classID,
@@ -65,6 +73,7 @@ func (h *AssignmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Statement:       req.Statement,
 		Language:        req.Language,
 		DueAt:           dueAt,
+		Tests:           tests,
 	})
 	if err != nil {
 		status, msg := mapError(err)

@@ -72,10 +72,16 @@ type joinClassRequest struct {
 }
 
 type createAssignmentRequest struct {
-	Title     string  `json:"title"`
-	Statement string  `json:"statement"`
-	Language  string  `json:"language"`
-	DueAt     *string `json:"due_at"`
+	Title     string        `json:"title"`
+	Statement string        `json:"statement"`
+	Language  string        `json:"language"`
+	DueAt     *string       `json:"due_at"`
+	Tests     []testRequest `json:"tests"`
+}
+
+type testRequest struct {
+	Input          string `json:"input"`
+	ExpectedOutput string `json:"expected_output"`
 }
 
 type submitRequest struct {
@@ -130,6 +136,13 @@ func toAssignmentSummaryResponse(a models.AssignmentSummary) assignmentSummaryRe
 	}
 }
 
+type assignmentTestResponse struct {
+	ID             uuid.UUID `json:"id"`
+	Position       int       `json:"position"`
+	Input          string    `json:"input"`
+	ExpectedOutput string    `json:"expected_output"`
+}
+
 type assignmentDetailResponse struct {
 	ID          uuid.UUID                   `json:"id"`
 	ClassID     uuid.UUID                   `json:"class_id"`
@@ -139,6 +152,7 @@ type assignmentDetailResponse struct {
 	Language    string                      `json:"language"`
 	DueAt       *time.Time                  `json:"due_at,omitempty"`
 	CreatedAt   time.Time                   `json:"created_at"`
+	Tests       []assignmentTestResponse    `json:"tests"`
 	Submissions []submissionSummaryResponse `json:"submissions"`
 	Draft       *models.Draft               `json:"draft,omitempty"`
 }
@@ -153,8 +167,17 @@ func toAssignmentDetailResponse(d models.AssignmentDetail) assignmentDetailRespo
 		Language:    d.Language,
 		DueAt:       d.DueAt,
 		CreatedAt:   d.CreatedAt,
+		Tests:       make([]assignmentTestResponse, 0, len(d.Tests)),
 		Submissions: make([]submissionSummaryResponse, 0, len(d.Submissions)),
 		Draft:       d.Draft,
+	}
+	for _, t := range d.Tests {
+		resp.Tests = append(resp.Tests, assignmentTestResponse{
+			ID:             t.ID,
+			Position:       t.Position,
+			Input:          t.Input,
+			ExpectedOutput: t.ExpectedOutput,
+		})
 	}
 	for _, s := range d.Submissions {
 		resp.Submissions = append(resp.Submissions, toSubmissionSummaryResponse(s))
@@ -181,16 +204,17 @@ func toSubmissionResponse(s models.Submission) submissionResponse {
 }
 
 type submissionSummaryResponse struct {
-	ID          uuid.UUID `json:"id"`
-	StudentName string    `json:"student_name"`
-	Language    string    `json:"language"`
-	SourceCode  string    `json:"source_code"`
-	Status      string    `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          uuid.UUID       `json:"id"`
+	StudentName string          `json:"student_name"`
+	Language    string          `json:"language"`
+	SourceCode  string          `json:"source_code"`
+	Status      string          `json:"status"`
+	Result      json.RawMessage `json:"result,omitempty"`
+	CreatedAt   time.Time       `json:"created_at"`
 }
 
 func toSubmissionSummaryResponse(s models.SubmissionView) submissionSummaryResponse {
-	return submissionSummaryResponse{
+	resp := submissionSummaryResponse{
 		ID:          s.ID,
 		StudentName: s.StudentName,
 		Language:    s.Language,
@@ -198,6 +222,11 @@ func toSubmissionSummaryResponse(s models.SubmissionView) submissionSummaryRespo
 		Status:      s.Status,
 		CreatedAt:   s.CreatedAt,
 	}
+	// result vem como texto JSON do banco e sai como objeto na resposta.
+	if s.Result != nil {
+		resp.Result = json.RawMessage(*s.Result)
+	}
+	return resp
 }
 
 type classResponse struct {

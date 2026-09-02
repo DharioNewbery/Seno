@@ -27,7 +27,8 @@ func mapError(err error) (int, string) {
 		errors.Is(err, repositories.ErrRoleNotFound),
 		errors.Is(err, repositories.ErrPermissionNotFound),
 		errors.Is(err, repositories.ErrClassNotFound),
-		errors.Is(err, repositories.ErrAssignmentNotFound):
+		errors.Is(err, repositories.ErrAssignmentNotFound),
+		errors.Is(err, repositories.ErrSubmissionNotFound):
 		return http.StatusNotFound, err.Error()
 	case errors.Is(err, repositories.ErrUserAlreadyExists),
 		errors.Is(err, services.ErrAlreadyClassMember):
