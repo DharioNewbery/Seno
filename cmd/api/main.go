@@ -13,9 +13,11 @@ import (
 	"seno/internal/database"
 	"seno/internal/handlers"
 	"seno/internal/repositories"
+	"seno/internal/runner"
 	"seno/internal/server"
 	"seno/internal/services"
 	"seno/internal/utils/jwt"
+	"seno/internal/worker"
 )
 
 func main() {
@@ -79,6 +81,19 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Correção automática: worker consome submissões pendentes e executa o
+	// código em containers efêmeros (requer Docker acessível ao processo).
+	if cfg.Runner.Enabled {
+		codeRunner, err := runner.NewRunner()
+		if err != nil {
+			log.Fatalf("Falha ao conectar ao Docker para a correção automática: %v", err)
+		}
+		gradingService := services.NewGradingService(assignmentRepo, codeRunner)
+		go worker.NewGradingWorker(gradingService, cfg.Runner.Interval, cfg.Runner.Batch).Start(ctx)
+	} else {
+		log.Println("Correção automática desativada (RUNNER_ENABLED=false); submissões permanecem pendentes")
+	}
 
 	go func() {
 		log.Printf("Servidor iniciado em http://%s:%s (ambiente: %s)",

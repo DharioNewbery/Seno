@@ -17,11 +17,12 @@ const defaultDevSecret = "dev-only-secret-please-override-in-production-32bytes"
 const defaultSuperPassword = "SUPER1234"
 
 type Config struct {
-	App   AppConfig
-	DB    DBConfig
-	JWT   JWTConfig
-	CORS  CORSConfig
-	Super SuperConfig
+	App    AppConfig
+	DB     DBConfig
+	JWT    JWTConfig
+	CORS   CORSConfig
+	Super  SuperConfig
+	Runner RunnerConfig
 }
 
 type AppConfig struct {
@@ -59,6 +60,13 @@ type SuperConfig struct {
 	Password string
 }
 
+// RunnerConfig define o worker de correção automática (execução em containers).
+type RunnerConfig struct {
+	Enabled  bool
+	Interval time.Duration
+	Batch    int
+}
+
 func Load() (*Config, error) {
 	_ = godotenv.Load()
 
@@ -91,6 +99,11 @@ func Load() (*Config, error) {
 		Super: SuperConfig{
 			Login:    getEnv("SUPER_LOGIN", "SUPER"),
 			Password: getEnv("SUPER_PASSWORD", defaultSuperPassword),
+		},
+		Runner: RunnerConfig{
+			Enabled:  getEnvBool("RUNNER_ENABLED", true),
+			Interval: getEnvDuration("RUNNER_INTERVAL", 5*time.Second),
+			Batch:    getEnvInt("RUNNER_BATCH", 5),
 		},
 	}
 
@@ -132,6 +145,15 @@ func getEnvInt(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
+		}
+	}
+	return fallback
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	if v := os.Getenv(key); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
 		}
 	}
 	return fallback
