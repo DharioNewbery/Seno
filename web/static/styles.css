@@ -161,6 +161,26 @@ body {
   width: 100%;
 }
 
+/* Links/botões em bloco empilhados (navegação da sessão) */
+.btn--block + .btn--block {
+  margin-top: var(--space-2);
+}
+
+.btn--small {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+/* Código de ingresso de turma (mono, destacado) */
+.code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace;
+  letter-spacing: 1px;
+  background: var(--color-badge-bg);
+  color: var(--color-badge-text);
+  border-radius: 4px;
+  padding: 2px var(--space-2);
+}
+
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;

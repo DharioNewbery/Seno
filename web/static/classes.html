@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seno — Minhas turmas</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <h1>Minhas turmas</h1>
+      <a class="btn" href="/">Voltar</a>
+    </header>
+
+    <section id="professor-panel" class="card hidden">
+      <h2>Nova turma</h2>
+      <form id="class-form" novalidate>
+        <div class="field">
+          <label for="class-name">Nome da turma</label>
+          <input type="text" id="class-name" name="name" placeholder="Ex.: Algoritmos 2026.1" required>
+        </div>
+
+        <div class="field">
+          <label for="class-description">Descrição (opcional)</label>
+          <input type="text" id="class-description" name="description" maxlength="255">
+        </div>
+
+        <p id="class-error" class="alert alert--error hidden" role="alert"></p>
+        <p id="class-success" class="alert alert--success hidden" role="status"></p>
+
+        <button type="submit" id="class-submit" class="btn btn--primary btn--block">Criar turma</button>
+      </form>
+    </section>
+
+    <section id="student-join" class="card hidden">
+      <h2>Entrar em uma turma</h2>
+      <form id="join-form" novalidate>
+        <div class="field">
+          <label for="join-code">Código da turma</label>
+          <input type="text" id="join-code" name="code" placeholder="Ex.: ABC123"
+                 autocomplete="off" required>
+          <p class="muted">O código é fornecido pelo professor.</p>
+        </div>
+
+        <p id="join-error" class="alert alert--error hidden" role="alert"></p>
+        <p id="join-success" class="alert alert--success hidden" role="status"></p>
+
+        <button type="submit" id="join-submit" class="btn btn--primary btn--block">Entrar na turma</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2 id="list-title">Turmas</h2>
+      <table class="table">
+        <thead id="classes-head"></thead>
+        <tbody id="classes-body"></tbody>
+      </table>
+      <p id="classes-empty" class="muted hidden"></p>
+    </section>
+  </main>
+
+  <script src="/common.js"></script>
+  <script src="/classes.js"></script>
+</body>
+</html>

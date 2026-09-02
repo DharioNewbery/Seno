@@ -14,6 +14,7 @@ var loginNotice = document.getElementById("login-notice");
 var loginSubmit = document.getElementById("login-submit");
 var logoutButton = document.getElementById("logout");
 var linkProfessors = document.getElementById("link-professors");
+var linkClasses = document.getElementById("link-classes");
 var changePasswordForm = document.getElementById("change-password-form");
 var currentPasswordInput = document.getElementById("current-password");
 var newPasswordInput = document.getElementById("new-password");
@@ -122,6 +123,7 @@ function renderMe(user) {
   });
 
   linkProfessors.classList.toggle("hidden", !hasRole(user, "super"));
+  linkClasses.classList.toggle("hidden", !(hasRole(user, "professor") || hasRole(user, "student")));
 }
 
 function showLoginView() {
