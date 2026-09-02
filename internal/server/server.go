@@ -28,6 +28,7 @@ func New(
 	jwtMgr *jwt.Manager,
 	authHandler *handlers.AuthHandler,
 	userHandler *handlers.UserHandler,
+	professorHandler *handlers.ProfessorHandler,
 	roleChecker appmw.RoleChecker,
 ) *Server {
 	r := chi.NewRouter()
@@ -63,22 +64,23 @@ func New(
 			r.Use(appmw.RequireAuth(jwtMgr))
 
 			r.Get("/auth/me", authHandler.Me)
+			r.Post("/auth/change-password", authHandler.ChangePassword)
 			r.Get("/users", userHandler.List)
 			r.Get("/users/{id}", userHandler.GetByID)
 		})
 
-		// Exemplo de rota protegida por papel (admin)
-		// r.Group(func(r chi.Router) {
-		// 	r.Use(appmw.RequireAuth(jwtMgr))
-		// 	r.With(appmw.RequireRole(roleChecker, "admin")).
-		// 		Get("/admin", adminHandler.Dashboard)
-		// })
+		// Rotas administrativas (superusuário)
+		r.Group(func(r chi.Router) {
+			r.Use(appmw.RequireAuth(jwtMgr))
+			r.Use(appmw.RequireRole(roleChecker, "super"))
+
+			r.Post("/professors", professorHandler.Create)
+			r.Get("/professors", professorHandler.List)
+		})
 	})
 
 	// Interface web (arquivos estáticos embutidos em web/static)
 	r.Handle("/*", web.Handler())
-
-	_ = roleChecker // disponível para rotas protegidas por papel/permissão
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf("%s:%s", cfg.App.Host, cfg.App.Port),
