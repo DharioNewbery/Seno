@@ -29,6 +29,7 @@ func New(
 	authHandler *handlers.AuthHandler,
 	userHandler *handlers.UserHandler,
 	professorHandler *handlers.ProfessorHandler,
+	classHandler *handlers.ClassHandler,
 	roleChecker appmw.RoleChecker,
 ) *Server {
 	r := chi.NewRouter()
@@ -67,6 +68,18 @@ func New(
 			r.Post("/auth/change-password", authHandler.ChangePassword)
 			r.Get("/users", userHandler.List)
 			r.Get("/users/{id}", userHandler.GetByID)
+
+			r.Post("/classes/join", classHandler.Join)
+			r.Get("/classes/mine", classHandler.Mine)
+		})
+
+		// Rotas de professor
+		r.Group(func(r chi.Router) {
+			r.Use(appmw.RequireAuth(jwtMgr))
+			r.Use(appmw.RequireRole(roleChecker, "professor"))
+
+			r.Post("/classes", classHandler.Create)
+			r.Get("/classes", classHandler.List)
 		})
 
 		// Rotas administrativas (superusuário)
