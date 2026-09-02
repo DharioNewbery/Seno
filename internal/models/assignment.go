@@ -29,9 +29,10 @@ type AssignmentSummary struct {
 	CreatedAt time.Time  `db:"created_at" json:"created_at"`
 }
 
-// AssignmentDetail é a tarefa completa (enunciado) com as submissões visíveis
-// ao solicitante: as próprias (aluno) ou todas (professor dono da turma).
-// Para o aluno, Draft carrega o rascunho salvo do editor online (backup).
+// AssignmentDetail é a tarefa completa (enunciado e casos de teste) com as
+// submissões visíveis ao solicitante: as próprias (aluno) ou todas
+// (professor dono da turma). Para o aluno, Draft carrega o rascunho salvo
+// do editor online (backup).
 type AssignmentDetail struct {
 	ID          uuid.UUID        `db:"id" json:"id"`
 	ClassID     uuid.UUID        `db:"class_id" json:"class_id"`
@@ -43,7 +44,19 @@ type AssignmentDetail struct {
 	CreatedAt   time.Time        `db:"created_at" json:"created_at"`
 	UpdatedAt   time.Time        `db:"updated_at" json:"updated_at"`
 	Submissions []SubmissionView `db:"-" json:"submissions"`
+	Tests       []AssignmentTest `db:"-" json:"tests"`
 	Draft       *Draft           `db:"-" json:"draft,omitempty"`
+}
+
+// AssignmentTest é um caso de teste da tarefa: entrada (stdin) e saída
+// esperada (stdout), usados pela correção automática.
+type AssignmentTest struct {
+	ID             uuid.UUID `db:"id" json:"id"`
+	AssignmentID   uuid.UUID `db:"assignment_id" json:"assignment_id"`
+	Position       int       `db:"position" json:"position"`
+	Input          string    `db:"input" json:"input"`
+	ExpectedOutput string    `db:"expected_output" json:"expected_output"`
+	CreatedAt      time.Time `db:"created_at" json:"created_at"`
 }
 
 // Draft é o rascunho de um aluno numa tarefa (backup do editor online).
@@ -62,6 +75,7 @@ type Submission struct {
 	Language      string    `db:"language" json:"language"`
 	SourceCode    string    `db:"source_code" json:"source_code"`
 	Status        string    `db:"status" json:"status"`
+	Result        *string   `db:"result" json:"result,omitempty"`
 	CreatedAt     time.Time `db:"created_at" json:"created_at"`
 }
 
@@ -73,5 +87,6 @@ type SubmissionView struct {
 	Language      string    `db:"language" json:"language"`
 	SourceCode    string    `db:"source_code" json:"source_code"`
 	Status        string    `db:"status" json:"status"`
+	Result        *string   `db:"result" json:"result,omitempty"`
 	CreatedAt     time.Time `db:"created_at" json:"created_at"`
 }
