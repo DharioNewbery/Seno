@@ -82,7 +82,7 @@ web/                       # Interface web estática (embed em web.go) + STYLEGU
 
 ## Autenticação e RBAC
 
-- `Register`: cria usuário + credencial (bcrypt) + atribui papel `user`.
+- `Register`: autocadastro público de **aluno** — usuário + credencial (bcrypt) + vínculo em `students` + papel `student`, em transação única (`StudentRepository.CreateWithAccount`). Professores são criados pelo SUPER.
 - `Login`: valida senha, controla `failed_login_attempts` (bloqueia após 5), emite par de tokens (access + refresh).
 - `Refresh`: valida o refresh token (JWT + tabela `refresh_tokens`), revoga o antigo e emite novo par (rotação).
 - Refresh tokens são armazenados como **hash SHA-256** (revogáveis sem expor o token).
@@ -91,6 +91,7 @@ web/                       # Interface web estática (embed em web.go) + STYLEGU
 - Login aceita **email ou username** (`users.username`, normalizado lowercase). SUPER é a única conta com username no MVP.
 - `ChangePassword`: verifica senha atual, atualiza e **revoga todos os refresh tokens** (outras sessões caem).
 - Cadastro de professores: transação única em `professors` (composição 1:1 com `users`) — `ProfessorRepository.CreateWithAccount`.
+- Criação de contas com perfil (professores/alunos) compartilha o helper transacional `repositories/account.go` (`createProfiledAccount`).
 
 ## Padrão de resposta HTTP
 
@@ -129,7 +130,7 @@ go build -o bin/seno-api ./cmd/api
 | GET    | /health            | —     | Healthcheck                       |
 | GET    | /routes            | —     | Lista todas as rotas registradas  |
 | GET    | /                  | —     | Interface web (login)             |
-| POST   | /api/v1/auth/register | —  | Cadastrar usuário                 |
+| POST   | /api/v1/auth/register | —  | Cadastrar aluno (autocadastro)    |
 | POST   | /api/v1/auth/login    | —  | Autenticar (email ou username)    |
 | POST   | /api/v1/auth/refresh  | —  | Renovar tokens                    |
 | GET    | /api/v1/auth/me       | Bearer | Dados do usuário autenticado   |
