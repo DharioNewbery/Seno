@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seno — Professores</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <h1>Professores</h1>
+      <a class="btn" href="/">Voltar</a>
+    </header>
+
+    <section class="card">
+      <h2>Novo professor</h2>
+      <form id="professor-form" novalidate>
+        <div class="field">
+          <label for="full_name">Nome completo</label>
+          <input type="text" id="full_name" name="full_name" autocomplete="name" required>
+        </div>
+
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" autocomplete="email" required>
+        </div>
+
+        <div class="field">
+          <label for="password">Senha temporária</label>
+          <input type="password" id="password" name="password"
+                 autocomplete="new-password" minlength="8" required>
+          <p class="muted">O professor deve trocá-la no primeiro acesso.</p>
+        </div>
+
+        <p id="professor-error" class="alert alert--error hidden" role="alert"></p>
+        <p id="professor-success" class="alert alert--success hidden" role="status"></p>
+
+        <button type="submit" id="professor-submit" class="btn btn--primary btn--block">Cadastrar professor</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Cadastrados</h2>
+      <table class="table">
+        <thead>
+          <tr><th>Nome</th><th>Email</th><th>Professor desde</th></tr>
+        </thead>
+        <tbody id="professors-body"></tbody>
+      </table>
+      <p id="professors-empty" class="muted hidden">Nenhum professor cadastrado.</p>
+    </section>
+  </main>
+
+  <script src="/common.js"></script>
+  <script src="/professors.js"></script>
+</body>
+</html>
