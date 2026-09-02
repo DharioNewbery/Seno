@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seno — Tarefas</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <h1 id="page-title">Tarefas</h1>
+      <a class="btn" href="/">Voltar</a>
+    </header>
+
+    <section id="new-assignment" class="card hidden">
+      <h2>Nova tarefa</h2>
+      <form id="assignment-form" novalidate>
+        <div class="field">
+          <label for="as-title">Título</label>
+          <input type="text" id="as-title" name="title" placeholder="Ex.: Fatorial recursivo" required>
+        </div>
+
+        <div class="field">
+          <label for="as-statement">Enunciado</label>
+          <textarea id="as-statement" name="statement" rows="6" required></textarea>
+        </div>
+
+        <div class="field">
+          <label for="as-language">Linguagem</label>
+          <select id="as-language" name="language">
+            <option value="python">Python</option>
+            <option value="c">C</option>
+            <option value="cpp">C++</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="as-due">Prazo (opcional)</label>
+          <input type="datetime-local" id="as-due" name="due_at">
+        </div>
+
+        <p id="as-error" class="alert alert--error hidden" role="alert"></p>
+        <p id="as-success" class="alert alert--success hidden" role="status"></p>
+
+        <button type="submit" id="as-submit" class="btn btn--primary btn--block">Publicar tarefa</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2 id="list-title">Tarefas</h2>
+      <table class="table">
+        <thead id="assignments-head"></thead>
+        <tbody id="assignments-body"></tbody>
+      </table>
+      <p id="assignments-empty" class="muted hidden"></p>
+    </section>
+  </main>
+
+  <script src="/common.js"></script>
+  <script src="/assignments.js"></script>
+</body>
+</html>

@@ -35,7 +35,7 @@ var joinSubmit = document.getElementById("join-submit");
 function setupMode() {
   if (mode === "professor") {
     professorPanel.classList.remove("hidden");
-    classesHead.innerHTML = "<tr><th>Nome</th><th>Código</th><th>Alunos</th><th>Criada em</th></tr>";
+    classesHead.innerHTML = "<tr><th>Nome</th><th>Código</th><th>Alunos</th><th>Tarefas</th><th>Criada em</th></tr>";
     listTitle.textContent = "Turmas criadas";
   } else {
     studentJoin.classList.remove("hidden");
@@ -134,6 +134,7 @@ function renderClasses(classes) {
       tr.appendChild(cell(c.name));
       tr.appendChild(codeCell(c.join_code));
       tr.appendChild(cell(String(c.member_count)));
+      tr.appendChild(tasksCell(c.id));
       tr.appendChild(cell(new Date(c.created_at).toLocaleDateString("pt-BR")));
     } else {
       tr.appendChild(cell(c.name));
@@ -147,6 +148,17 @@ function renderClasses(classes) {
 function cell(text) {
   var td = document.createElement("td");
   td.textContent = text;
+  return td;
+}
+
+// tasksCell aponta o professor para as tarefas da turma.
+function tasksCell(classId) {
+  var td = document.createElement("td");
+  var a = document.createElement("a");
+  a.className = "link";
+  a.href = "/assignments.html?class=" + classId;
+  a.textContent = "Tarefas";
+  td.appendChild(a);
   return td;
 }
 
