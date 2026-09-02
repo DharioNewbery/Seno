@@ -75,6 +75,7 @@ func New(
 
 			r.Get("/assignments/mine", assignmentHandler.Mine)
 			r.Get("/assignments/{assignmentID}", assignmentHandler.Get)
+			r.Put("/assignments/{assignmentID}/draft", assignmentHandler.SaveDraft)
 			r.Post("/assignments/{assignmentID}/submissions", assignmentHandler.Submit)
 		})
 

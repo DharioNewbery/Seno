@@ -82,6 +82,10 @@ type submitRequest struct {
 	SourceCode string `json:"source_code"`
 }
 
+type saveDraftRequest struct {
+	SourceCode string `json:"source_code"`
+}
+
 type assignmentResponse struct {
 	ID        uuid.UUID  `json:"id"`
 	ClassID   uuid.UUID  `json:"class_id"`
@@ -136,6 +140,7 @@ type assignmentDetailResponse struct {
 	DueAt       *time.Time                  `json:"due_at,omitempty"`
 	CreatedAt   time.Time                   `json:"created_at"`
 	Submissions []submissionSummaryResponse `json:"submissions"`
+	Draft       *models.Draft               `json:"draft,omitempty"`
 }
 
 func toAssignmentDetailResponse(d models.AssignmentDetail) assignmentDetailResponse {
@@ -149,6 +154,7 @@ func toAssignmentDetailResponse(d models.AssignmentDetail) assignmentDetailRespo
 		DueAt:       d.DueAt,
 		CreatedAt:   d.CreatedAt,
 		Submissions: make([]submissionSummaryResponse, 0, len(d.Submissions)),
+		Draft:       d.Draft,
 	}
 	for _, s := range d.Submissions {
 		resp.Submissions = append(resp.Submissions, toSubmissionSummaryResponse(s))

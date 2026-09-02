@@ -148,6 +148,40 @@ func (h *AssignmentHandler) Get(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, "Tarefa encontrada", toAssignmentDetailResponse(*detail))
 }
 
+// SaveDraft grava o rascunho do editor online (backup em tempo real).
+func (h *AssignmentHandler) SaveDraft(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		response.JSON(w, http.StatusUnauthorized, response.Error("Autenticação necessária"))
+		return
+	}
+
+	assignmentID, err := uuid.Parse(chi.URLParam(r, "assignmentID"))
+	if err != nil {
+		response.JSON(w, http.StatusBadRequest, response.Error("ID de tarefa inválido"))
+		return
+	}
+
+	var req saveDraftRequest
+	if err := decodeJSON(r, &req); err != nil {
+		response.JSON(w, http.StatusBadRequest, response.Error("JSON inválido: "+err.Error()))
+		return
+	}
+
+	draft, err := h.assignmentService.SaveDraft(r.Context(), services.SaveDraftInput{
+		AssignmentID:  assignmentID,
+		StudentUserID: userID,
+		SourceCode:    req.SourceCode,
+	})
+	if err != nil {
+		status, msg := mapError(err)
+		response.JSON(w, status, response.Error(msg))
+		return
+	}
+
+	response.OK(w, "Rascunho salvo", draft)
+}
+
 func (h *AssignmentHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
