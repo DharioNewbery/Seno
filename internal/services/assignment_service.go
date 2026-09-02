@@ -2,12 +2,14 @@ package services
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"seno/internal/models"
+	"seno/internal/repositories"
 )
 
 const (
@@ -135,7 +137,64 @@ func (s *AssignmentService) GetDetail(ctx context.Context, requesterID, assignme
 		return nil, ErrNotClassMember
 	}
 	detail.Submissions, err = s.assignmentRepo.ListSubmissionsByStudent(ctx, assignmentID, requesterID)
-	return detail, err
+	if err != nil {
+		return nil, err
+	}
+
+	// Rascunho do editor online (backup); ausência não é erro.
+	draft, err := s.assignmentRepo.GetDraft(ctx, assignmentID, requesterID)
+	if err != nil {
+		if !errors.Is(err, repositories.ErrDraftNotFound) {
+			return nil, err
+		}
+	} else {
+		detail.Draft = draft
+	}
+	return detail, nil
+}
+
+type SaveDraftInput struct {
+	AssignmentID  uuid.UUID
+	StudentUserID uuid.UUID
+	SourceCode    string
+}
+
+func (in SaveDraftInput) validate() *ValidationError {
+	if len(in.SourceCode) > sourceCodeMaxLen {
+		return NewValidationError("rascunho excede o limite de 64.000 caracteres")
+	}
+	return nil
+}
+
+// SaveDraft cria ou atualiza o rascunho do aluno na tarefa (backup do editor
+// online). Rascunho vazio é válido: o aluno pode limpar o editor.
+func (s *AssignmentService) SaveDraft(ctx context.Context, in SaveDraftInput) (*models.Draft, error) {
+	if vErr := in.validate(); vErr != nil {
+		return nil, vErr
+	}
+
+	assignment, err := s.assignmentRepo.GetByID(ctx, in.AssignmentID)
+	if err != nil {
+		return nil, err
+	}
+
+	member, err := s.assignmentRepo.IsClassMember(ctx, assignment.ClassID, in.StudentUserID)
+	if err != nil {
+		return nil, err
+	}
+	if !member {
+		return nil, ErrNotClassMember
+	}
+
+	draft := &models.Draft{
+		AssignmentID:  in.AssignmentID,
+		StudentUserID: in.StudentUserID,
+		SourceCode:    in.SourceCode,
+	}
+	if err := s.assignmentRepo.UpsertDraft(ctx, draft); err != nil {
+		return nil, err
+	}
+	return draft, nil
 }
 
 type SubmitInput struct {
