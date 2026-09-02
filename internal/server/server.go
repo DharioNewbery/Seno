@@ -30,6 +30,7 @@ func New(
 	userHandler *handlers.UserHandler,
 	professorHandler *handlers.ProfessorHandler,
 	classHandler *handlers.ClassHandler,
+	assignmentHandler *handlers.AssignmentHandler,
 	roleChecker appmw.RoleChecker,
 ) *Server {
 	r := chi.NewRouter()
@@ -71,6 +72,10 @@ func New(
 
 			r.Post("/classes/join", classHandler.Join)
 			r.Get("/classes/mine", classHandler.Mine)
+
+			r.Get("/assignments/mine", assignmentHandler.Mine)
+			r.Get("/assignments/{assignmentID}", assignmentHandler.Get)
+			r.Post("/assignments/{assignmentID}/submissions", assignmentHandler.Submit)
 		})
 
 		// Rotas de professor
@@ -80,6 +85,8 @@ func New(
 
 			r.Post("/classes", classHandler.Create)
 			r.Get("/classes", classHandler.List)
+			r.Post("/classes/{classID}/assignments", assignmentHandler.Create)
+			r.Get("/classes/{classID}/assignments", assignmentHandler.ListByClass)
 		})
 
 		// Rotas administrativas (superusuário)

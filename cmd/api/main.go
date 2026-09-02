@@ -66,13 +66,16 @@ func main() {
 	professorService := services.NewProfessorService(professorRepo)
 	classRepo := repositories.NewClassRepository(db)
 	classService := services.NewClassService(classRepo, roleRepo)
+	assignmentRepo := repositories.NewAssignmentRepository(db)
+	assignmentService := services.NewAssignmentService(assignmentRepo)
 
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(userService)
 	professorHandler := handlers.NewProfessorHandler(professorService)
 	classHandler := handlers.NewClassHandler(classService)
+	assignmentHandler := handlers.NewAssignmentHandler(assignmentService)
 
-	srv := server.New(cfg, jwtMgr, authHandler, userHandler, professorHandler, classHandler, roleRepo)
+	srv := server.New(cfg, jwtMgr, authHandler, userHandler, professorHandler, classHandler, assignmentHandler, roleRepo)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
