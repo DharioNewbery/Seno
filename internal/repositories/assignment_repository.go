@@ -20,15 +20,84 @@ func NewAssignmentRepository(db *sqlx.DB) *AssignmentRepository {
 	return &AssignmentRepository{db: db}
 }
 
-func (r *AssignmentRepository) Create(ctx context.Context, a *models.Assignment) error {
-	query := `INSERT INTO assignments (class_id, title, statement, language, due_at)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, class_id, title, statement, language, due_at, created_at, updated_at`
+// CreateWithTests cria a tarefa e seus casos de teste em uma única transação.
+// Popula a.ID e as posições dos testes (1..N).
+func (r *AssignmentRepository) CreateWithTests(ctx context.Context, a *models.Assignment, tests []models.AssignmentTest) error {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("erro ao iniciar transação: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }() // no-op após Commit
 
-	if err := r.db.QueryRowxContext(ctx, query,
+	if err := tx.QueryRowxContext(ctx,
+		`INSERT INTO assignments (class_id, title, statement, language, due_at)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, class_id, title, statement, language, due_at, created_at, updated_at`,
 		a.ClassID, a.Title, a.Statement, a.Language, a.DueAt).
 		StructScan(a); err != nil {
 		return fmt.Errorf("erro ao criar tarefa: %w", err)
+	}
+
+	for i := range tests {
+		tests[i].AssignmentID = a.ID
+		tests[i].Position = i + 1
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO assignment_tests (assignment_id, position, input, expected_output)
+			VALUES ($1, $2, $3, $4)`,
+			tests[i].AssignmentID, tests[i].Position, tests[i].Input, tests[i].ExpectedOutput); err != nil {
+			return fmt.Errorf("erro ao criar caso de teste: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("erro ao confirmar transação: %w", err)
+	}
+	return nil
+}
+
+func (r *AssignmentRepository) ListTests(ctx context.Context, assignmentID uuid.UUID) ([]models.AssignmentTest, error) {
+	var tests []models.AssignmentTest
+	query := `SELECT id, assignment_id, position, input, expected_output, created_at
+		FROM assignment_tests
+		WHERE assignment_id = $1
+		ORDER BY position ASC`
+
+	if err := r.db.SelectContext(ctx, &tests, query, assignmentID); err != nil {
+		return nil, fmt.Errorf("erro ao listar casos de teste: %w", err)
+	}
+	return tests, nil
+}
+
+// submissionStatusPending é o status de submissão aguardando correção
+// (o worker de correção consome essas linhas).
+const submissionStatusPending = "pending"
+
+// ListPendingSubmissions retorna as submissões aguardando correção, mais
+// antigas primeiro (consumidas pelo worker).
+func (r *AssignmentRepository) ListPendingSubmissions(ctx context.Context, limit int) ([]models.Submission, error) {
+	var submissions []models.Submission
+	query := `SELECT id, assignment_id, student_user_id, language, source_code, status, result, created_at
+		FROM submissions
+		WHERE status = $1
+		ORDER BY created_at ASC
+		LIMIT $2`
+
+	if err := r.db.SelectContext(ctx, &submissions, query, submissionStatusPending, limit); err != nil {
+		return nil, fmt.Errorf("erro ao listar submissões pendentes: %w", err)
+	}
+	return submissions, nil
+}
+
+// UpdateSubmissionResult grava o status final e o detalhe (JSON) da correção.
+func (r *AssignmentRepository) UpdateSubmissionResult(ctx context.Context, id uuid.UUID, status, result string) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE submissions SET status = $2, result = $3 WHERE id = $1`,
+		id, status, result)
+	if err != nil {
+		return fmt.Errorf("erro ao atualizar resultado da submissão: %w", err)
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		return ErrSubmissionNotFound
 	}
 	return nil
 }
@@ -135,7 +204,7 @@ func (r *AssignmentRepository) CreateSubmission(ctx context.Context, s *models.S
 func (r *AssignmentRepository) ListSubmissionsByAssignment(ctx context.Context, assignmentID uuid.UUID) ([]models.SubmissionView, error) {
 	var submissions []models.SubmissionView
 	query := `SELECT s.id, s.student_user_id, u.full_name AS student_name, s.language,
-			s.source_code, s.status, s.created_at
+			s.source_code, s.status, s.result, s.created_at
 		FROM submissions s
 		JOIN users u ON u.id = s.student_user_id
 		WHERE s.assignment_id = $1
@@ -150,7 +219,7 @@ func (r *AssignmentRepository) ListSubmissionsByAssignment(ctx context.Context, 
 func (r *AssignmentRepository) ListSubmissionsByStudent(ctx context.Context, assignmentID, studentUserID uuid.UUID) ([]models.SubmissionView, error) {
 	var submissions []models.SubmissionView
 	query := `SELECT s.id, s.student_user_id, u.full_name AS student_name, s.language,
-			s.source_code, s.status, s.created_at
+			s.source_code, s.status, s.result, s.created_at
 		FROM submissions s
 		JOIN users u ON u.id = s.student_user_id
 		WHERE s.assignment_id = $1 AND s.student_user_id = $2
