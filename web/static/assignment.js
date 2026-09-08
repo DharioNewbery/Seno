@@ -223,6 +223,14 @@ document.addEventListener("visibilitychange", function () {
   }
 });
 
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === 's') {
+    e.preventDefault();
+    flushDraft()
+  }
+});
+
+
 async function loadAssignment() {
   try {
     var data = await request("/assignments/" + assignmentId);
@@ -447,8 +455,6 @@ function renderResultTable(result) {
     var statusTd = document.createElement("td");
     if (t.timed_out) {
       statusTd.appendChild(badge("timeout", "erro"));
-    } else if (t.exit_code !== 0) {
-      statusTd.appendChild(badge("exit " + t.exit_code, "erro"));
     } else if (t.passed) {
       statusTd.appendChild(badge("ok", "success"));
     } else {
