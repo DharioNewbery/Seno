@@ -42,12 +42,12 @@ var languageSpecs = map[string]languageSpec{
 		timeout: 10 * time.Second,
 	},
 	"c": {
-		image:   "gcc:13-alpine",
+		image:   "gcc:latest",
 		command: []string{"sh", "-c", "cc -O2 -o /tmp/prog /tmp/main.c && /tmp/prog < /tmp/input.txt"},
 		timeout: 30 * time.Second,
 	},
 	"cpp": {
-		image:   "gcc:13-alpine",
+		image:   "gcc:latest",
 		command: []string{"sh", "-c", "c++ -O2 -o /tmp/prog /tmp/main.cpp && /tmp/prog < /tmp/input.txt"},
 		timeout: 30 * time.Second,
 	},
@@ -73,7 +73,7 @@ type Runner struct {
 // NewRunner conecta ao daemon Docker (DOCKER_HOST via FromEnv: pipe do
 // Docker Desktop no dev, unix socket em produção).
 func NewRunner() (*Runner, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	cli, err := client.New(client.FromEnv)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao conectar ao Docker: %w", err)
 	}

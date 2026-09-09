@@ -6,6 +6,17 @@ import (
 	"github.com/google/uuid"
 )
 
+// AssignmentGroup é um grupo de tarefas de programação.
+type AssignmentGroup struct {
+	ID          uuid.UUID  `db:"id" json:"id"`
+	ClassID     uuid.UUID  `db:"class_id" json:"class_id"`
+	Title       string     `db:"title" json:"title"`
+	Description string     `db:"description" json:"description"`
+	DueAt       *time.Time `db:"due_at" json:"due_at,omitempty"`
+	CreatedAt   time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt   time.Time  `db:"updated_at" json:"updated_at"`
+}
+
 // Assignment é uma tarefa de programação publicada numa turma.
 type Assignment struct {
 	ID        uuid.UUID  `db:"id" json:"id"`
