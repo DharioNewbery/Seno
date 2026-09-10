@@ -15,7 +15,6 @@ import (
 	appmw "seno/internal/middleware"
 	"seno/internal/utils/jwt"
 	"seno/pkg/response"
-	"seno/web"
 )
 
 type Server struct {
@@ -50,8 +49,6 @@ func New(
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		response.OK(w, "Serviço operacional", map[string]string{"status": "ok"})
 	})
-
-	r.Get("/routes", listRoutesHandler(r))
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// Rotas públicas
@@ -99,9 +96,6 @@ func New(
 			r.Get("/professors", professorHandler.List)
 		})
 	})
-
-	// Interface web (arquivos estáticos embutidos em web/static)
-	r.Handle("/*", web.Handler())
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf("%s:%s", cfg.App.Host, cfg.App.Port),

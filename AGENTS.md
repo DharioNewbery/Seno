@@ -11,6 +11,7 @@ Projeto: API RESTful em Go para autenticação, usuários e controle de acesso b
 - **Autenticação:** JWT (`github.com/golang-jwt/jwt/v5`) + bcrypt (`golang.org/x/crypto/bcrypt`)
 - **UUIDs:** `github.com/google/uuid`
 - **Correção automática:** cliente Docker `github.com/moby/moby/client` (API em `github.com/moby/moby/api`)
+- **Interface web:** SvelteKit (Svelte 5 + TypeScript + Vite), CodeMirror 6; código em `../Seno-ui` (diretório irmão do repo), build estática embutida aqui via `go:embed`
 
 ## Regra de idioma (OBRIGATÓRIA)
 
@@ -46,7 +47,15 @@ internal/
   server/                  # Montagem do chi router + middlewares + rotas
   utils/                   # jwt, password (bcrypt), hash (sha256)
 pkg/response/              # Helper de resposta JSON padrão (Body{success,message,data,error})
-web/                       # Interface web estática (embed em web.go) + STYLEGUIDE.md
+web/                       # Saída do build da UI (web/static, gerada pelo adapter-static) + embed em web.go (SPA fallback)
+
+Interface web (fora deste repo, diretório irmão):
+../Seno-ui/
+  src/lib/api/             # Cliente fetch (envelope, Bearer, refresh) + tipos da API
+  src/lib/stores/          # Sessão reativa (localStorage: seno.access/refresh/user)
+  src/lib/components/      # Componentes Svelte (CodeEditor etc.)
+  src/routes/              # Páginas: /, professors, classes, assignments, assignments/[id]
+  app.css                  # Design tokens + componentes (ver Seno-ui/STYLEGUIDE.md)
 ```
 
 ### Princípios
@@ -94,7 +103,7 @@ web/                       # Interface web estática (embed em web.go) + STYLEGU
 - Cadastro de professores: transação única em `professors` (composição 1:1 com `users`) — `ProfessorRepository.CreateWithAccount`.
 - Criação de contas com perfil (professores/alunos) compartilha o helper transacional `repositories/account.go` (`createProfiledAccount`).
 - **Turmas:** professor cria (`POST /classes`) com `join_code` gerado pelo serviço (6 caracteres, sem ambíguos, retry em colisão); aluno ingressa via `POST /classes/join` (valida papel `student`, idempotente); listagens por papel (`GET /classes` do professor, `GET /classes/mine` do aluno). Associação N:M em `class_members`.
-- **Tarefas e submissões:** professor publica em `POST /classes/{id}/assignments` (título, enunciado, linguagem `python|c|cpp`, prazo opcional RFC3339 e **casos de teste** — entrada + saída esperada, 1..20 por tarefa, IO ≤8KB); aluno vê feed (`GET /assignments/mine`), detalhe (`GET /assignments/{id}` — casos de teste e submissões embutidas conforme papel) e submete código pela IDE web (`POST /assignments/{id}/submissions`, linguagem herdada da tarefa, status inicial `pending`). IDE: CodeMirror 5 embutido em `web/static/vendor` (sem build).
+- **Tarefas e submissões:** professor publica em `POST /classes/{id}/assignments` (título, enunciado, linguagem `python|c|cpp`, prazo opcional RFC3339 e **casos de teste** — entrada + saída esperada, 1..20 por tarefa, IO ≤8KB); aluno vê feed (`GET /assignments/mine`), detalhe (`GET /assignments/{id}` — casos de teste e submissões embutidas conforme papel) e submete código pela IDE web (`POST /assignments/{id}/submissions`, linguagem herdada da tarefa, status inicial `pending`). IDE: CodeMirror 6 (pacotes npm `codemirror`, `@codemirror/lang-python`, `@codemirror/lang-cpp`, `@codemirror/legacy-modes`).
 - **Correção automática (milestone 6):** um worker interno (`internal/worker`, ticker + batch, config `RUNNER_*`) consome submissões `pending` e executa o código em containers efêmeros (`internal/runner`, cliente Docker `moby/moby/client`). Cada caso de teste roda isolado: sem rede, `128MB` RAM, 1 CPU, 64 pids, `CapDrop ALL`, `no-new-privileges`, usuário `nobody` (65534), timeout por linguagem (`python` 10s, `c`/`cpp` 30s incluindo compilação). Fonte e entrada são injetadas via `CopyToContainer` (tar) e a saída é capturada por logs (stdout/stderr, 64KB cada), sem bind mounts. Imagens `python:3.12-alpine` e `gcc:13-alpine` são baixadas no primeiro uso (pull com timeout de 5min, fora do timeout da execução). Comparação normalizada (CRLF→LF, trim de espaços finais por linha e de linhas vazias). Resultado gravado como JSON em `submissions.result` (`{tests: [{position, passed, input, expected, got, stderr, timed_out, exit_code, duration_ms}], summary: {passed, total}}`); status final `passed`/`failed`/`error`. Erros de infraestrutura mantêm a submissão `pending` (nova tentativa no próximo tick). O worker só inicia com `RUNNER_ENABLED=true` (requer daemon Docker acessível).
 - **Editor com backup em tempo real:** rascunho do aluno salvado em duas camadas — `localStorage` (`seno.draft.<id>`, debounce 800ms, formato `{code, savedAt}`) e servidor (`PUT /assignments/{id}/draft`, upsert em `drafts`, sync debounced 3s + `keepalive` no `pagehide`). Restauração usa o mais recente das duas fontes; "Carregar no editor" também sincroniza.
 
@@ -126,6 +135,22 @@ go run ./cmd/api
 
 # Build do binário
 go build -o bin/seno-api ./cmd/api
+```
+
+Interface web (SvelteKit, em `../Seno-ui`):
+
+```bash
+# Dependências (primeira vez)
+cd ../Seno-ui && npm install
+
+# Build da UI → escreve a saída em ../Seno/web/static (deve rodar antes de go build)
+npm run build
+
+# Dev server com proxy /api e /health → http://localhost:8080 (API Go rodando)
+npm run dev
+
+# Typecheck (svelte-check)
+npm run check
 ```
 
 ## Endpoints iniciais
