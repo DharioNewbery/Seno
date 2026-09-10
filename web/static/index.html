@@ -1,121 +1,35 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Seno — Entrar</title>
-  <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="/styles.css">
-</head>
-<body>
-  <main class="auth-wrap">
-    <section id="view-login" class="card">
-      <header class="auth-header">
-        <h1>Seno</h1>
-        <p class="muted">Sistema de entrega de tarefas de programação</p>
-      </header>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link href="/_app/immutable/entry/start.C2E-zQzu.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/DG42-U8i.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/BE32fpMh.js" rel="modulepreload">
+		<link href="/_app/immutable/entry/app.DjG0GHLR.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/xihTtKlq.js" rel="modulepreload">
+		<link href="/_app/immutable/nodes/0.Dav191rw.js" rel="modulepreload">
+		
+		<link href="/_app/immutable/assets/0.BxbVRv-7.css" rel="stylesheet">
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">
+			<script>
+				{
+					__sveltekit_4r02yc = {
+						base: ""
+					};
 
-      <form id="login-form" novalidate>
-        <div class="field">
-          <label for="login">Login</label>
-          <input type="text" id="login" name="login" autocomplete="username"
-                 placeholder="Email ou nome de usuário" required>
-        </div>
+					const element = document.currentScript.parentElement;
 
-        <div class="field">
-          <label for="password">Senha</label>
-          <input type="password" id="password" name="password"
-                 autocomplete="current-password" required>
-        </div>
-
-        <p id="login-notice" class="alert alert--success hidden" role="status"></p>
-        <p id="login-error" class="alert alert--error hidden" role="alert"></p>
-
-        <button type="submit" id="login-submit" class="btn btn--primary btn--block">Entrar</button>
-      </form>
-
-      <p class="auth-switch">Não tem conta? <a href="#" id="show-register" class="link">Criar conta</a></p>
-    </section>
-
-    <section id="view-register" class="card hidden">
-      <header class="auth-header">
-        <h1>Seno</h1>
-        <p class="muted">Criar conta de aluno</p>
-      </header>
-
-      <form id="register-form" novalidate>
-        <div class="field">
-          <label for="reg-full-name">Nome completo</label>
-          <input type="text" id="reg-full-name" name="full_name" autocomplete="name" required>
-        </div>
-
-        <div class="field">
-          <label for="reg-email">Email</label>
-          <input type="email" id="reg-email" name="email" autocomplete="email" required>
-        </div>
-
-        <div class="field">
-          <label for="reg-password">Senha</label>
-          <input type="password" id="reg-password" name="password"
-                 autocomplete="new-password" minlength="8" required>
-          <p class="muted">Mínimo de 8 caracteres.</p>
-        </div>
-
-        <p id="register-error" class="alert alert--error hidden" role="alert"></p>
-
-        <button type="submit" id="register-submit" class="btn btn--primary btn--block">Criar conta</button>
-      </form>
-
-      <p class="auth-switch">Já tem conta? <a href="#" id="show-login" class="link">Entrar</a></p>
-    </section>
-
-    <section id="view-me" class="card hidden">
-      <header class="auth-header">
-        <h1>Seno</h1>
-        <p class="muted">Sessão iniciada</p>
-      </header>
-
-      <dl class="profile">
-        <dt>Nome</dt>
-        <dd id="me-name"></dd>
-        <dt>Email</dt>
-        <dd id="me-email"></dd>
-        <dt>Usuário</dt>
-        <dd id="me-username"></dd>
-        <dt>Papéis</dt>
-        <dd id="me-roles"></dd>
-      </dl>
-
-      <a id="link-professors" class="btn btn--block hidden" href="/professors.html">Gerenciar professores</a>
-      <a id="link-classes" class="btn btn--block hidden" href="/classes.html">Minhas turmas</a>
-      <a id="link-assignments" class="btn btn--block hidden" href="/assignments.html">Minhas tarefas</a>
-
-      <h2>Alterar senha</h2>
-      <form id="change-password-form" novalidate>
-        <div class="field">
-          <label for="current-password">Senha atual</label>
-          <input type="password" id="current-password" name="current_password"
-                 autocomplete="current-password" required>
-        </div>
-
-        <div class="field">
-          <label for="new-password">Nova senha</label>
-          <input type="password" id="new-password" name="new_password"
-                 autocomplete="new-password" minlength="8" required>
-        </div>
-
-        <p id="change-password-error" class="alert alert--error hidden" role="alert"></p>
-
-        <button type="submit" id="change-password-submit" class="btn btn--block">Alterar senha</button>
-      </form>
-
-      <hr class="divider">
-
-      <button type="button" id="logout" class="btn btn--block">Sair</button>
-    </section>
-  </main>
-
-  <script src="/common.js"></script>
-  <script src="/app.js"></script>
-</body>
+					Promise.all([
+						import("/_app/immutable/entry/start.C2E-zQzu.js"),
+						import("/_app/immutable/entry/app.DjG0GHLR.js")
+					]).then(([kit, app]) => {
+						kit.start(app, element);
+					});
+				}
+			</script>
+		</div>
+	</body>
 </html>
