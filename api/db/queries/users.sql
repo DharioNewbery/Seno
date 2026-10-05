@@ -38,9 +38,10 @@ FROM user_roles
 WHERE user_id = $1
 ORDER BY role;
 
--- name: InsertPerson :execrows
+-- name: InsertPerson :one
 INSERT INTO persons (first_name, last_name)
-VALUES ($1, $2);
+VALUES ($1, $2)
+RETURNING id;
 
 -- name: UpdatePerson :exec
 UPDATE persons

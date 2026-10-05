@@ -243,9 +243,10 @@ func (q *Queries) GetUserRoles(ctx context.Context, userID int64) ([]string, err
 	return items, nil
 }
 
-const insertPerson = `-- name: InsertPerson :execrows
+const insertPerson = `-- name: InsertPerson :one
 INSERT INTO persons (first_name, last_name)
 VALUES ($1, $2)
+RETURNING id
 `
 
 type InsertPersonParams struct {
@@ -254,11 +255,10 @@ type InsertPersonParams struct {
 }
 
 func (q *Queries) InsertPerson(ctx context.Context, arg InsertPersonParams) (int64, error) {
-	result, err := q.db.Exec(ctx, insertPerson, arg.FirstName, arg.LastName)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	row := q.db.QueryRow(ctx, insertPerson, arg.FirstName, arg.LastName)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const insertUser = `-- name: InsertUser :one

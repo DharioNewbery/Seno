@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -117,7 +118,7 @@ func (r *Recoverer) ResetPassword(ctx context.Context, token, newPassword string
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return platform.NewAPIError(400, platform.CodeNotFound, "Token inválido ou expirado.")
+			return platform.NewAPIError(http.StatusNotFound, platform.CodeNotFound, "Token inválido ou expirado.")
 		}
 		return err
 	}
