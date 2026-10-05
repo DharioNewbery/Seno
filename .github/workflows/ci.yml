@@ -42,8 +42,8 @@ jobs:
         run: go vet ./...
       - name: sqlc em dia
         uses: sqlc-dev/setup-sqlc@v4
-          with:
-            sqlc-version: "1.31.1"
+        with:
+          sqlc-version: "1.31.1"
       - run: sqlc generate
       - name: git diff após sqlc generate
         run: git diff --exit-code
