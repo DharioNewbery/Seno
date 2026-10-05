@@ -90,7 +90,7 @@ func (r *Recoverer) RequestPasswordReset(ctx context.Context, email string) erro
 		return err
 	}
 
-	link := fmt.Sprintf("%s/reset-password?token=%s", r.webOrigin, token)
+	link := fmt.Sprintf("%s/redefinir-senha?token=%s", r.webOrigin, token)
 	msg := mail.Message{
 		To:      email,
 		Subject: "Seno — redefinição de senha",

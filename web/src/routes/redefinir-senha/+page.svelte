@@ -1,31 +1,33 @@
 <script lang="ts">
   import Logo from "#lib/components/Logo.svelte";
   import { NOME_SISTEMA } from "#lib/config";
+  import type { PageProps } from "./$types";
 
-  let email = $state("");
+  let { data }: PageProps = $props();
+
+  let senha = $state("");
   let enviando = $state(false);
-  let enviado = $state(false);
+  let redefinida = $state(false);
   let erroMensagem = $state("");
 
-  async function pedir(evento: SubmitEvent) {
+  async function redefinir(evento: SubmitEvent) {
     evento.preventDefault();
     enviando = true;
     erroMensagem = "";
     try {
-      const res = await fetch("/api/recuperar-senha", {
+      const res = await fetch("/api/redefinir-senha", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ token: data.token, senha }),
       });
-      // 202 sempre (silencioso: não revela se a conta existe).
       if (res.ok) {
-        enviado = true;
+        redefinida = true;
         return;
       }
       const corpo = (await res.json().catch(() => null)) as {
         erro?: { mensagem?: string };
       } | null;
-      erroMensagem = corpo?.erro?.mensagem ?? "Não foi possível enviar o pedido.";
+      erroMensagem = corpo?.erro?.mensagem ?? "Não foi possível redefinir a senha.";
     } catch {
       erroMensagem = "Sem comunicação com o servidor. Tente novamente.";
     } finally {
@@ -34,50 +36,53 @@
   }
 </script>
 
-<main class="recuperar">
+<main class="redefinir">
   <div class="marca">
     <Logo tamanho={32} />
     <h1>{NOME_SISTEMA}</h1>
   </div>
 
-  {#if enviado}
+  {#if !data.token}
+    <p class="erro" role="alert">
+      Token ausente neste link. Use o endereço completo indicado no e-mail de
+      redefinição.
+    </p>
+  {:else if redefinida}
     <section class="cartao">
-      <h2>Pedido enviado</h2>
+      <h2>Senha redefinida!</h2>
       <p>
-        Se o e-mail estiver cadastrado, você receberá um link para redefinir a
-        senha (válido por 1 hora). Verifique sua caixa de entrada.
+        Todas as sessões anteriores foram encerradas. Entre com a nova senha.
       </p>
-      <a class="voltar" href="/">Voltar ao login</a>
+      <a class="entrar" href="/">Entrar no Seno</a>
     </section>
   {:else}
-    <form class="cartao" onsubmit={pedir}>
-      <h2>Recuperar senha</h2>
+    <form class="cartao" onsubmit={redefinir}>
+      <h2>Nova senha</h2>
       <p class="dica">
-        Enviaremos um link de redefinição (uso único) para o seu e-mail.
+        O link de redefinição é de uso único e expira em 1 hora.
       </p>
       <label>
-        <span>E-mail</span>
+        <span>Nova senha</span>
         <input
-          type="email"
-          bind:value={email}
-          autocomplete="email"
+          type="password"
+          bind:value={senha}
+          autocomplete="new-password"
+          minlength={8}
           required
-          placeholder="voce@ufpa.br"
         />
       </label>
       {#if erroMensagem}
         <p class="erro" role="alert">{erroMensagem}</p>
       {/if}
       <button type="submit" disabled={enviando}>
-        {enviando ? "Enviando..." : "Enviar link de redefinição"}
+        {enviando ? "Redefinindo..." : "Redefinir senha"}
       </button>
-      <a class="voltar" href="/">Voltar ao login</a>
     </form>
   {/if}
 </main>
 
 <style>
-  .recuperar {
+  .redefinir {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -172,9 +177,9 @@
     font-size: 0.9rem;
   }
 
-  .voltar {
+  .entrar {
     color: var(--seno-blue-600);
-    font-size: 0.9rem;
+    font-weight: 600;
     text-align: center;
   }
 </style>
