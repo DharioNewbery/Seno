@@ -19,6 +19,7 @@ import (
 	"github.com/seno-project/seno/api/internal/mail"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
+	"github.com/seno-project/seno/api/internal/usuarios"
 )
 
 func main() {
@@ -57,11 +58,12 @@ func main() {
 	}
 
 	deps := &httpapi.Dependencies{
-		Cfg:   cfg,
-		Pool:  pool,
-		Audit: audit,
-		Auth:  authSvc,
-		Cargo: recoverer,
+		Cfg:      cfg,
+		Pool:     pool,
+		Audit:    audit,
+		Auth:     authSvc,
+		Cargo:    recoverer,
+		UsuarioS: usuarios.New(st, audit, recoverer),
 	}
 
 	if os.Getenv("SENO_MODE") != "debug" {

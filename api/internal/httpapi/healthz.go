@@ -9,6 +9,8 @@ import (
 
 	"github.com/seno-project/seno/api/internal/auth"
 	"github.com/seno-project/seno/api/internal/platform"
+	"github.com/seno-project/seno/api/internal/store"
+	"github.com/seno-project/seno/api/internal/usuarios"
 )
 
 // PGXPool é a interface mínima do pool usada pelos handlers (facilita testes).
@@ -18,11 +20,13 @@ type PGXPool interface {
 
 // Dependencies carrega os serviços compartilhados dos handlers.
 type Dependencies struct {
-	Cfg   *platform.Config
-	Pool  PGXPool
-	Audit *platform.Audit
-	Auth  *auth.Service
-	Cargo *auth.Recoverer
+	Cfg      *platform.Config
+	Pool     PGXPool
+	Store    *store.Store
+	Audit    *platform.Audit
+	Auth     *auth.Service
+	Cargo    *auth.Recoverer
+	UsuarioS *usuarios.Service
 }
 
 // Healthz verifica integridade do processo e do banco (compose healthcheck).

@@ -19,6 +19,7 @@ import (
 	"github.com/seno-project/seno/api/internal/mail"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
+	"github.com/seno-project/seno/api/internal/usuarios"
 )
 
 // testeDB conecta ao Postgres de teste (CI ou docker local: banco seno_test).
@@ -60,10 +61,12 @@ func montaAPI(t *testing.T, pool *pgxpool.Pool) (*Dependencies, *gin.Engine) {
 	deps := &Dependencies{
 		Cfg:   cfg,
 		Pool:  pool,
+		Store: st,
 		Audit: audit,
 		Auth:  auth.New(st, audit, time.Minute, time.Hour, cfg.WebOrigin),
 		Cargo: auth.NewRecoverer(st, audit, &mail.LogSender{Audit: audit}, cfg.WebOrigin),
 	}
+	deps.UsuarioS = usuarios.New(st, audit, deps.Cargo)
 	r := gin.New()
 	RegisterRoutes(r, deps)
 	return deps, r
