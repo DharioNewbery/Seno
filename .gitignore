@@ -1,0 +1,28 @@
+# Arquivos gerados
+sqlc/
+sqlc/*.go
+
+# Segredos
+.env
+.env.*
+!.env.example
+
+# Certificados locais
+deploy/caddy/certs/
+
+# Go
+api/seno-api
+api/seno-api.exe
+api/coverage.out
+*.test
+
+# Web
+web/node_modules/
+web/.svelte-kit/
+web/build/
+web/vite.config.ts.timestamp-*
+
+# Logs e temporários
+*.log
+.DS_Store
+Thumbs.db

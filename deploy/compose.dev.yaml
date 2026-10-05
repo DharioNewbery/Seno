@@ -1,0 +1,33 @@
+# compose.dev.yaml — ambiente de desenvolvimento do Seno.
+# Sobe apenas a infraestrutura de apoio (PostgreSQL + MailPit);
+# api e web rodam nátivamente com hot-reload:
+#   cd api && go run ./cmd/api
+#   cd web && npm run dev
+# Antes: cp .env.example .env  (e ajuste SENO_DATABASE_URL para localhost)
+name: seno-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: seno
+      POSTGRES_USER: seno
+      POSTGRES_PASSWORD: seno
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seno -d seno"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:v1.24
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # caixa web
+
+volumes:
+  pgdata_dev:

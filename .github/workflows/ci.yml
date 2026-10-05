@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master, develop]
+  push:
+    branches: [master, develop]
+
+jobs:
+  api:
+    name: "API (Go)"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: seno_test
+          POSTGRES_USER: seno
+          POSTGRES_PASSWORD: seno
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U seno"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      SENO_DATABASE_URL: postgres://seno:seno@localhost:5432/seno_test?sslmode=disable
+      SENO_SUPER_EMAIL: super@seno.dev
+      SENO_SUPER_PASSWORD: 102938
+      SENO_WEB_ORIGIN: http://localhost:5173
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache-dependency-path: api/go.sum
+      - name: gofmt
+        run: test -z "$(gofmt -l .)"
+      - name: go vet
+        run: go vet ./...
+      - name: sqlc em dia
+        uses: sqlc-dev/setup-sqlc@v4
+        with:
+          sqlc-version: "v1.31.1"
+      - run: sqlc generate
+      - name: git diff após sqlc generate
+        run: git diff --exit-code
+      - name: go test
+        run: go test ./... -race
+
+  web:
+    name: "Web (SvelteKit)"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: prettier --check
+        run: npx prettier --check --ignore-unknown .
+      - name: eslint
+        run: npx eslint .
+      - name: svelte-check
+        run: npm run check
+      - name: vitest
+        run: npm run test
