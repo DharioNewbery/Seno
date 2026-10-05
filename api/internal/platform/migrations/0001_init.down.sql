@@ -1,0 +1,13 @@
+BEGIN;
+
+DROP TRIGGER IF EXISTS users_touch_updated_at ON users;
+DROP FUNCTION IF EXISTS touch_updated_at();
+DROP TABLE IF EXISTS jobs;
+DROP TABLE IF EXISTS log_entries;
+DROP TABLE IF EXISTS one_time_tokens;
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS user_roles;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS persons;
+
+COMMIT;

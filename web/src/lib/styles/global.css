@@ -1,0 +1,44 @@
+:root {
+  --seno-white: #ffffff;
+  --seno-blue-900: #0d3b7a;
+  --seno-blue-800: #124a94;
+  --seno-blue-700: #175bb0;
+  --seno-blue-600: #1e6cd2;
+  --seno-blue-500: #2f80ed;
+  --seno-blue-400: #5b9bf3;
+  --seno-blue-300: #94bcf8;
+  --seno-blue-200: #c2d8fb;
+  --seno-blue-100: #e8f0fd;
+  --seno-gray-900: #1a2332;
+  --seno-gray-700: #4a5568;
+  --seno-gray-500: #718096;
+  --seno-gray-300: #cbd5e0;
+  --seno-gray-100: #f4f6f9;
+  --seno-red: #c53030;
+  --seno-green: #2f855a;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--seno-white);
+  color: var(--seno-gray-900);
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--seno-blue-900);
+}
