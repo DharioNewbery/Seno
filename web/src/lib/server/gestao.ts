@@ -150,36 +150,6 @@ export function gestaoDeUsuarios(cargo: "professor" | "admin"): {
   }
 
   const actions: Actions = {
-    criar: async (evento: AcaoEvento) => {
-      const form = await evento.request.formData();
-      const token = tokenDaSessao(evento.cookies);
-      if (!token) return fail(401, { erro: "Sessão encerrada." });
-
-      const email = String(form.get("email") ?? "").trim();
-      const first_name = String(form.get("first_name") ?? "").trim();
-      const last_name = String(form.get("last_name") ?? "").trim();
-      if (!email || !first_name || !last_name) {
-        return fail(422, { erro: "Informe e-mail, nome e sobrenome." });
-      }
-      let res: Response;
-      try {
-        res = await criarUsuario(evento.request, token, {
-          email,
-          first_name,
-          last_name,
-          cargo,
-        });
-      } catch {
-        return fail(502, { erro: "Sem comunicação com a API." });
-      }
-      if (!res.ok) {
-        return fail(res.status, { erro: mensagemErro(await corpoJSON(res)) });
-      }
-      return {
-        ok: `Convite enviado para ${email} — pendente até definir a senha.`,
-      };
-    },
-
     editar: async (evento: AcaoEvento) => {
       const form = await evento.request.formData();
       const pronto = await idEToken(form, evento.cookies);
@@ -216,4 +186,51 @@ export function gestaoDeUsuarios(cargo: "professor" | "admin"): {
   };
 
   return { load, actions };
+}
+
+/**
+ * Ação de criação (compartilhada das duas páginas "novo"): o usuário nasce
+ * pendente e recebe convite por e-mail; sucesso volta à listagem.
+ */
+export function criarAction(
+  cargo: "professor" | "admin",
+): (evento: AcaoEvento) => Promise<{ ok: string } | FalhaDaAcao> {
+  return async (evento: AcaoEvento) => {
+    const form = await evento.request.formData();
+    const token = tokenDaSessao(evento.cookies);
+    if (!token) return fail(401, { erro: "Sessão encerrada." });
+
+    const email = String(form.get("email") ?? "").trim();
+    const first_name = String(form.get("first_name") ?? "").trim();
+    const last_name = String(form.get("last_name") ?? "").trim();
+    if (!email || !first_name || !last_name) {
+      return fail(422, { erro: "Informe e-mail, nome e sobrenome." });
+    }
+    let res: Response;
+    try {
+      res = await criarUsuario(evento.request, token, {
+        email,
+        first_name,
+        last_name,
+        cargo,
+      });
+    } catch {
+      return fail(502, { erro: "Sem comunicação com a API." });
+    }
+    if (!res.ok) {
+      return fail(res.status, { erro: mensagemErro(await corpoJSON(res)) });
+    }
+    redirect(
+      303,
+      cargo === "professor" ? "/admin/professores" : "/admin/admins",
+    );
+  };
+}
+
+/** Fábrica das páginas "novo" de professores/admins: só a ação criar. */
+export function gestaoDeCriacao(cargo: "professor" | "admin"): {
+  actions: Actions;
+} {
+  const actions: Actions = { criar: criarAction(cargo) };
+  return { actions };
 }

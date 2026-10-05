@@ -108,12 +108,12 @@
     <button>Buscar</button>
   </form>
 
-  <form method="POST" action={urlAcao("criar")} class="criar">
-    <input name="first_name" placeholder="Nome" required />
-    <input name="last_name" placeholder="Sobrenome" required />
-    <input name="email" type="email" placeholder="E-mail" required />
-    <button>{cargo === "professor" ? "Convidar professor" : "Criar admin"}</button>
-  </form>
+  <a
+    class="ir-criar"
+    href={`/admin/${cargo === "professor" ? "professores" : "admins"}/novo`}
+  >
+    {cargo === "professor" ? "Convidar professor →" : "Criar admin →"}
+  </a>
   {#if cargo === "admin" && !eSuper}
     <p class="nota">
       Só o super admin cria contas de admin (ARQUITETURA §5.4).
@@ -241,7 +241,6 @@
 
   .busca input,
   .busca select,
-  .criar input,
   .edicao input {
     border: 1px solid var(--seno-gray-300);
     border-radius: 8px;
@@ -250,8 +249,21 @@
     font-size: 0.9rem;
   }
 
+  .ir-criar {
+    align-self: flex-start;
+    background: var(--seno-blue-600);
+    color: var(--seno-white);
+    border-radius: 8px;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.9rem;
+    text-decoration: none;
+  }
+
+  .ir-criar:hover {
+    background: var(--seno-blue-700);
+  }
+
   .busca button,
-  .criar button,
   .edicao button,
   .acao {
     background: var(--seno-blue-600);
@@ -264,7 +276,6 @@
   }
 
   .busca button:hover,
-  .criar button:hover,
   .edicao button:hover,
   .acao:hover {
     background: var(--seno-blue-700);
