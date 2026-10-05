@@ -13,8 +13,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/seno-project/seno/api/db"
+	"github.com/seno-project/seno/api/internal/auth"
 	"github.com/seno-project/seno/api/internal/httpapi"
+	"github.com/seno-project/seno/api/internal/mail"
 	"github.com/seno-project/seno/api/internal/platform"
+	"github.com/seno-project/seno/api/internal/store"
 )
 
 func main() {
@@ -36,14 +40,29 @@ func main() {
 	}
 	defer pool.Close()
 
-	if err := platform.MigrateUp(ctx, pool); err != nil {
+	if err := platform.MigrateUp(ctx, pool, db.Migrations); err != nil {
 		slog.Error("falha nas migrações", "err", err)
 		os.Exit(1)
 	}
 	slog.Info("migrações aplicadas")
 
 	audit := platform.NewAudit(pool)
-	deps := &httpapi.Dependencies{Cfg: cfg, Pool: pool, Audit: audit}
+	st := store.New(pool)
+	authSvc := auth.New(st, audit, cfg.SessionTTL, cfg.SessionMaxTTL, cfg.WebOrigin)
+	recoverer := auth.NewRecoverer(st, audit, mail.Choose(cfg, audit), cfg.WebOrigin)
+
+	if err := auth.BootstrapSuperAdmin(ctx, st, cfg.SuperEmail, cfg.SuperPassword); err != nil {
+		slog.Error("bootstrap do super admin", "err", err)
+		os.Exit(1)
+	}
+
+	deps := &httpapi.Dependencies{
+		Cfg:   cfg,
+		Pool:  pool,
+		Audit: audit,
+		Auth:  authSvc,
+		Cargo: recoverer,
+	}
 
 	if os.Getenv("SENO_MODE") != "debug" {
 		gin.SetMode(gin.ReleaseMode)

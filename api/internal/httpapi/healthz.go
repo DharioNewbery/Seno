@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/seno-project/seno/api/internal/auth"
 	"github.com/seno-project/seno/api/internal/platform"
 )
 
@@ -20,6 +21,8 @@ type Dependencies struct {
 	Cfg   *platform.Config
 	Pool  PGXPool
 	Audit *platform.Audit
+	Auth  *auth.Service
+	Cargo *auth.Recoverer
 }
 
 // Healthz verifica integridade do processo e do banco (compose healthcheck).
