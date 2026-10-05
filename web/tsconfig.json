@@ -1,9 +1,15 @@
+// A base (paths, rootDirs, types $app/*) é gerada pelo `svelte-kit sync`
+// em node_modules/$app/tsconfig.json; aqui ficam apenas as escolhas do projeto.
 {
   "extends": "$app/tsconfig",
   "compilerOptions": {
     "strict": true,
     "noUncheckedIndexedAccess": true,
-    "types": ["node", "$app/types"]
+    "paths": {
+      "#lib": ["./src/lib/index.ts"],
+      "#lib/*": ["./src/lib/*"]
+    }
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "test", "*"],
+  "exclude": ["src/service-worker"]
 }
