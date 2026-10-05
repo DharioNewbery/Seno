@@ -2,18 +2,13 @@ package platform
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"io/fs"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-//go:embed all:migrations
-var migrationsFS embed.FS
 
 // advisoryLockID é o identificador do lock de migração (arbitrário, fixo).
 const advisoryLockID = 918273645
@@ -21,8 +16,9 @@ const advisoryLockID = 918273645
 // MigrateUp aplica todas as migrações pendentes sob advisory lock,
 // garantindo exclusão múltipla entre réplicas (ARQUITETURA §4.3).
 // Cada migração é transacional; a ordem de aplicação é o nome do arquivo.
-func MigrateUp(ctx context.Context, pool *pgxpool.Pool) error {
-	entries, err := fs.ReadDir(migrationsFS, "migrations")
+// source deve enraizar o diretório de migrações (ex.: db.Migrations).
+func MigrateUp(ctx context.Context, pool *pgxpool.Pool, root fs.FS) error {
+	entries, err := fs.ReadDir(root, "migrations")
 	if err != nil {
 		return fmt.Errorf("fs de migrações inválido: %w", err)
 	}
@@ -60,7 +56,7 @@ func MigrateUp(ctx context.Context, pool *pgxpool.Pool) error {
 		if exists {
 			continue
 		}
-		sqlBytes, err := migrationsFS.ReadFile("migrations/" + name)
+		sqlBytes, err := fs.ReadFile(root, "migrations/"+name)
 		if err != nil {
 			return fmt.Errorf("lendo migração %s: %w", name, err)
 		}
@@ -82,9 +78,4 @@ func MigrateUp(ctx context.Context, pool *pgxpool.Pool) error {
 		fmt.Printf("migração aplicada: %s\n", name)
 	}
 	return nil
-}
-
-// migrateTimeout limita o tempo total do processo de migração.
-func migrateTimeout() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), 2*time.Minute)
 }

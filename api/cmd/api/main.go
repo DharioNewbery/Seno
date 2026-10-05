@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/seno-project/seno/api/db"
 	"github.com/seno-project/seno/api/internal/httpapi"
 	"github.com/seno-project/seno/api/internal/platform"
 )
@@ -36,7 +37,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	if err := platform.MigrateUp(ctx, pool); err != nil {
+	if err := platform.MigrateUp(ctx, pool, db.Migrations); err != nil {
 		slog.Error("falha nas migrações", "err", err)
 		os.Exit(1)
 	}
