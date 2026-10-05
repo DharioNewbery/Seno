@@ -27,6 +27,11 @@ export function comBearer(token: string): Headers {
   return headers;
 }
 
+/** Token opaco da sessão do navegador (para chamadas autenticadas). */
+export function tokenDaSessao(cookies: Cookies): string {
+  return cookies.get(COOKIE_SESSAO) ?? "";
+}
+
 /** Resposta de login da API: {token, pessoa, cargos} (ARQUITETURA §5.2). */
 export interface RespostaLogin {
   token: string;
@@ -48,7 +53,12 @@ export async function lerSessao(
 
   let res: Response;
   try {
-    res = await apiFetch("/v1/auth/me", request, { headers: comBearer(token) });
+    // method GET explícito: o wrapper repassa o método da requisição do
+    // navegador quando não fixado — e isso consumiria o corpo de POSTs.
+    res = await apiFetch("/v1/auth/me", request, {
+      method: "GET",
+      headers: comBearer(token),
+    });
   } catch {
     return null;
   }
@@ -66,7 +76,9 @@ export async function fecharSessao(event: RequestEvent): Promise<void> {
   if (token) {
     try {
       await apiFetch("/v1/auth/logout", event.request, {
+        method: "POST",
         headers: comBearer(token),
+        body: "{}",
       });
     } catch {
       // API indisponível: o cookie local é removido mesmo assim.
