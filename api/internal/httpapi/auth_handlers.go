@@ -106,6 +106,39 @@ func (d *Dependencies) RequestPasswordReset(c *gin.Context) {
 	})
 }
 
+// inviteRequest é o corpo do POST /v1/auth/invite/accept.
+type inviteRequest struct {
+	Token string `json:"token"`
+	Senha string `json:"senha"`
+}
+
+// AcceptInvite consome o convite (uso único) e define a senha inicial,
+// ativando o usuário pendente. Público: quem expira o convite não tem
+// senha ainda.
+func (d *Dependencies) AcceptInvite(c *gin.Context) {
+	var req inviteRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+	if req.Token == "" {
+		platform.ErrorBody(c, platform.NewAPIError(
+			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+			"Token de convite ausente."))
+		return
+	}
+	if req.Senha == "" {
+		platform.ErrorBody(c, platform.NewAPIError(
+			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+			"Informe a senha."))
+		return
+	}
+	if err := d.Cargo.AcceptInvite(c.Request.Context(), req.Token, req.Senha); err != nil {
+		platform.ErrorBody(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"mensagem": "Senha definida. Você já pode entrar no sistema."})
+}
+
 // resetPasswordRequest é o corpo do POST /v1/auth/password/reset.
 type resetPasswordRequest struct {
 	Token string `json:"token"`

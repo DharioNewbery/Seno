@@ -16,6 +16,7 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 
 	auth := v1.Group("/auth")
 	auth.POST("/login", deps.Login)
+	auth.POST("/invite/accept", deps.AcceptInvite)
 	auth.POST("/password/reset-request", deps.RequestPasswordReset)
 	auth.POST("/password/reset", deps.ResetPassword)
 
