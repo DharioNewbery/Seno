@@ -33,6 +33,7 @@ type Recoverer struct {
 	fallback   *mail.LogSender
 	webOrigin  string
 	tokenTTL   time.Duration
+	inviteTTL  time.Duration
 	sendTimout time.Duration
 }
 
@@ -45,6 +46,7 @@ func NewRecoverer(s *store.Store, audit *platform.Audit, sender mail.Sender, web
 		fallback:   &mail.LogSender{Audit: audit},
 		webOrigin:  webOrigin,
 		tokenTTL:   time.Hour,
+		inviteTTL:  7 * 24 * time.Hour,
 		sendTimout: 10 * time.Second,
 	}
 }
