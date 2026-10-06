@@ -16,6 +16,7 @@ import (
 
 	"github.com/seno-project/seno/api/db"
 	"github.com/seno-project/seno/api/internal/auth"
+	"github.com/seno-project/seno/api/internal/ensino"
 	"github.com/seno-project/seno/api/internal/mail"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
@@ -67,6 +68,7 @@ func montaAPI(t *testing.T, pool *pgxpool.Pool) (*Dependencies, *gin.Engine) {
 		Cargo: auth.NewRecoverer(st, audit, &mail.LogSender{Audit: audit}, cfg.WebOrigin),
 	}
 	deps.UsuarioS = usuarios.New(st, audit, deps.Cargo)
+	deps.Ensino = ensino.New(st, audit, deps.Cargo)
 	r := gin.New()
 	RegisterRoutes(r, deps)
 	return deps, r

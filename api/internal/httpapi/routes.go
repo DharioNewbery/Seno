@@ -39,4 +39,46 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	gestao.POST("/:id/desativar", deps.BloquearUsuario)
 	gestao.POST("/:id/ativar", deps.DesbloquearUsuario)
 	gestao.POST("/:id/resetar-senha", deps.ResetarSenhaUsuario)
+
+	// Ensino: matérias, períodos, turmas e matrículas (PROJETO §Organização).
+	materias := v1.Group("/materias")
+	materias.Use(
+		deps.RequireAuth(),
+		deps.RequireCargo(domain.RoleProfessor, domain.RoleAdmin, domain.RoleSuper),
+	)
+	materias.GET("", deps.ListarMaterias)
+	escrita := materias.Group("")
+	escrita.Use(deps.RequireCargo(domain.RoleAdmin, domain.RoleSuper))
+	escrita.POST("", deps.CriarMateria)
+	escrita.PATCH("/:id", deps.EditarMateria)
+	escrita.DELETE("/:id", deps.ExcluirMateria)
+
+	periodos := v1.Group("/periodos")
+	periodos.Use(
+		deps.RequireAuth(),
+		deps.RequireCargo(domain.RoleProfessor, domain.RoleAdmin, domain.RoleSuper),
+	)
+	periodos.GET("", deps.ListarPeriodos)
+	periodos.POST("", deps.CriarPeriodo)
+
+	turmas := v1.Group("/turmas")
+	turmas.Use(
+		deps.RequireAuth(),
+		deps.RequireCargo(domain.RoleProfessor, domain.RoleAdmin, domain.RoleSuper),
+	)
+	turmas.GET("", deps.ListarTurmas)
+	turmas.POST("", deps.CriaTurma)
+	turmas.GET("/:id", deps.VerTurma)
+	turmas.PATCH("/:id", deps.EditarTurma)
+	turmas.POST("/:id/encerrar", deps.EncerrarTurma)
+	turmas.DELETE("/:id", deps.ExcluirTurma)
+	turmas.GET("/:id/matriculas", deps.ListarMatriculasTurma)
+	turmas.POST("/:id/matriculas", deps.MatricularTurma)
+
+	matriculas := v1.Group("/matriculas")
+	matriculas.Use(
+		deps.RequireAuth(),
+		deps.RequireCargo(domain.RoleProfessor, domain.RoleAdmin, domain.RoleSuper),
+	)
+	matriculas.DELETE("/:id", deps.EncerrarMatricula)
 }
