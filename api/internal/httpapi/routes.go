@@ -118,4 +118,16 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	atividades.PATCH("/:id", deps.EditarAtividade)
 	atividades.POST("/:id/duplicar", deps.DuplicarAtividade)
 	atividades.DELETE("/:id", deps.ExcluirAtividade)
+
+	// Atribuições: turma ← atividade (PROJETO §Atribuição).
+	atribuicoes := v1.Group("/atribuicoes")
+	atribuicoes.Use(
+		deps.RequireAuth(),
+		deps.RequireCargo(domain.RoleProfessor, domain.RoleAdmin, domain.RoleSuper),
+	)
+	atribuicoes.GET("", deps.ListarAtribuicoes)
+	atribuicoes.POST("", deps.CriarAtribuicao)
+	atribuicoes.GET("/:id", deps.VerAtribuicao)
+	atribuicoes.PATCH("/:id", deps.EditarAtribuicao)
+	atribuicoes.DELETE("/:id", deps.ExcluirAtribuicao)
 }

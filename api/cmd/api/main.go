@@ -19,6 +19,7 @@ import (
 	"github.com/seno-project/seno/api/internal/httpapi"
 	"github.com/seno-project/seno/api/internal/mail"
 	"github.com/seno-project/seno/api/internal/atividades"
+	"github.com/seno-project/seno/api/internal/atribuicoes"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
 	"github.com/seno-project/seno/api/internal/tarefas"
@@ -70,8 +71,9 @@ func main() {
 		Cargo:      recoverer,
 		UsuarioS:   usuarios.New(st, audit, recoverer),
 		Ensino:     ensino.New(st, audit, recoverer),
-		TarefaS:    svcTarefas,
-		AtividadeS: atividades.New(st, audit, svcTarefas),
+		TarefaS:     svcTarefas,
+		AtividadeS:  atividades.New(st, audit, svcTarefas),
+		AtribuicaoS: atribuicoes.New(st, audit),
 	}
 
 	if os.Getenv("SENO_MODE") != "debug" {

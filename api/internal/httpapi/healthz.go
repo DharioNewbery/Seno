@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/seno-project/seno/api/internal/atividades"
+	"github.com/seno-project/seno/api/internal/atribuicoes"
 	"github.com/seno-project/seno/api/internal/auth"
 	"github.com/seno-project/seno/api/internal/ensino"
 	"github.com/seno-project/seno/api/internal/platform"
@@ -33,6 +34,7 @@ type Dependencies struct {
 	Ensino     *ensino.Service
 	TarefaS    *tarefas.Service
 	AtividadeS *atividades.Service
+	AtribuicaoS *atribuicoes.Service
 }
 
 // Healthz verifica integridade do processo e do banco (compose healthcheck).

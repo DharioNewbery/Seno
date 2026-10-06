@@ -26,6 +26,19 @@ type AtividadeTarefa struct {
 	Linguagem   string `json:"linguagem"`
 }
 
+type Atribuico struct {
+	ID           int64              `json:"id"`
+	TurmaID      int64              `json:"turma_id"`
+	AtividadeID  int64              `json:"atividade_id"`
+	Autocomplete bool               `json:"autocomplete"`
+	Inicio       pgtype.Timestamptz `json:"inicio"`
+	Prazo        pgtype.Timestamptz `json:"prazo"`
+	DuracaoSeg   pgtype.Int4        `json:"duracao_seg"`
+	PodeAtrasado bool               `json:"pode_atrasado"`
+	CreatedBy    pgtype.Int8        `json:"created_by"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
 type Job struct {
 	ID        int64              `json:"id"`
 	Kind      string             `json:"kind"`
