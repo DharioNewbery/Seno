@@ -181,3 +181,24 @@ func (s *Service) ListarPeriodos(ctx context.Context) ([]Periodo, error) {
 	}
 	return out, nil
 }
+
+// ExcluirPeriodo apaga o período; em uso por turmas → 409 (FK RESTRICT).
+func (s *Service) ExcluirPeriodo(ctx context.Context, actor domain.User, id int64) error {
+	rows, err := s.store.Q.DeletePeriodo(ctx, id)
+	if err != nil {
+		if eReferenciado(err) {
+			return conflito("Período em uso por turmas.")
+		}
+		return err
+	}
+	if rows == 0 {
+		return platform.NewAPIError(
+			http.StatusNotFound, platform.CodeNotFound, "Período não encontrado.")
+	}
+	s.audit.Record(ctx, platform.LogEntry{
+		ActorID: &actor.ID, Actor: actor.Email,
+		Kind:   LogKindPeriodoCreate,
+		Detail: fmt.Sprintf("periodo=%d excluído", id),
+	})
+	return nil
+}

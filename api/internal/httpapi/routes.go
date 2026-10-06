@@ -59,7 +59,10 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 		deps.RequireCargo(domain.RoleProfessor, domain.RoleAdmin, domain.RoleSuper),
 	)
 	periodos.GET("", deps.ListarPeriodos)
-	periodos.POST("", deps.CriarPeriodo)
+	escritaPer := periodos.Group("")
+	escritaPer.Use(deps.RequireCargo(domain.RoleAdmin, domain.RoleSuper))
+	escritaPer.POST("", deps.CriarPeriodo)
+	escritaPer.DELETE("/:id", deps.ExcluirPeriodo)
 
 	turmas := v1.Group("/turmas")
 	turmas.Use(

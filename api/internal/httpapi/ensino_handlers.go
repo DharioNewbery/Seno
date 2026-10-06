@@ -126,6 +126,20 @@ func (d *Dependencies) ListarAlunos(c *gin.Context) {
 	})
 }
 
+// ExcluirPeriodo: DELETE /v1/periodos/:id (staff; FK em uso → 409).
+func (d *Dependencies) ExcluirPeriodo(c *gin.Context) {
+	user, _ := currentUser(c)
+	id, ok := idDaRota(c)
+	if !ok {
+		return
+	}
+	if err := d.Ensino.ExcluirPeriodo(c.Request.Context(), user, id); err != nil {
+		platform.ErrorBody(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 // ------------------------------- Turmas ------------------------------
 
 // numParamOpcional lê ?professor_id/&materia_id como filtro (staff).

@@ -60,14 +60,8 @@ export const PORTAIS: Record<PortalId, PortalDef> = {
         rotulo: "Minhas turmas",
         href: "/professor/turmas",
         sub: [
-          { rotulo: "Painel da turma", href: "/professor/turmas" },
-          { rotulo: "Gerenciar alunos", href: "/professor/turmas/alunos" },
-          { rotulo: "Atribuir atividade", href: "/professor/turmas/atribuir" },
-          {
-            rotulo: "Entregas e correções",
-            href: "/professor/turmas/entregas",
-          },
-          { rotulo: "Analytics", href: "/professor/turmas/analytics" },
+          { rotulo: "Listar turmas", href: "/professor/turmas" },
+          { rotulo: "Criar turma", href: "/professor/turmas/nova" },
         ],
       },
       {
@@ -117,6 +111,15 @@ export const PORTAIS: Record<PortalId, PortalDef> = {
         sub: [
           { rotulo: "Listar matérias", href: "/admin/materias" },
           { rotulo: "Criar matéria", href: "/admin/materias/nova" },
+        ],
+      },
+      {
+        rotulo: "Períodos e turmas",
+        href: "/admin/periodos",
+        sub: [
+          { rotulo: "Períodos letivos", href: "/admin/periodos" },
+          { rotulo: "Novo período", href: "/admin/periodos/nova" },
+          { rotulo: "Todas as turmas", href: "/admin/turmas" },
         ],
       },
       {
