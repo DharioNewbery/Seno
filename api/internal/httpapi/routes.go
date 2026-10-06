@@ -147,6 +147,20 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	sub.POST("/submissao", deps.EntregarSubmissao)
 	sub.GET("/submissoes", deps.ListarSubmissoes)
 
+	// Correção: professor dono|staff no serviço (§5.4); aluno vê o
+	// enviado depois de publicar (§Visibilidade).
+	submissoesCorrecao := v1.Group("/submissoes/:id")
+	submissoesCorrecao.Use(deps.RequireAuth())
+	submissoesCorrecao.GET("/correcao", deps.verCorrecao)
+	submissoesCorrecao.PATCH("/correcao", deps.editarCorrecao)
+	submissoesCorrecao.POST("/correcao/confirmar", deps.confirmarCorrecao)
+	submissoesCorrecao.POST("/correcao/publicar", deps.publicarCorrecao)
+	submissoesCorrecao.GET("/minha", deps.minhaCorrecao)
+
+	// Callback do Judge0 (rede interna; chave compartilhada validada no
+	// handler — config em SENO_JUDGE0_CALLBACK_KEY).
+	r.POST("/v1/judge0/callback", deps.callbackJudge0)
+
 	// Visão do aluno na atribuição (RequireAuth só; regras no serviço —
 	// student + matrícula ativa).
 	aluno := v1.Group("/atribuicoes/:id/aluno")

@@ -27,7 +27,9 @@ SELECT a.id,
        tt.revisao      AS minha_revisao,
        tt.gravado_em   AS meu_gravado_em,
        ss.entregue_em  AS minha_entrega,
-       ss.atrasada     AS minha_atrasada
+       ss.atrasada     AS minha_atrasada,
+       pub.pub_em      AS publicada_em,
+       COALESCE(pub.nota::text, '') AS minha_nota_texto
 FROM atribuicoes a
 JOIN turmas t ON t.id = a.turma_id
 JOIN materias m ON m.id = t.materia_id
@@ -40,6 +42,15 @@ LEFT JOIN tentativas tt ON tt.atribuicao_id = a.id
   AND tt.aluno_id = $1
 LEFT JOIN submissoes ss ON ss.atribuicao_id = a.id
   AND ss.aluno_id = $1
+LEFT JOIN LATERAL (
+  SELECT c.publicada_em AS pub_em,
+         SUM(COALESCE(ct.nota_final, ct.nota_auto))::int AS nota
+  FROM correcoes c
+  JOIN correcao_tarefas ct ON ct.correcao_id = c.id
+  WHERE c.submissao_id = ss.id
+    AND c.publicada_em IS NOT NULL
+  GROUP BY c.publicada_em
+) pub ON TRUE
 WHERE ($2::bigint IS NULL OR a.turma_id = $2::bigint)
 ORDER BY a.prazo NULLS FIRST, tt.gravado_em NULLS FIRST, a.created_at DESC, a.id DESC
 `
@@ -66,11 +77,14 @@ type ListAtribuicoesAlunoRow struct {
 	MeuGravadoEm     pgtype.Timestamptz `json:"meu_gravado_em"`
 	MinhaEntrega     pgtype.Timestamptz `json:"minha_entrega"`
 	MinhaAtrasada    pgtype.Bool        `json:"minha_atrasada"`
+	PublicadaEm      pgtype.Timestamptz `json:"publicada_em"`
+	MinhaNotaTexto   interface{}        `json:"minha_nota_texto"`
 }
 
 // Atribuições da escolha do aluno (turmas com matrícula ativa), com a
 // tentativa própria quando existir (em andamento). Sem submissões não
 // há separação entre pendentes/entregues — o rascunho sinaliza o estado.
+// Nota final da correção publicada (se existir): soma das notas.
 func (q *Queries) ListAtribuicoesAluno(ctx context.Context, arg ListAtribuicoesAlunoParams) ([]ListAtribuicoesAlunoRow, error) {
 	rows, err := q.db.Query(ctx, listAtribuicoesAluno, arg.AlunoID, arg.Turma)
 	if err != nil {
@@ -97,6 +111,8 @@ func (q *Queries) ListAtribuicoesAluno(ctx context.Context, arg ListAtribuicoesA
 			&i.MeuGravadoEm,
 			&i.MinhaEntrega,
 			&i.MinhaAtrasada,
+			&i.PublicadaEm,
+			&i.MinhaNotaTexto,
 		); err != nil {
 			return nil, err
 		}

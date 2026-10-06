@@ -146,6 +146,7 @@
               </span>
             </div>
             <div class="acao-area">
+              <a class="peq" href={`/professor/atribuicoes/${a.id}/entregas`}>Entregas</a>
               <form method="POST" action="?/editarConfig">
                 <input type="hidden" name="atribuicao_id" value={a.id} />
                 <button class="peq">Configurar</button>

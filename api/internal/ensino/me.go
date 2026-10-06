@@ -5,6 +5,7 @@ package ensino
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -36,6 +37,8 @@ type AtribuicaoDoAluno struct {
 	Entregue      bool       `json:"entregue"`
 	EntregueEm    *time.Time `json:"entregue_em,omitempty"`
 	Atrasada      bool       `json:"atrasada"`
+	PublicadaEm   *time.Time `json:"publicada_em,omitempty"`
+	NotaFinal     *int32     `json:"nota_final,omitempty"`
 }
 // TurmaDoAluno é a turma na visão do aluno.
 type TurmaDoAluno struct {
@@ -82,6 +85,24 @@ func horaPtr(ts pgtype.Timestamptz) *time.Time {
 	}
 	t := ts.Time
 	return &t
+}
+
+// notaPtrMeu: nota só existe quando a correção foi publicada; o valor
+// chega como texto pelo LATERAL (NULL → nil).
+func notaPtrMeu(valor any, pub pgtype.Timestamptz) *int32 {
+	if !pub.Valid {
+		return nil
+	}
+	texto, ok := valor.(string)
+	if !ok {
+		return nil
+	}
+	var n int
+	if _, err := fmt.Sscan(texto, &n); err != nil {
+		return nil
+	}
+	out := int32(n)
+	return &out
 }
 
 // MinhasTurmas: turmas com matrícula ativa do aluno.
@@ -152,6 +173,8 @@ func (s *Service) MinhasAtribuicoes(
 			Entregue:      row.MinhaEntrega.Valid,
 			EntregueEm:    horaPtr(row.MinhaEntrega),
 			Atrasada:      row.MinhaAtrasada.Bool,
+			PublicadaEm:   horaPtr(row.PublicadaEm),
+			NotaFinal:     notaPtrMeu(row.MinhaNotaTexto, row.PublicadaEm),
 		})
 	}
 	return out, nil

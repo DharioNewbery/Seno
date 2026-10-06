@@ -31,6 +31,19 @@ func (d *Dependencies) EntregarSubmissao(c *gin.Context) {
 		platform.ErrorBody(c, err)
 		return
 	}
+	// Correção nasce junto com a submissão (PROJETO §Correção: "gerada
+	// automaticamente"). Falha no despacho não bloqueia a entrega.
+	if _, corErr := d.CorrecaoS.Iniciar(
+		c.Request.Context(), sub.ID, user.ID, user.Email,
+	); corErr != nil {
+		c.JSON(http.StatusCreated, gin.H{
+			"submissao":   sub,
+			"correcao":    map[string]any{"erro": "não iniciada"},
+		})
+		return
+	}
+	cor, _ := d.CorrecaoS.VerProfessor(c.Request.Context(), user, sub.ID)
+	_ = cor
 	c.JSON(http.StatusCreated, sub)
 }
 

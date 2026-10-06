@@ -39,6 +39,28 @@ type Atribuico struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
+type CorrecaoTarefa struct {
+	ID         int64       `json:"id"`
+	CorrecaoID int64       `json:"correcao_id"`
+	TarefaID   int64       `json:"tarefa_id"`
+	ValorPts   int32       `json:"valor_pts"`
+	NotaAuto   pgtype.Int4 `json:"nota_auto"`
+	NotaFinal  pgtype.Int4 `json:"nota_final"`
+	Feedback   *string     `json:"feedback"`
+}
+
+type Correco struct {
+	ID            int64              `json:"id"`
+	SubmissaoID   int64              `json:"submissao_id"`
+	Status        string             `json:"status"`
+	Feedback      *string            `json:"feedback"`
+	ConfirmadaPor pgtype.Int8        `json:"confirmada_por"`
+	ConfirmadaEm  pgtype.Timestamptz `json:"confirmada_em"`
+	PublicadaEm   pgtype.Timestamptz `json:"publicada_em"`
+	CreatedBy     pgtype.Int8        `json:"created_by"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
 type Job struct {
 	ID        int64              `json:"id"`
 	Kind      string             `json:"kind"`
@@ -104,6 +126,19 @@ type Person struct {
 	FirstName string             `json:"first_name"`
 	LastName  string             `json:"last_name"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type Resultado struct {
+	ID               int64   `json:"id"`
+	CorrecaoTarefaID int64   `json:"correcao_tarefa_id"`
+	TesteID          int64   `json:"teste_id"`
+	Status           *string `json:"status"`
+	Stdout           *string `json:"stdout"`
+	Stderr           *string `json:"stderr"`
+	CompileOutput    *string `json:"compile_output"`
+	Tempo            *string `json:"tempo"`
+	Memoria          *string `json:"memoria"`
+	Cpu              *string `json:"cpu"`
 }
 
 type Session struct {

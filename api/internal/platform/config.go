@@ -26,6 +26,12 @@ type Config struct {
 	SMTPFrom         string
 	WebOrigin        string // origem válida para verificação de Origin no BFF/API
 	ShutdownDeadline time.Duration
+
+	// Judge0 (§Execução do código): vazio = integração desligada
+	// (correções pendentes p/ grade manual).
+	Judge0URL    string
+	Judge0Token  string // X-Auth-Token (se exigido pela instância)
+	Judge0Secret string // chave compartilhada do callback (?key=)
 }
 
 // LoadConfig lê o ambiente e devolve a configuração validada.
@@ -44,6 +50,9 @@ func LoadConfig() (*Config, error) {
 		SMTPFrom:         env("SENO_SMTP_FROM", "seno@ufpa.br"),
 		WebOrigin:        os.Getenv("SENO_WEB_ORIGIN"),
 		ShutdownDeadline: envDuration("SENO_SHUTDOWN_DEADLINE", 10*time.Second),
+		Judge0URL:        os.Getenv("SENO_JUDGE0_URL"),
+		Judge0Token:      os.Getenv("SENO_JUDGE0_TOKEN"),
+		Judge0Secret:     os.Getenv("SENO_JUDGE0_CALLBACK_KEY"),
 	}
 
 	c.DatabaseURL = os.Getenv("SENO_DATABASE_URL")

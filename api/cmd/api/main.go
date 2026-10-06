@@ -16,10 +16,12 @@ import (
 	"github.com/seno-project/seno/api/db"
 	"github.com/seno-project/seno/api/internal/auth"
 	"github.com/seno-project/seno/api/internal/ensino"
-	"github.com/seno-project/seno/api/internal/httpapi"
-	"github.com/seno-project/seno/api/internal/mail"
 	"github.com/seno-project/seno/api/internal/atividades"
 	"github.com/seno-project/seno/api/internal/atribuicoes"
+	"github.com/seno-project/seno/api/internal/correcoes"
+	"github.com/seno-project/seno/api/internal/httpapi"
+	"github.com/seno-project/seno/api/internal/judge0"
+	"github.com/seno-project/seno/api/internal/mail"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
 	"github.com/seno-project/seno/api/internal/submissoes"
@@ -64,6 +66,10 @@ func main() {
 	}
 
 	svcTarefas := tarefas.New(st, audit)
+	// Judge0 (§Execução do código): vazio = integração desligada.
+	judge0Cfg := judge0.CarregarConfigDasEnvLigada(
+		cfg.Judge0URL, cfg.Judge0Token, cfg.Judge0Secret, cfg.WebOrigin,
+	)
 	deps := &httpapi.Dependencies{
 		Cfg:        cfg,
 		Pool:       pool,
@@ -78,6 +84,7 @@ func main() {
 		AtribuicaoS: atribuicoes.New(st, audit),
 		TentativaS:  tentativas.New(st, audit),
 		SubmissaoS:  submissoes.New(st, audit),
+		CorrecaoS:   correcoes.New(st, audit, judge0.NewClient(judge0Cfg), judge0Cfg),
 	}
 
 	if os.Getenv("SENO_MODE") != "debug" {

@@ -658,6 +658,15 @@ export async function entregarAtividade(
   });
 }
 
+export interface Entrega {
+  id: number;
+  aluno: string;
+  aluno_email: string;
+  comecou_em: string;
+  entregue_em: string;
+  atrasada: boolean;
+}
+
 /** Entregas da atribuição (professor dono|staff). */
 export async function listarEntregas(
   request: Request,
@@ -667,6 +676,97 @@ export async function listarEntregas(
   return chamar(request, token, `/v1/atribuicoes/${id}/submissoes`, {
     method: "GET",
   });
+}
+
+export function entregasDe(r: Resultado): Entrega[] {
+  return (r.body as { submissoes?: Entrega[] } | null)?.submissoes ?? [];
+}
+
+// ------------------------- correção ------------------------------------
+
+export interface ResultadoTeste {
+  teste_id: number;
+  status?: string;
+  stdout?: string;
+  stderr?: string;
+  compile_output?: string;
+  tempo?: string;
+  memoria?: string;
+  cpu?: string;
+  publico: boolean;
+}
+
+export interface CorrecaoTarefa {
+  id: number;
+  tarefa_id: number;
+  tarefa_nome: string;
+  valor_pts: number;
+  nota_auto?: number;
+  nota_final?: number;
+  feedback?: string;
+  resultados: ResultadoTeste[];
+}
+
+export interface Correcao {
+  id: number;
+  submissao_id: number;
+  status: string;
+  feedback?: string;
+  confirmada_em?: string;
+  publicada_em?: string;
+  tarefas: CorrecaoTarefa[];
+}
+
+export interface VisaoCorrecaoProfessor {
+  submissao: {
+    id: number;
+    aluno: string;
+    aluno_email: string;
+    atividade_nome: string;
+    entregue_em: string;
+    atrasada: boolean;
+  };
+  correcao: Correcao | null;
+}
+
+export async function verCorrecao(
+  request: Request,
+  token: string,
+  submissaoID: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/submissoes/${submissaoID}/correcao`, {
+    method: "GET",
+  });
+}
+
+export async function editarCorrecao(
+  request: Request,
+  token: string,
+  submissaoID: number,
+  cad: {
+    feedback?: string;
+    tarefas?: { id: number; nota_final?: number; feedback?: string }[];
+  },
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/submissoes/${submissaoID}/correcao`, {
+    method: "PATCH",
+    body: JSON.stringify(cad),
+  });
+}
+
+/** Ações: confirmar | publicar. */
+export async function acaoCorrecao(
+  request: Request,
+  token: string,
+  submissaoID: number,
+  acao: "confirmar" | "publicar",
+): Promise<Resultado> {
+  return chamar(
+    request,
+    token,
+    `/v1/submissoes/${submissaoID}/correcao/${acao}`,
+    { method: "POST", body: "{}" },
+  );
 }
 
 // ------------------------- matérias e períodos -------------------------
