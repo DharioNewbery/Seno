@@ -218,6 +218,356 @@ export async function listarAlunos(
   return chamar(request, token, `/v1/alunos${param(qs)}`, { method: "GET" });
 }
 
+// --------------------------- tarefas -----------------------------------
+
+export interface Tarefa {
+  id: number;
+  professor_id?: number;
+  nome: string;
+  enunciado?: string;
+  tempo_cpu_ms?: number;
+  tempo_total_ms?: number;
+  memoria_mb?: number;
+  created_at?: string;
+}
+
+export interface Teste {
+  id: number;
+  tarefa_id?: number;
+  stdin: string;
+  stdout_esperado: string;
+  publico: boolean;
+}
+
+export async function listarTarefas(
+  request: Request,
+  token: string,
+): Promise<Resultado> {
+  return chamar(request, token, "/v1/tarefas", { method: "GET" });
+}
+
+/** Lista de tarefas de uma resposta. */
+export function listaDeTarefas(r: Resultado): Tarefa[] {
+  return (r.body as { tarefas?: Tarefa[] } | null)?.tarefas ?? [];
+}
+
+export async function criarTarefa(
+  request: Request,
+  token: string,
+  cad: {
+    nome: string;
+    enunciado: string;
+    tempo_cpu_ms?: number;
+    tempo_total_ms?: number;
+    memoria_mb?: number;
+    testes?: { stdin: string; stdout_esperado: string; publico: boolean }[];
+  },
+): Promise<Resultado> {
+  return chamar(request, token, "/v1/tarefas", {
+    method: "POST",
+    body: JSON.stringify(cad),
+  });
+}
+
+export async function verTarefaBruta(
+  request: Request,
+  token: string,
+  id: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/tarefas/${id}`, { method: "GET" });
+}
+
+/** Detalhe da tarefa: {tarefa, testes}. */
+export function detalhesDoVerTarefa(
+  r: Resultado,
+): { tarefa: Tarefa | null; testes: Teste[] } {
+  const corpo = r.body as { tarefa?: Tarefa; testes?: Teste[] } | null;
+  return { tarefa: corpo?.tarefa ?? null, testes: corpo?.testes ?? [] };
+}
+
+export async function verTarefa(
+  request: Request,
+  token: string,
+  id: number,
+): Promise<{ tarefa: Tarefa | null; testes: Teste[] }> {
+  return detalhesDoVerTarefa(await verTarefaBruta(request, token, id));
+}
+
+export async function editarTarefa(
+  request: Request,
+  token: string,
+  id: number,
+  cad: {
+    nome: string;
+    enunciado: string;
+    tempo_cpu_ms?: number;
+    tempo_total_ms?: number;
+    memoria_mb?: number;
+    testes?: { stdin: string; stdout_esperado: string; publico: boolean }[];
+  },
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/tarefas/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(cad),
+  });
+}
+
+export async function duplicarTarefa(
+  request: Request,
+  token: string,
+  id: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/tarefas/${id}/duplicar`, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
+export async function excluirTarefa(
+  request: Request,
+  token: string,
+  id: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/tarefas/${id}`, {
+    method: "DELETE",
+    body: "{}",
+  });
+}
+
+// --------------------------- atividades --------------------------------
+
+export interface Atividade {
+  id: number;
+  professor_id?: number;
+  nome: string;
+  conteudo?: unknown;
+  tarefas?: TarefaAtividade[];
+  created_at?: string;
+}
+
+export interface TarefaAtividade {
+  tarefa_id: number;
+  ordem: number;
+  valor_pts: number;
+  linguagem: string;
+  tarefa_nome?: string;
+  tarefa_enunciado?: string;
+  tarefa_excluida?: string;
+}
+
+export async function listarAtividades(
+  request: Request,
+  token: string,
+): Promise<Resultado> {
+  return chamar(request, token, "/v1/atividades", { method: "GET" });
+}
+
+/** Lista de atividades de uma resposta (sem tarefas). */
+export function listaDeAtividades(r: Resultado): Atividade[] {
+  return (r.body as { atividades?: Atividade[] } | null)?.atividades ?? [];
+}
+
+/** Monta o JSON pré-hidratação (schema_version 1) a partir das tarefas
+ * escolhidas pelo professor: título grande + task_default por tarefa. */
+export function montarConteudo(
+  nome: string,
+  tarefas: { id: number; valor_pts: number; linguagem: string }[],
+): unknown {
+  return {
+    schema_version: 1,
+    components: [
+      { type: "large_text", text: nome },
+      ...tarefas.map((t) => ({
+        type: "task_default" as const,
+        id: t.id,
+        value_pts: t.valor_pts,
+        language: t.linguagem,
+      })),
+    ],
+  };
+}
+
+export async function criarAtividade(
+  request: Request,
+  token: string,
+  cad: {
+    nome: string;
+    conteudo: unknown;
+    tarefas: {
+      tarefa_id: number;
+      ordem: number;
+      valor_pts: number;
+      linguagem: string;
+    }[];
+  },
+): Promise<Resultado> {
+  return chamar(request, token, "/v1/atividades", {
+    method: "POST",
+    body: JSON.stringify(cad),
+  });
+}
+
+export async function editarAtividade(
+  request: Request,
+  token: string,
+  id: number,
+  cad: {
+    nome: string;
+    conteudo: unknown;
+    tarefas: {
+      tarefa_id: number;
+      ordem: number;
+      valor_pts: number;
+      linguagem: string;
+    }[];
+  },
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/atividades/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(cad),
+  });
+}
+
+export async function duplicarAtividade(
+  request: Request,
+  token: string,
+  id: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/atividades/${id}/duplicar`, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
+/**
+ * Ver detalhado (professor+staff): corpo já decodificado em
+ * {atividade, tarefas}.
+ */
+export async function verAtividadePorId(
+  request: Request,
+  token: string,
+  id: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/atividades/${id}`, { method: "GET" });
+}
+
+export async function excluirAtividade(
+  request: Request,
+  token: string,
+  id: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/atividades/${id}`, {
+    method: "DELETE",
+    body: "{}",
+  });
+}
+
+// --------------------------- atribuições -------------------------------
+
+export interface Atribuicao {
+  id: number;
+  turma_id: number;
+  atividade_id: number;
+  autocomplete: boolean;
+  inicio?: string | null;
+  prazo?: string | null;
+  duracao_seg?: number | null;
+  pode_atrasado: boolean;
+  turma_titulo?: string;
+  atividade_nome?: string;
+}
+
+export async function listarAtribuicoes(
+  request: Request,
+  token: string,
+  filtro: { turma_id?: number; atividade_id?: number },
+): Promise<Resultado> {
+  const qs = new URLSearchParams();
+  if (filtro.turma_id) qs.set("turma_id", String(filtro.turma_id));
+  if (filtro.atividade_id) qs.set("atividade_id", String(filtro.atividade_id));
+  return chamar(request, token, `/v1/atribuicoes${param(qs)}`, { method: "GET" });
+}
+
+export async function criarAtribuicao(
+  request: Request,
+  token: string,
+  cad: {
+    turma_id: number;
+    atividade_id: number;
+    autocomplete?: boolean;
+    inicio?: string | null;
+    prazo?: string | null;
+    duracao_seg?: number | null;
+    pode_atrasado?: boolean;
+  },
+): Promise<Resultado> {
+  return chamar(request, token, "/v1/atribuicoes", {
+    method: "POST",
+    body: JSON.stringify(cad),
+  });
+}
+
+export async function verAtribuicao(
+  request: Request,
+  token: string,
+  id: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/atribuicoes/${id}`, { method: "GET" });
+}
+
+export async function editarAtribuicao(
+  request: Request,
+  token: string,
+  id: number,
+  cad: {
+    autocomplete?: boolean;
+    inicio?: string | null;
+    prazo?: string | null;
+    duracao_seg?: number | null;
+    pode_atrasado?: boolean;
+  },
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/atribuicoes/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(cad),
+  });
+}
+
+export async function excluirAtribuicao(
+  request: Request,
+  token: string,
+  id: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/atribuicoes/${id}`, {
+    method: "DELETE",
+    body: "{}",
+  });
+}
+
+// --------------------- tentativa (fluxo do aluno) ----------------------
+
+export async function visaoAluno(
+  request: Request,
+  token: string,
+  id: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/atribuicoes/${id}/aluno`, {
+    method: "GET",
+  });
+}
+
+export async function gravarTentativa(
+  request: Request,
+  token: string,
+  id: number,
+  grav: { revisao: number; snapshot: { tasks: { id: number; text: string }[] } },
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/atribuicoes/${id}/tentativa`, {
+    method: "PUT",
+    body: JSON.stringify(grav),
+  });
+}
+
 // ------------------------- matérias e períodos -------------------------
 
 export async function listarMaterias(

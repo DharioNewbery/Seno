@@ -139,4 +139,10 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	tent.POST("", deps.AbrirTentativa)
 	tent.GET("", deps.LerTentativa)
 	tent.PUT("", deps.GravarTentativa)
+
+	// Visão do aluno na atribuição (RequireAuth só; regras no serviço —
+	// student + matrícula ativa).
+	aluno := v1.Group("/atribuicoes/:id/aluno")
+	aluno.Use(deps.RequireAuth())
+	aluno.GET("", deps.ViewAluno)
 }

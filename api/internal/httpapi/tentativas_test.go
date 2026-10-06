@@ -145,4 +145,22 @@ func TestTentativas(t *testing.T) {
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Errorf("snapshot inválido: %d", w.Code)
 	}
+
+	// Visão do aluno: material completo; professor → 403.
+	w, visao := chama(t, r, "GET", "/v1/atribuicoes/"+intStr(idAtrib)+"/aluno",
+		"", autenticado(tokCarla))
+	if w.Code != http.StatusOK {
+		t.Fatalf("visão do aluno: %d corpo %v", w.Code, visao)
+	}
+	if tarefas, _ := visao["atividade"].(map[string]any)["tarefas"].([]any); len(tarefas) != 1 {
+		t.Errorf("visão com 1 tarefa: %v", visao)
+	}
+	if _, ok := visao["tentativa"].(map[string]any); !ok {
+		t.Errorf("rascunho aberto aparece na visão: %v", visao)
+	}
+	w, _ = chama(t, r, "GET", "/v1/atribuicoes/"+intStr(idAtrib)+"/aluno",
+		"", autenticado(tokPaula))
+	if w.Code != http.StatusForbidden {
+		t.Errorf("professor usa visão do aluno: %d", w.Code)
+	}
 }

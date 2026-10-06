@@ -10,6 +10,7 @@ package atribuicoes
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -278,6 +279,113 @@ func (s *Service) Ver(ctx context.Context, actor domain.User, id int64) (Atribui
 		return Atribuicao{}, err
 	}
 	return atribuicaoDeGet(row), nil
+}
+
+// VisaoAluno é o material visível ao aluno na atribuição: config da
+// atribuição + atividade (nome/JSON) com tarefas e enunciados + rascunho
+// (quando aberto). Filtragem de dados privados fica sempre neste lado.
+type VisaoAluno struct {
+	Atribuicao Atribuicao       `json:"atribuicao"`
+	Atividade  AtividadeDoAluno `json:"atividade"`
+	Tentativa  *TentativaDoAluno `json:"tentativa,omitempty"`
+}
+
+// AtividadeDoAluno é o conteúdo renderizável da atividade.
+type AtividadeDoAluno struct {
+	ID      int64              `json:"id"`
+	Nome    string             `json:"nome"`
+	Tarefas []TarefaDeAtividade `json:"tarefas"`
+}
+
+// TarefaDeAtividade é a tarefa na visão do aluno (enunciado + atributos).
+type TarefaDeAtividade struct {
+	ID         int64  `json:"id"`
+	Ordem      int    `json:"ordem"`
+	ValorPts   int    `json:"valor_pts"`
+	Linguagem  string `json:"linguagem"`
+	Nome       string `json:"nome"`
+	Enunciado  string `json:"enunciado"`
+	Excluida   bool   `json:"excluida"`
+}
+
+// TentativaDoAluno é o rascunho (escondido até abrir).
+type TentativaDoAluno struct {
+	Revisao   int32           `json:"revisao"`
+	Snapshot  json.RawMessage `json:"snapshot"`
+}
+
+// VerParaAluno devolve a visão do aluno: exige cargo student e
+// matrícula ativa na turma (§5.4; rascunho só o dono vê).
+func (s *Service) VerParaAluno(ctx context.Context, aluno domain.User, id int64) (VisaoAluno, error) {
+	if !domain.HasAnyRole(aluno.Roles, domain.RoleStudent) {
+		return VisaoAluno{}, platform.NewAPIError(
+			http.StatusForbidden, platform.CodeForbidden,
+			"Operação exclusiva de alunos.")
+	}
+	atr, err := s.store.Q.GetAtribuicao(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return VisaoAluno{}, atribuicaoNaoEncontrada()
+		}
+		return VisaoAluno{}, err
+	}
+	mat, err := s.store.Q.MatriculaAtiva(ctx, gen.MatriculaAtivaParams{
+		TurmaID: atr.TurmaID, AlunoID: aluno.ID,
+	})
+	if err != nil {
+		return VisaoAluno{}, err
+	}
+	if !mat {
+		return VisaoAluno{}, atribuicaoNaoEncontrada()
+	}
+
+	atividadeAssoc, err := s.store.Q.GetAtividade(ctx, atr.AtividadeID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return VisaoAluno{}, atribuicaoNaoEncontrada()
+		}
+		return VisaoAluno{}, err
+	}
+	vinculos, err := s.store.Q.ListAtividadeTarefas(ctx, atr.AtividadeID)
+	if err != nil {
+		return VisaoAluno{}, err
+	}
+	tarefas := make([]TarefaDeAtividade, 0, len(vinculos))
+	for _, vt := range vinculos {
+		tarefas = append(tarefas, TarefaDeAtividade{
+			ID: vt.TarefaID, Ordem: int(vt.Ordem), ValorPts: int(vt.ValorPts),
+			Linguagem: vt.Linguagem, Nome: vt.TarefaNome,
+			Enunciado: vt.TarefaEnunciado, Excluida: vt.TarefaDeletedAt.Valid,
+		})
+	}
+
+	visao := VisaoAluno{
+		Atribuicao: Atribuicao{
+			ID: atr.ID, TurmaID: atr.TurmaID, AtividadeID: atr.AtividadeID,
+			Autocomplete: atr.Autocomplete,
+			Inicio:       horaPtr(atr.Inicio), Prazo: horaPtr(atr.Prazo),
+			DuracaoSeg:    intPtr(atr.DuracaoSeg),
+			PodeAtrasado:  atr.PodeAtrasado,
+			CreatedAt:     horaDe(atr.CreatedAt),
+			TurmaTitulo:   tituloDe(atr.TurmaTitulo),
+			AtividadeNome: atr.AtividadeNome,
+		},
+		Atividade: AtividadeDoAluno{
+			ID: atividadeAssoc.ID, Nome: atividadeAssoc.Nome, Tarefas: tarefas,
+		},
+	}
+	tent, err := s.store.Q.GetTentativa(ctx, gen.GetTentativaParams{
+		AtribuicaoID: id, AlunoID: aluno.ID,
+	})
+	switch {
+	case err == nil:
+		visao.Tentativa = &TentativaDoAluno{
+			Revisao: tent.Revisao, Snapshot: tent.Snapshot,
+		}
+	case !errors.Is(err, pgx.ErrNoRows):
+		return VisaoAluno{}, err
+	}
+	return visao, nil
 }
 
 // FiltroAtribuicoes parametriza a listagem (professor é forçado às

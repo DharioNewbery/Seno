@@ -90,6 +90,22 @@ func (d *Dependencies) EditarAtribuicao(c *gin.Context) {
 	c.JSON(http.StatusOK, atribuicao)
 }
 
+// ViewAluno: GET /v1/atribuicoes/:id/aluno — material do aluno
+// (exige student + matrícula ativa, validado no serviço).
+func (d *Dependencies) ViewAluno(c *gin.Context) {
+	user, _ := currentUser(c)
+	id, ok := idDaRota(c)
+	if !ok {
+		return
+	}
+	visao, err := d.AtribuicaoS.VerParaAluno(c.Request.Context(), user, id)
+	if err != nil {
+		platform.ErrorBody(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, visao)
+}
+
 // ExcluirAtribuicao: DELETE /v1/atribuicoes/:id — dono|staff.
 func (d *Dependencies) ExcluirAtribuicao(c *gin.Context) {
 	user, _ := currentUser(c)
