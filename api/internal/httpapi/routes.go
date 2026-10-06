@@ -105,4 +105,17 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	tarefas.PATCH("/:id", deps.EditarTarefa)
 	tarefas.POST("/:id/duplicar", deps.DuplicarTarefa)
 	tarefas.DELETE("/:id", deps.ExcluirTarefa)
+
+	// Banco de atividades (PROJETO §Atividades).
+	atividades := v1.Group("/atividades")
+	atividades.Use(
+		deps.RequireAuth(),
+		deps.RequireCargo(domain.RoleProfessor, domain.RoleAdmin, domain.RoleSuper),
+	)
+	atividades.GET("", deps.ListarAtividades)
+	atividades.POST("", deps.CriarAtividade)
+	atividades.GET("/:id", deps.VerAtividade)
+	atividades.PATCH("/:id", deps.EditarAtividade)
+	atividades.POST("/:id/duplicar", deps.DuplicarAtividade)
+	atividades.DELETE("/:id", deps.ExcluirAtividade)
 }

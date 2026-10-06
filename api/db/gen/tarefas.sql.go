@@ -108,6 +108,7 @@ const countTarefas = `-- name: CountTarefas :one
 SELECT count(*)
 FROM tarefas
 WHERE ($1::bigint IS NULL OR professor_id = $1::bigint)
+  AND deleted_at IS NULL
 `
 
 func (q *Queries) CountTarefas(ctx context.Context, professor pgtype.Int8) (int64, error) {
@@ -300,6 +301,7 @@ FROM tarefas t
 JOIN users u ON u.id = t.professor_id
 JOIN persons p ON p.id = u.person_id
 WHERE ($1::bigint IS NULL OR t.professor_id = $1::bigint)
+  AND t.deleted_at IS NULL
 ORDER BY t.created_at DESC, t.id DESC
 LIMIT $3 OFFSET $2
 `
@@ -406,6 +408,21 @@ WHERE tarefa_id = $1
 
 func (q *Queries) ReplaceTestesTarefa(ctx context.Context, tarefaID int64) (int64, error) {
 	result, err := q.db.Exec(ctx, replaceTestesTarefa, tarefaID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const softDeleteTarefa = `-- name: SoftDeleteTarefa :execrows
+UPDATE tarefas
+SET deleted_at = now()
+WHERE id = $1
+  AND deleted_at IS NULL
+`
+
+func (q *Queries) SoftDeleteTarefa(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteTarefa, id)
 	if err != nil {
 		return 0, err
 	}

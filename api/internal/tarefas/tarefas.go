@@ -321,13 +321,36 @@ func (s *Service) Listar(ctx context.Context, actor domain.User, f FiltroTarefas
 	return ListaTarefas{Total: total, Pagina: pagina, Por: por, Tarefas: out}, nil
 }
 
+// emUso: quantas atividades ativas referenciam a tarefa (regras §Ciclo:
+// usada → não edita e exclusão vira soft delete).
+func (s *Service) emUso(ctx context.Context, id int64) (bool, error) {
+	n, err := s.store.Q.CountAtividadesUsandoTarefa(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+func tarefaEmUso() error {
+	return platform.NewAPIError(
+		http.StatusConflict, platform.CodeConflict,
+		"Tarefa em uso por atividade — duplique para editar.")
+}
+
 // Editar muda nome/enunciado/limites e (opcional) substitui os testes.
+// Tarefa usada por atividade → 409 (duplicar para obter editável).
 func (s *Service) Editar(ctx context.Context, actor domain.User, id int64, cad CadastroTarefa) (Tarefa, []Teste, error) {
-	roda, testes, err := s.Ver(ctx, actor, id)
+	_, testes, err := s.Ver(ctx, actor, id)
 	if err != nil {
 		return Tarefa{}, nil, err
 	}
-	_ = roda
+	usada, err := s.emUso(ctx, id)
+	if err != nil {
+		return Tarefa{}, nil, err
+	}
+	if usada {
+		return Tarefa{}, nil, tarefaEmUso()
+	}
 	nome, enunciado, err := validaNomeEnunciado(cad)
 	if err != nil {
 		return Tarefa{}, nil, err
@@ -422,12 +445,31 @@ func (s *Service) Duplicar(ctx context.Context, actor domain.User, id int64) (Ta
 	return copia, nil
 }
 
-// Excluir apaga a tarefa definitivamente (sem referência de Atividade —
-// quando as Atividades existirem, usada → soft delete e visível somente
-// leitura). Testes caem junto (CASCADE).
+// Excluir segue §Ciclo de Tarefa e Atividade: sem referência de atividade
+// → hard delete (testes caem junto, CASCADE); usada → soft delete e
+// passa a ficar somente leitura nas atividades/submissões antigas.
 func (s *Service) Excluir(ctx context.Context, actor domain.User, id int64) error {
 	if _, _, err := s.Ver(ctx, actor, id); err != nil {
 		return err
+	}
+	usada, err := s.emUso(ctx, id)
+	if err != nil {
+		return err
+	}
+	if usada {
+		rows, err := s.store.Q.SoftDeleteTarefa(ctx, id)
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return tarefaNaoEncontrada()
+		}
+		s.audit.Record(ctx, platform.LogEntry{
+			ActorID: &actor.ID, Actor: actor.Email,
+			Kind:   LogKindTarefaDelete,
+			Detail: fmt.Sprintf("tarefa=%d (soft: usada por atividade)", id),
+		})
+		return nil
 	}
 	rows, err := s.store.Q.DeleteTarefa(ctx, id)
 	if err != nil {

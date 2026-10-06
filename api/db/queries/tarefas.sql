@@ -31,6 +31,12 @@ DELETE FROM tarefas
 WHERE id = $1
   AND deleted_at IS NULL;
 
+-- name: SoftDeleteTarefa :execrows
+UPDATE tarefas
+SET deleted_at = now()
+WHERE id = $1
+  AND deleted_at IS NULL;
+
 -- name: GetTarefa :one
 SELECT t.id,
        t.professor_id,
@@ -65,13 +71,15 @@ FROM tarefas t
 JOIN users u ON u.id = t.professor_id
 JOIN persons p ON p.id = u.person_id
 WHERE (sqlc.narg('professor')::bigint IS NULL OR t.professor_id = sqlc.narg('professor')::bigint)
+  AND t.deleted_at IS NULL
 ORDER BY t.created_at DESC, t.id DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CountTarefas :one
 SELECT count(*)
 FROM tarefas
-WHERE (sqlc.narg('professor')::bigint IS NULL OR professor_id = sqlc.narg('professor')::bigint);
+WHERE (sqlc.narg('professor')::bigint IS NULL OR professor_id = sqlc.narg('professor')::bigint)
+  AND deleted_at IS NULL;
 
 -- name: ListTestesTarefa :many
 SELECT id, tarefa_id, stdin, stdout_esperado, publico, created_at

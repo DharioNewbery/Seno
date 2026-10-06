@@ -8,6 +8,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Atividade struct {
+	ID          int64              `json:"id"`
+	ProfessorID int64              `json:"professor_id"`
+	Nome        string             `json:"nome"`
+	Conteudo    []byte             `json:"conteudo"`
+	CreatedBy   pgtype.Int8        `json:"created_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type AtividadeTarefa struct {
+	AtividadeID int64  `json:"atividade_id"`
+	TarefaID    int64  `json:"tarefa_id"`
+	Ordem       int32  `json:"ordem"`
+	ValorPts    int32  `json:"valor_pts"`
+	Linguagem   string `json:"linguagem"`
+}
+
 type Job struct {
 	ID        int64              `json:"id"`
 	Kind      string             `json:"kind"`

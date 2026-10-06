@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/seno-project/seno/api/db"
+	"github.com/seno-project/seno/api/internal/atividades"
 	"github.com/seno-project/seno/api/internal/auth"
 	"github.com/seno-project/seno/api/internal/ensino"
 	"github.com/seno-project/seno/api/internal/mail"
@@ -46,7 +47,8 @@ func testeDB(t *testing.T) *pgxpool.Pool {
 		t.Fatalf("migrações: %v", err)
 	}
 	_, err = pool.Exec(ctx, `TRUNCATE persons, users, user_roles, sessions,
-		one_time_tokens, log_entries, jobs, tarefas, testes_tarefa RESTART IDENTITY CASCADE`)
+		one_time_tokens, log_entries, jobs, tarefas, testes_tarefa,
+		atividades, atividade_tarefas RESTART IDENTITY CASCADE`)
 	if err != nil {
 		t.Fatalf("limpeza do banco: %v", err)
 	}
@@ -71,6 +73,7 @@ func montaAPI(t *testing.T, pool *pgxpool.Pool) (*Dependencies, *gin.Engine) {
 	deps.UsuarioS = usuarios.New(st, audit, deps.Cargo)
 	deps.Ensino = ensino.New(st, audit, deps.Cargo)
 	deps.TarefaS = tarefas.New(st, audit)
+	deps.AtividadeS = atividades.New(st, audit, deps.TarefaS)
 	r := gin.New()
 	RegisterRoutes(r, deps)
 	return deps, r

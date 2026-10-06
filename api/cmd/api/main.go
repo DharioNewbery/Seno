@@ -18,6 +18,7 @@ import (
 	"github.com/seno-project/seno/api/internal/ensino"
 	"github.com/seno-project/seno/api/internal/httpapi"
 	"github.com/seno-project/seno/api/internal/mail"
+	"github.com/seno-project/seno/api/internal/atividades"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
 	"github.com/seno-project/seno/api/internal/tarefas"
@@ -59,16 +60,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	svcTarefas := tarefas.New(st, audit)
 	deps := &httpapi.Dependencies{
-		Cfg:      cfg,
-		Pool:     pool,
-		Store:    st,
-		Audit:    audit,
-		Auth:     authSvc,
-		Cargo:    recoverer,
-		UsuarioS: usuarios.New(st, audit, recoverer),
-		Ensino:   ensino.New(st, audit, recoverer),
-		TarefaS:  tarefas.New(st, audit),
+		Cfg:        cfg,
+		Pool:       pool,
+		Store:      st,
+		Audit:      audit,
+		Auth:       authSvc,
+		Cargo:      recoverer,
+		UsuarioS:   usuarios.New(st, audit, recoverer),
+		Ensino:     ensino.New(st, audit, recoverer),
+		TarefaS:    svcTarefas,
+		AtividadeS: atividades.New(st, audit, svcTarefas),
 	}
 
 	if os.Getenv("SENO_MODE") != "debug" {
