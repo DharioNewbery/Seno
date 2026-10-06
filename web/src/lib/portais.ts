@@ -33,19 +33,14 @@ export const PORTAIS: Record<PortalId, PortalDef> = {
       {
         rotulo: "Minhas turmas",
         href: "/aluno/turmas",
-        sub: [
-          { rotulo: "Listar turmas", href: "/aluno/turmas" },
-          { rotulo: "Professor e colegas", href: "/aluno/turmas/colegas" },
-          { rotulo: "Atividades da turma", href: "/aluno/turmas/atividades" },
-        ],
+        sub: [{ rotulo: "Listar turmas", href: "/aluno/turmas" }],
       },
-      { rotulo: "Atividades pendentes", href: "/aluno/pendentes" },
       {
-        rotulo: "Atividades entregues",
-        href: "/aluno/entregues",
+        rotulo: "Atividades",
+        href: "/aluno/atividades",
         sub: [
-          { rotulo: "Listar entregas", href: "/aluno/entregues" },
-          { rotulo: "Notas e feedback", href: "/aluno/entregues/notas" },
+          { rotulo: "Todas as atividades", href: "/aluno/atividades" },
+          { rotulo: "Continuar em andamento", href: "/aluno/atividades" },
         ],
       },
     ],

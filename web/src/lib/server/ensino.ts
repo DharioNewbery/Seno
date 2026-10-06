@@ -546,12 +546,86 @@ export async function excluirAtribuicao(
 
 // --------------------- tentativa (fluxo do aluno) ----------------------
 
+export interface VisaoAluno {
+  atribuicao: {
+    id: number;
+    prazo?: string | null;
+    pode_atrasado: boolean;
+  };
+  atividade: {
+    id: number;
+    nome: string;
+    tarefas: {
+      id: number;
+      ordem: number;
+      valor_pts: number;
+      linguagem: string;
+      nome: string;
+      enunciado: string;
+      excluida: boolean;
+    }[];
+  };
+  tentativa?: { revisao: number; snapshot: { tasks?: { id: number; text: string }[] } };
+}
+
 export async function visaoAluno(
   request: Request,
   token: string,
   id: number,
 ): Promise<Resultado> {
   return chamar(request, token, `/v1/atribuicoes/${id}/aluno`, {
+    method: "GET",
+  });
+}
+
+// ---------------------- portal aluno (v1/me) ---------------------------
+
+export interface TurmaDoAluno {
+  id: number;
+  titulo?: string;
+  materia_codigo: string;
+  materia_nome: string;
+  trimestre: number;
+  ano: number;
+  professor: string;
+  professor_email: string;
+  ativa: boolean;
+  created_at: string;
+}
+
+export interface AtribuicaoDoAluno {
+  id: number;
+  turma_id: number;
+  atividade_id: number;
+  autocomplete: boolean;
+  inicio?: string;
+  prazo?: string;
+  duracao_seg?: number;
+  pode_atrasado: boolean;
+  materia_codigo: string;
+  turma_titulo?: string;
+  turma_ativa: boolean;
+  atividade_nome: string;
+  em_andamento: boolean;
+  minha_revisao?: number;
+  gravado_em?: string;
+}
+
+export async function listarMinhasTurmas(
+  request: Request,
+  token: string,
+): Promise<Resultado> {
+  return chamar(request, token, "/v1/me/turmas", { method: "GET" });
+}
+
+export async function listarMinhasAtribuicoes(
+  request: Request,
+  token: string,
+  turmaID?: number,
+): Promise<Resultado> {
+  const qs = new URLSearchParams();
+  if (turmaID) qs.set("turma_id", String(turmaID));
+  return chamar(request, token, `/v1/me/atribuicoes${param(qs)}`, {
     method: "GET",
   });
 }

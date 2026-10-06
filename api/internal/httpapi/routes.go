@@ -145,4 +145,11 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	aluno := v1.Group("/atribuicoes/:id/aluno")
 	aluno.Use(deps.RequireAuth())
 	aluno.GET("", deps.ViewAluno)
+
+	// Portal aluno: turmas e atribuições do próprio usuário (§Portal
+	// Aluno); cargo student exigido no serviço.
+	me := v1.Group("/me")
+	me.Use(deps.RequireAuth())
+	me.GET("/turmas", deps.MinhasTurmas)
+	me.GET("/atribuicoes", deps.MinhasAtribuicoes)
 }
