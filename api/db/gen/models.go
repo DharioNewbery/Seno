@@ -87,6 +87,29 @@ type Session struct {
 	UserAgent    *string            `json:"user_agent"`
 }
 
+type Tarefa struct {
+	ID           int64              `json:"id"`
+	ProfessorID  int64              `json:"professor_id"`
+	Nome         string             `json:"nome"`
+	Enunciado    string             `json:"enunciado"`
+	TempoCpuMs   int32              `json:"tempo_cpu_ms"`
+	TempoTotalMs int32              `json:"tempo_total_ms"`
+	MemoriaMb    int32              `json:"memoria_mb"`
+	CreatedBy    pgtype.Int8        `json:"created_by"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type TestesTarefa struct {
+	ID             int64              `json:"id"`
+	TarefaID       int64              `json:"tarefa_id"`
+	Stdin          string             `json:"stdin"`
+	StdoutEsperado string             `json:"stdout_esperado"`
+	Publico        bool               `json:"publico"`
+	CreatedBy      pgtype.Int8        `json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
 type Turma struct {
 	ID          int64              `json:"id"`
 	MateriaID   int64              `json:"materia_id"`

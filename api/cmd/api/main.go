@@ -20,6 +20,7 @@ import (
 	"github.com/seno-project/seno/api/internal/mail"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
+	"github.com/seno-project/seno/api/internal/tarefas"
 	"github.com/seno-project/seno/api/internal/usuarios"
 )
 
@@ -67,6 +68,7 @@ func main() {
 		Cargo:    recoverer,
 		UsuarioS: usuarios.New(st, audit, recoverer),
 		Ensino:   ensino.New(st, audit, recoverer),
+		TarefaS:  tarefas.New(st, audit),
 	}
 
 	if os.Getenv("SENO_MODE") != "debug" {

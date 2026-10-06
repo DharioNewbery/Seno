@@ -92,4 +92,17 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 		deps.RequireCargo(domain.RoleProfessor, domain.RoleAdmin, domain.RoleSuper),
 	)
 	alunos.GET("", deps.ListarAlunos)
+
+	// Banco de tarefas (professor dono; staff tudo — PROJETO §Tarefas).
+	tarefas := v1.Group("/tarefas")
+	tarefas.Use(
+		deps.RequireAuth(),
+		deps.RequireCargo(domain.RoleProfessor, domain.RoleAdmin, domain.RoleSuper),
+	)
+	tarefas.GET("", deps.ListarTarefas)
+	tarefas.POST("", deps.CriarTarefa)
+	tarefas.GET("/:id", deps.VerTarefa)
+	tarefas.PATCH("/:id", deps.EditarTarefa)
+	tarefas.POST("/:id/duplicar", deps.DuplicarTarefa)
+	tarefas.DELETE("/:id", deps.ExcluirTarefa)
 }
