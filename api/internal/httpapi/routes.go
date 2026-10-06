@@ -81,4 +81,12 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 		deps.RequireCargo(domain.RoleProfessor, domain.RoleAdmin, domain.RoleSuper),
 	)
 	matriculas.DELETE("/:id", deps.EncerrarMatricula)
+
+	// Busca de alunos para a matrícula (professor+staff).
+	alunos := v1.Group("/alunos")
+	alunos.Use(
+		deps.RequireAuth(),
+		deps.RequireCargo(domain.RoleProfessor, domain.RoleAdmin, domain.RoleSuper),
+	)
+	alunos.GET("", deps.ListarAlunos)
 }

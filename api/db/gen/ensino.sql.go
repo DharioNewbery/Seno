@@ -30,15 +30,28 @@ SELECT count(*)
 FROM turmas t
 WHERE ($1::bigint IS NULL OR t.professor_id = $1::bigint)
   AND ($2::bigint IS NULL OR t.materia_id = $2::bigint)
+  AND ($3::bigint IS NULL OR t.periodo_id = $3::bigint)
+  AND (
+    ($4::text IS NULL AND t.encerrado_em IS NULL)
+    OR ($4::text = 'only' AND t.encerrado_em IS NOT NULL)
+    OR ($4::text = 'all')
+  )
 `
 
 type CountTurmasParams struct {
-	Professor pgtype.Int8 `json:"professor"`
-	Materia   pgtype.Int8 `json:"materia"`
+	Professor  pgtype.Int8 `json:"professor"`
+	Materia    pgtype.Int8 `json:"materia"`
+	Periodo    pgtype.Int8 `json:"periodo"`
+	Encerradas *string     `json:"encerradas"`
 }
 
 func (q *Queries) CountTurmas(ctx context.Context, arg CountTurmasParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countTurmas, arg.Professor, arg.Materia)
+	row := q.db.QueryRow(ctx, countTurmas,
+		arg.Professor,
+		arg.Materia,
+		arg.Periodo,
+		arg.Encerradas,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -495,15 +508,23 @@ JOIN users uu ON uu.id = t.professor_id
 JOIN persons up ON up.id = uu.person_id
 WHERE ($1::bigint IS NULL OR t.professor_id = $1::bigint)
   AND ($2::bigint IS NULL OR t.materia_id = $2::bigint)
+  AND ($3::bigint IS NULL OR t.periodo_id = $3::bigint)
+  AND (
+    ($4::text IS NULL AND t.encerrado_em IS NULL)
+    OR ($4::text = 'only' AND t.encerrado_em IS NOT NULL)
+    OR ($4::text = 'all')
+  )
 ORDER BY t.created_at DESC, t.id DESC
-LIMIT $4 OFFSET $3
+LIMIT $6 OFFSET $5
 `
 
 type ListTurmasParams struct {
-	Professor pgtype.Int8 `json:"professor"`
-	Materia   pgtype.Int8 `json:"materia"`
-	Offset    int32       `json:"offset"`
-	Limit     int32       `json:"limit"`
+	Professor  pgtype.Int8 `json:"professor"`
+	Materia    pgtype.Int8 `json:"materia"`
+	Periodo    pgtype.Int8 `json:"periodo"`
+	Encerradas *string     `json:"encerradas"`
+	Offset     int32       `json:"offset"`
+	Limit      int32       `json:"limit"`
 }
 
 type ListTurmasRow struct {
@@ -527,6 +548,8 @@ func (q *Queries) ListTurmas(ctx context.Context, arg ListTurmasParams) ([]ListT
 	rows, err := q.db.Query(ctx, listTurmas,
 		arg.Professor,
 		arg.Materia,
+		arg.Periodo,
+		arg.Encerradas,
 		arg.Offset,
 		arg.Limit,
 	)

@@ -99,6 +99,12 @@ JOIN users uu ON uu.id = t.professor_id
 JOIN persons up ON up.id = uu.person_id
 WHERE (sqlc.narg('professor')::bigint IS NULL OR t.professor_id = sqlc.narg('professor')::bigint)
   AND (sqlc.narg('materia')::bigint IS NULL OR t.materia_id = sqlc.narg('materia')::bigint)
+  AND (sqlc.narg('periodo')::bigint IS NULL OR t.periodo_id = sqlc.narg('periodo')::bigint)
+  AND (
+    (sqlc.narg('encerradas')::text IS NULL AND t.encerrado_em IS NULL)
+    OR (sqlc.narg('encerradas')::text = 'only' AND t.encerrado_em IS NOT NULL)
+    OR (sqlc.narg('encerradas')::text = 'all')
+  )
 ORDER BY t.created_at DESC, t.id DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
@@ -106,7 +112,13 @@ LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 SELECT count(*)
 FROM turmas t
 WHERE (sqlc.narg('professor')::bigint IS NULL OR t.professor_id = sqlc.narg('professor')::bigint)
-  AND (sqlc.narg('materia')::bigint IS NULL OR t.materia_id = sqlc.narg('materia')::bigint);
+  AND (sqlc.narg('materia')::bigint IS NULL OR t.materia_id = sqlc.narg('materia')::bigint)
+  AND (sqlc.narg('periodo')::bigint IS NULL OR t.periodo_id = sqlc.narg('periodo')::bigint)
+  AND (
+    (sqlc.narg('encerradas')::text IS NULL AND t.encerrado_em IS NULL)
+    OR (sqlc.narg('encerradas')::text = 'only' AND t.encerrado_em IS NOT NULL)
+    OR (sqlc.narg('encerradas')::text = 'all')
+  );
 
 -- name: UpdateTurma :exec
 UPDATE turmas

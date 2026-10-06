@@ -9,8 +9,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/seno-project/seno/api/internal/domain"
 	"github.com/seno-project/seno/api/internal/ensino"
 	"github.com/seno-project/seno/api/internal/platform"
+	"github.com/seno-project/seno/api/internal/usuarios"
 )
 
 // ------------------------------ Matérias ------------------------------
@@ -100,6 +102,30 @@ func (d *Dependencies) CriarPeriodo(c *gin.Context) {
 	c.JSON(http.StatusCreated, periodo)
 }
 
+// ListarAlunos: GET /v1/alunos?busca&status&pagina&por — busca de alunos
+// para matricular (professor+staff; cargo de student fixo no filtro),
+// devolvendo {total, usuarios}.
+func (d *Dependencies) ListarAlunos(c *gin.Context) {
+	pagina, por := numPagina(c)
+	lista, err := d.UsuarioS.Listar(c.Request.Context(), usuarios.Filtros{
+		Busca:  c.Query("busca"),
+		Status: c.Query("status"),
+		Cargo:  domain.RoleStudent,
+		Pagina: pagina,
+		Por:    por,
+	})
+	if err != nil {
+		platform.ErrorBody(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"total":    lista.Total,
+		"pagina":   lista.Pagina,
+		"por":      lista.Por,
+		"usuarios": lista.Usuarios,
+	})
+}
+
 // ------------------------------- Turmas ------------------------------
 
 // numParamOpcional lê ?professor_id/&materia_id como filtro (staff).
@@ -131,10 +157,17 @@ func (d *Dependencies) ListarTurmas(c *gin.Context) {
 		platform.ErrorBody(c, err)
 		return
 	}
+	per, err := numParamOpcional(c, "periodo_id")
+	if err != nil {
+		platform.ErrorBody(c, err)
+		return
+	}
 	pagina, por := numPagina(c)
 	lista, err := d.Ensino.ListarTurmas(c.Request.Context(), user, ensino.FiltroTurmas{
 		ProfessorID: prof,
 		MateriaID:   mat,
+		PeriodoID:   per,
+		Encerradas:  c.Query("encerradas"),
 		Pagina:      &pagina,
 		Por:         &por,
 	})

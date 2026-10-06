@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
@@ -43,7 +44,7 @@ func TestEnsinoTurmasMatriculas(t *testing.T) {
 		t.Errorf("editar matéria: status %d", w.Code)
 	}
 
-	// -------- Professores (fica pendente; aceite via convite) --------
+	// -------- Professores (nascem pendentes; aceite via convite) --------
 	criarProfessor(t, r, tokSuper, "paula.ensino@seno.dev", "Paula", "Ribeiro")
 	ativaNovoUsuario(t, r, pool, "paula.ensino@seno.dev", "senha-paula-1")
 	tokPaula := logar(t, r, "paula.ensino@seno.dev", "senha-paula-1")
@@ -78,7 +79,8 @@ func TestEnsinoTurmasMatriculas(t *testing.T) {
 		t.Errorf("turma de outro: 404 (sem revelar): %d %v", w.Code, body)
 	}
 
-	// Staff: tudo; filtro por professor_id funciona.
+	// Staff: só a dele... na verdade: staff vê TUDO (não-dono?? staff vê a
+	// turma do outro); filtro por professor_id funciona.
 	w, body = chama(t, r, "GET", "/v1/turmas", "", autenticado(tokSuper))
 	if intOf(body["total"]) != 1 {
 		t.Errorf("staff deve ver todas: %v", body["total"])
@@ -167,7 +169,7 @@ func TestEnsinoTurmasMatriculas(t *testing.T) {
 		t.Errorf("matricular em turma encerrada: status %d", w.Code)
 	}
 
-	// Exclusão: com matrícula ENCERRADA (histórico) ainda é possível; 404 depois.
+	// Exclusão: com matrícula encerrada (histórico) ainda é possível; 404 depois.
 	w, _ = chama(t, r, "DELETE", "/v1/turmas/"+intStr(idTurma), "", autenticado(tokPaula))
 	if w.Code != http.StatusNoContent {
 		t.Errorf("excluir turma: status %d", w.Code)
@@ -181,6 +183,102 @@ func TestEnsinoTurmasMatriculas(t *testing.T) {
 	w, _ = chama(t, r, "GET", "/v1/turmas/abc", "", autenticado(tokSuper))
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Errorf("id inválido: status %d", w.Code)
+	}
+}
+
+// TestEnsinoFiltros valida encerradas=only/all, periodo_id e a busca de
+// alunos (GET /v1/alunos, professor+staff).
+func TestEnsinoFiltros(t *testing.T) {
+	pool := testeDB(t)
+	deps, r := montaAPI(t, pool)
+
+	if err := bootstrapSuper(t, deps); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	tokSuper := logar(t, r, "super@seno.dev", "102938")
+
+	w, materia := chama(t, r, "POST", "/v1/materias",
+		`{"codigo":"GRAF","nome":"Grafos"}`, autenticado(tokSuper))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("criar matéria: status %d corpo %v", w.Code, materia)
+	}
+	idMateria := int64(materia["id"].(float64))
+
+	criarProfessor(t, r, tokSuper, "hilda.filtros@seno.dev", "Hilda", "Maia")
+	ativaNovoUsuario(t, r, pool, "hilda.filtros@seno.dev", "senha-hilda-1")
+	tokProf := logar(t, r, "hilda.filtros@seno.dev", "senha-hilda-1")
+
+	// Duas turmas: uma ativa, uma encerrada.
+	w, ativa := chama(t, r, "POST", "/v1/turmas",
+		`{"materia_id":`+intStr(idMateria)+`,"trimestre":1,"ano":2026,"titulo":"A"}`,
+		autenticado(tokProf))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("turma ativa: status %d corpo %v", w.Code, ativa)
+	}
+	idAtiva := int64(ativa["id"].(float64))
+
+	w, encerrada := chama(t, r, "POST", "/v1/turmas",
+		`{"materia_id":`+intStr(idMateria)+`,"trimestre":2,"ano":2025,"titulo":"E"}`,
+		autenticado(tokProf))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("turma a encerrar: status %d corpo %v", w.Code, encerrada)
+	}
+	idEncerrada := int64(encerrada["id"].(float64))
+	w, _ = chama(t, r, "POST", "/v1/turmas/"+intStr(idEncerrada)+"/encerrar",
+		"", autenticado(tokProf))
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("encerrar: status %d", w.Code)
+	}
+
+	// Padrão: só ativas (1).
+	w, body := chama(t, r, "GET", "/v1/turmas", "", autenticado(tokProf))
+	if intOf(body["total"]) != 1 {
+		t.Errorf("padrão ativas: %v", body["total"])
+	}
+	// only: só a encerrada.
+	w, body = chama(t, r, "GET", "/v1/turmas?encerradas=only", "", autenticado(tokProf))
+	if intOf(body["total"]) != 1 {
+		t.Errorf("encerradas=only: %v", body["total"])
+	}
+	if turmas, _ := body["turmas"].([]any); len(turmas) == 1 {
+		item, _ := turmas[0].(map[string]any)
+		if id, _ := item["id"].(float64); int64(id) != idEncerrada {
+			t.Errorf("only devolve a encerrada: %v", item["id"])
+		}
+	}
+	// all: 2.
+	w, body = chama(t, r, "GET", "/v1/turmas?encerradas=all", "", autenticado(tokProf))
+	if intOf(body["total"]) != 2 {
+		t.Errorf("encerradas=all: %v", body["total"])
+	}
+	// Valor inválido → 422.
+	w, _ = chama(t, r, "GET", "/v1/turmas?encerradas=zanzar", "", autenticado(tokProf))
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Errorf("encerradas inválido: status %d", w.Code)
+	}
+	// periodo_id filtra: id do período lido direto do banco.
+	var idPeriodo int64
+	if err := pool.QueryRow(context.Background(),
+		`SELECT periodo_id FROM turmas WHERE id = $1`, idAtiva).Scan(&idPeriodo); err != nil {
+		t.Fatalf("periodo: %v", err)
+	}
+	w, body = chama(t, r, "GET",
+		"/v1/turmas?encerradas=all&periodo_id="+intStr(idPeriodo), "", autenticado(tokProf))
+	if intOf(body["total"]) != 1 {
+		t.Errorf("periodo_id deveria devolver 1 turma: %v", body["total"])
+	}
+
+	// Busca de alunos: professor pode buscar (cargo student fixo no filtro).
+	w, body = chama(t, r, "GET", "/v1/alunos?busca=aluna", "", autenticado(tokProf))
+	if w.Code != http.StatusOK {
+		t.Errorf("busca alunos: status %d corpo %v", w.Code, body)
+	}
+
+	// Professor não acessa escrita de matérias.
+	w, _ = chama(t, r, "POST", "/v1/materias",
+		`{"codigo":"X1","nome":"X"}`, autenticado(tokProf))
+	if w.Code != http.StatusForbidden {
+		t.Errorf("professor cria matéria: status %d", w.Code)
 	}
 }
 
@@ -205,7 +303,8 @@ func criarProfessor(t *testing.T, r *gin.Engine, tokSuper, email, nome, sobrenom
 	}
 }
 
-// ativaNovoUsuario consome o convite capturado no Log e confirmar ativação.
+// ativaNovoUsuario consome o convite capturado no Log (da conta criada
+// por último).
 func ativaNovoUsuario(t *testing.T, r *gin.Engine, pool *pgxpool.Pool, email, senha string) {
 	t.Helper()
 	tokConvite := tokenDoLog(t, pool)
