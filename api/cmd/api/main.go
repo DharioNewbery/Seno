@@ -15,6 +15,7 @@ import (
 
 	"github.com/seno-project/seno/api/db"
 	"github.com/seno-project/seno/api/internal/auth"
+	"github.com/seno-project/seno/api/internal/ensino"
 	"github.com/seno-project/seno/api/internal/httpapi"
 	"github.com/seno-project/seno/api/internal/mail"
 	"github.com/seno-project/seno/api/internal/platform"
@@ -60,10 +61,12 @@ func main() {
 	deps := &httpapi.Dependencies{
 		Cfg:      cfg,
 		Pool:     pool,
+		Store:    st,
 		Audit:    audit,
 		Auth:     authSvc,
 		Cargo:    recoverer,
 		UsuarioS: usuarios.New(st, audit, recoverer),
+		Ensino:   ensino.New(st, audit, recoverer),
 	}
 
 	if os.Getenv("SENO_MODE") != "debug" {

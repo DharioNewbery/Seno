@@ -31,6 +31,25 @@ type LogEntry struct {
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
+type Materia struct {
+	ID        int64              `json:"id"`
+	Codigo    string             `json:"codigo"`
+	Nome      string             `json:"nome"`
+	CreatedBy pgtype.Int8        `json:"created_by"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type Matricula struct {
+	ID        int64              `json:"id"`
+	TurmaID   int64              `json:"turma_id"`
+	AlunoID   int64              `json:"aluno_id"`
+	EntradaEm pgtype.Timestamptz `json:"entrada_em"`
+	SaidaEm   pgtype.Timestamptz `json:"saida_em"`
+	CreatedBy pgtype.Int8        `json:"created_by"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type OneTimeToken struct {
 	ID        int64              `json:"id"`
 	UserID    int64              `json:"user_id"`
@@ -40,6 +59,13 @@ type OneTimeToken struct {
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 	UsedAt    pgtype.Timestamptz `json:"used_at"`
 	CreatedBy pgtype.Int8        `json:"created_by"`
+}
+
+type PeriodosLetivo struct {
+	ID        int64              `json:"id"`
+	Trimestre int16              `json:"trimestre"`
+	Ano       int16              `json:"ano"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type Person struct {
@@ -59,6 +85,17 @@ type Session struct {
 	LastSeenAt   pgtype.Timestamptz `json:"last_seen_at"`
 	CreatedIp    *string            `json:"created_ip"`
 	UserAgent    *string            `json:"user_agent"`
+}
+
+type Turma struct {
+	ID          int64              `json:"id"`
+	MateriaID   int64              `json:"materia_id"`
+	PeriodoID   int64              `json:"periodo_id"`
+	ProfessorID int64              `json:"professor_id"`
+	Titulo      *string            `json:"titulo"`
+	EncerradoEm pgtype.Timestamptz `json:"encerrado_em"`
+	CreatedBy   pgtype.Int8        `json:"created_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 type User struct {
