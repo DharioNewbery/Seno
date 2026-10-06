@@ -38,6 +38,8 @@ type EditarTurma struct {
 type FiltroTurmas struct {
 	ProfessorID *int64
 	MateriaID   *int64
+	PeriodoID   *int64
+	Encerradas  string // "" (só ativas), "only" ou "all"
 	Pagina      *int
 	Por         *int
 }
@@ -47,6 +49,14 @@ func tituloPtr(t string) *string {
 		return nil
 	}
 	return &t
+}
+
+// encerradasOpcional: "" vira NULL ( фильт de só ativas no SQL).
+func encerradasOpcional(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
 }
 
 // int8OrNull converte id opcional em pgtype.Int8 (nil → NULL).
@@ -172,19 +182,28 @@ func (s *Service) ListarTurmas(ctx context.Context, actor domain.User, f FiltroT
 		prof = &pro
 	}
 	pagina, por := paginaPadrao(f.Pagina, f.Por)
+	if f.Encerradas != "" && f.Encerradas != "only" && f.Encerradas != "all" {
+		return ListaTurmas{}, platform.NewAPIError(
+			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+			"Filtro encerradas inválido (use only ou all).")
+	}
 
 	total, err := s.store.Q.CountTurmas(ctx, gen.CountTurmasParams{
-		Professor: int8OrNull(prof),
-		Materia:   int8OrNull(f.MateriaID),
+		Professor:  int8OrNull(prof),
+		Materia:    int8OrNull(f.MateriaID),
+		Periodo:    int8OrNull(f.PeriodoID),
+		Encerradas: encerradasOpcional(f.Encerradas),
 	})
 	if err != nil {
 		return ListaTurmas{}, err
 	}
 	rows, err := s.store.Q.ListTurmas(ctx, gen.ListTurmasParams{
-		Professor: int8OrNull(prof),
-		Materia:   int8OrNull(f.MateriaID),
-		Limit:     int32(por),
-		Offset:    int32((pagina - 1) * por),
+		Professor:  int8OrNull(prof),
+		Materia:    int8OrNull(f.MateriaID),
+		Periodo:    int8OrNull(f.PeriodoID),
+		Encerradas: encerradasOpcional(f.Encerradas),
+		Limit:      int32(por),
+		Offset:     int32((pagina - 1) * por),
 	})
 	if err != nil {
 		return ListaTurmas{}, err
