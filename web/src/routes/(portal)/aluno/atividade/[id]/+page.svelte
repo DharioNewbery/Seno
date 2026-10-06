@@ -6,7 +6,7 @@
   import { page } from "$app/state";
   import type { PageProps } from "./$types";
 
-  let { data }: PageProps = $props();
+  let { data, form }: PageProps = $props();
 
   const visao = $derived(data.visao);
   const tarefas = $derived(visao?.atividade.tarefas.filter((t) => !t.excluida) ?? []);
@@ -110,6 +110,36 @@
           oninput={(e) => aoDigitar(t.id, e.currentTarget.value)}
           onchange={salvar}
         ></textarea>
+
+        {#if t.teste_publico && !formulandoEntrega}
+          <form method="POST" action="?/testar" class="testar">
+            <input type="hidden" name="tarefa_id" value={t.id} />
+            <button disabled={carro}>Testar tarefa</button>
+            {#if typeof form?.testado === "number" && form.testado === t.id}
+              <span class="mono nota-teste">Resultados abaixo ↓</span>
+            {/if}
+          </form>
+          {#if typeof form?.testado === "number" && form.testado === t.id}
+            <div class="testes">
+              <ul>
+                {#each (form.resultados ?? []) as res (res.teste_id)}
+                  <li class:ok={res.status === "accepted"}>
+                    <span class="veredito">{res.status ?? "—"}</span>
+                    <span class="mono">teste #{res.teste_id}</span>
+                    {#if res.tempo}<span class="mono">{res.tempo}s</span>{/if}
+                    {#if res.memoria}<span class="mono">{res.memoria}KB</span>{/if}
+                    {#if res.stderr}
+                      <details><summary>stderr</summary><pre>{res.stderr}</pre></details>
+                    {/if}
+                  </li>
+                {/each}
+              </ul>
+              <span class="mono dica-teste">
+                Histórico nos últimos 7 dias: <a href="/aluno/testes">ver histórico</a>
+              </span>
+            </div>
+          {/if}
+        {/if}
       </article>
     {/each}
 
@@ -223,6 +253,77 @@
     font-size: 0.88rem;
     background: #fbfcfe;
     resize: vertical;
+  }
+  .testar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .testar button {
+    background: none;
+    color: var(--seno-blue-600);
+    border: 1px solid var(--seno-blue-600);
+    border-radius: 8px;
+    padding: 0.35rem 0.8rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .testar button:hover {
+    background: #eaf2ff;
+  }
+  .testes {
+    background: var(--seno-gray-100);
+    border-radius: 8px;
+    padding: 0.5rem 0.7rem;
+  }
+  .testes ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .testes li {
+    font-size: 0.82rem;
+    display: flex;
+    gap: 0.45rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .testes li.ok .veredito {
+    background: #e6f4ea;
+    color: var(--seno-green);
+  }
+  .veredito {
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+    background: #fdecea;
+    color: var(--seno-red);
+    font-size: 0.74rem;
+  }
+  .mono {
+    font-family: monospace;
+    font-size: 0.78rem;
+  }
+  .testes pre {
+    max-width: 480px;
+    white-space: pre-wrap;
+    font-size: 0.78rem;
+    background: var(--seno-white);
+    border-radius: 6px;
+    padding: 0.3rem 0.45rem;
+  }
+  details summary {
+    cursor: pointer;
+    font-size: 0.76rem;
+  }
+  .nota-teste,
+  .dica-teste {
+    color: var(--seno-gray-500);
+  }
+  .dica-teste a {
+    color: var(--seno-blue-600);
   }
   .rodape {
     display: flex;

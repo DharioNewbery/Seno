@@ -306,6 +306,7 @@ type TarefaDeAtividade struct {
 	Nome       string `json:"nome"`
 	Enunciado  string `json:"enunciado"`
 	Excluida   bool   `json:"excluida"`
+	TestePublico bool `json:"teste_publico"`
 }
 
 // TentativaDoAluno é o rascunho (escondido até abrir).
@@ -346,6 +347,14 @@ func (s *Service) VerParaAluno(ctx context.Context, aluno domain.User, id int64)
 		}
 		return VisaoAluno{}, err
 	}
+	publicos, err := s.store.Q.CountTestesPublicosDaAtribuicao(ctx, atr.AtividadeID)
+	if err != nil {
+		return VisaoAluno{}, err
+	}
+	temPublico := map[int64]bool{}
+	for _, p := range publicos {
+		temPublico[p.TarefaID] = p.TemPublico
+	}
 	vinculos, err := s.store.Q.ListAtividadeTarefas(ctx, atr.AtividadeID)
 	if err != nil {
 		return VisaoAluno{}, err
@@ -356,6 +365,7 @@ func (s *Service) VerParaAluno(ctx context.Context, aluno domain.User, id int64)
 			ID: vt.TarefaID, Ordem: int(vt.Ordem), ValorPts: int(vt.ValorPts),
 			Linguagem: vt.Linguagem, Nome: vt.TarefaNome,
 			Enunciado: vt.TarefaEnunciado, Excluida: vt.TarefaDeletedAt.Valid,
+			TestePublico: temPublico[vt.TarefaID],
 		})
 	}
 

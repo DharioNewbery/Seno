@@ -129,6 +129,39 @@
 
       <button>Salvar tarefa</button>
     </form>
+
+    <form method="POST" action="?/testar" class="cartao teste-banco">
+      <h3>Testar (professor)</h3>
+      <p class="dica">
+        Executa o código contra TODOS os testes (públicos e privados); não
+        vai para o histórico do aluno. Linguagem à escolha.
+      </p>
+      <label class="linha-pequena">
+        <span>Linguagem</span>
+        <select name="linguagem">
+          <option value="python">Python</option>
+          <option value="c">C</option>
+          <option value="cpp">C++</option>
+        </select>
+      </label>
+      <label>
+        <span>Código</span>
+        <textarea name="codigo_teste" rows="6" placeholder="print(1+2)"></textarea>
+      </label>
+      <button>Executar teste</button>
+      {#if typeof form?.testado !== "undefined" && form?.testado}
+        <ul class="resultados-banco">
+          {#each ((form?.resultados as { resultados?: any[] })?.resultados ?? []) as res (res.teste_id)}
+            <li class:ok={res.status === "accepted"}>
+              <span class="veredito">{res.status ?? "—"}</span>
+              <span class="mono">teste #{res.teste_id} {res.publico ? "(público)" : "(privado)"}</span>
+              {#if res.tempo}<span class="mono">{res.tempo}s</span>{/if}
+              {#if res.memoria}<span class="mono">{res.memoria}KB</span>{/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </form>
   {/if}
 </section>
 
@@ -293,5 +326,42 @@
     padding: 0.6rem 0.9rem;
     font-size: 0.9rem;
     margin: 0;
+  }
+  .teste-banco h3 {
+    margin: 0;
+  }
+  .teste-banco .dica {
+    color: var(--seno-gray-500);
+    font-size: 0.84rem;
+    margin: 0;
+  }
+  .resultados-banco {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .resultados-banco li {
+    font-size: 0.84rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  .resultados-banco li.ok .veredito {
+    background: #e6f4ea;
+    color: var(--seno-green);
+  }
+  .veredito {
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+    background: #fdecea;
+    color: var(--seno-red);
+    font-size: 0.74rem;
+  }
+  .mono {
+    font-family: monospace;
+    font-size: 0.78rem;
   }
 </style>

@@ -1,4 +1,11 @@
-import { mensagemDaApi, visaoAluno, gravarTentativa, entregarAtividade } from "#lib/server/ensino";
+import {
+  mensagemDaApi,
+  visaoAluno,
+  gravarTentativa,
+  entregarAtividade,
+  testarTarefa,
+  type ResultadoExec,
+} from "#lib/server/ensino";
 import { fail, redirect, type Actions } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 import { tokenDaSessao } from "#lib/server/sessao";
@@ -31,6 +38,7 @@ export const load: PageServerLoad = async ({ locals, cookies, request, params })
                 nome: string;
                 enunciado: string;
                 excluida: boolean;
+                teste_publico: boolean;
               }[];
             };
             tentativa?: {
@@ -84,6 +92,32 @@ export const actions: Actions = {
     const r = await entregarAtividade(evento.request, token, id, observacao);
     if (r.status === 401) redirect(303, "/");
     if (r.ok) redirect(303, "/aluno/atividades?entregue=1");
+    return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
+  },
+
+  /** Testar (§Execução de teste): o código atual contra testes públicos. */
+  testar: async (evento) => {
+    const token = tokenDaSessao(evento.cookies);
+    if (!token) return fail(401, { erro: "Sessão encerrada." });
+    const id = Number(evento.params.id);
+    const form = await evento.request.formData();
+    const tarefaID = Number(form.get("tarefa_id"));
+    const codigo = String(form.get("codigo") ?? "");
+    if (!Number.isInteger(tarefaID) || tarefaID < 1) {
+      return fail(422, { erro: "Tarefa inválida." });
+    }
+    const r = await testarTarefa(evento.request, token, id, {
+      tarefa_id: tarefaID,
+      codigo,
+    });
+    if (r.status === 401) return fail(401, { erro: "Sessão encerrada." });
+    if (r.ok) {
+      const corpo = r.body as { resultados?: ResultadoExec[]; criado_em?: string };
+      return {
+        testado: tarefaID,
+        resultados: (corpo.resultados ?? []) as ResultadoExec[],
+      };
+    }
     return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
   },
 };

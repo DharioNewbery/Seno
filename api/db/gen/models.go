@@ -61,6 +61,17 @@ type Correco struct {
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
+type ExecucoesTeste struct {
+	ID           int64              `json:"id"`
+	AlunoID      int64              `json:"aluno_id"`
+	AtribuicaoID int64              `json:"atribuicao_id"`
+	TarefaID     int64              `json:"tarefa_id"`
+	Linguagem    string             `json:"linguagem"`
+	Codigo       string             `json:"codigo"`
+	Resultados   []byte             `json:"resultados"`
+	CriadoEm     pgtype.Timestamptz `json:"criado_em"`
+}
+
 type Job struct {
 	ID        int64              `json:"id"`
 	Kind      string             `json:"kind"`

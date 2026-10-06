@@ -55,7 +55,7 @@ func testeDB(t *testing.T) *pgxpool.Pool {
 		one_time_tokens, log_entries, jobs, tarefas, testes_tarefa,
 		atividades, atividade_tarefas, atribuicoes,
 		tentativas, submissoes, resultados, correcao_tarefas,
-		correcoes RESTART IDENTITY CASCADE`)
+		correcoes, execucoes_teste RESTART IDENTITY CASCADE`)
 	if err != nil {
 		t.Fatalf("limpeza do banco: %v", err)
 	}

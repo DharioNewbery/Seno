@@ -769,6 +769,71 @@ export async function acaoCorrecao(
   );
 }
 
+// ------------------ Execução de teste (§ modalidade) -------------------
+
+export interface ResultadoExec {
+  teste_id: number;
+  publico: boolean;
+  status?: string;
+  stdout?: string;
+  stderr?: string;
+  compile_output?: string;
+  tempo?: string;
+  memoria?: string;
+  cpu?: string;
+}
+
+/** Aluno testa (§Execução de teste): código do editor, testes públicos. */
+export async function testarTarefa(
+  request: Request,
+  token: string,
+  atribuicaoID: number,
+  cad: { tarefa_id: number; codigo: string },
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/atribuicoes/${atribuicaoID}/testar`, {
+    method: "POST",
+    body: JSON.stringify(cad),
+  });
+}
+
+/** Histórico do aluno nos últimos 7 dias (todas ou por atribuição). */
+export async function historicoTestes(
+  request: Request,
+  token: string,
+  atribuicaoID?: number,
+): Promise<Resultado> {
+  const qs = new URLSearchParams();
+  if (atribuicaoID) qs.set("atribuicao_id", String(atribuicaoID));
+  return chamar(request, token, `/v1/me/testes${param(qs)}`, { method: "GET" });
+}
+
+export interface Execucao {
+  id: number;
+  atribuicao_id: number;
+  tarefa_id: number;
+  atividade_nome?: string;
+  linguagem: string;
+  resultados?: ResultadoExec[];
+  criado_em: string;
+}
+
+export function execucoesDe(r: Resultado): Execucao[] {
+  return (r.body as { execucoes?: Execucao[] } | null)?.execucoes ?? [];
+}
+
+/** Professor: testar no banco (linguagem livre, sem histórico). */
+export async function testarTarefaProfessor(
+  request: Request,
+  token: string,
+  tarefaID: number,
+  cad: { linguagem: string; codigo: string },
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/tarefas/${tarefaID}/testar`, {
+    method: "POST",
+    body: JSON.stringify(cad),
+  });
+}
+
 // ------------------------- matérias e períodos -------------------------
 
 export async function listarMaterias(

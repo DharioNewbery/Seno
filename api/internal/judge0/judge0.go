@@ -173,6 +173,45 @@ func (cli *Client) EnviarBatch(ctx context.Context, itens []SubmissaoJudge0) err
 	return nil
 }
 
+// EnviarBatchSincrono executa o lote com wait=true: o Judge0 responde
+// com os resultados inline (sem callbacks) — usado no "testar" imediato.
+func (cli *Client) EnviarBatchSincrono(
+	ctx context.Context, itens []SubmissaoJudge0,
+) ([]RespostaJudge0, error) {
+	body, err := json.Marshal(itens)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(
+		ctx, http.MethodPost,
+		cli.base+"/submissions/batch?wait=true", bytes.NewReader(body),
+	)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if cli.token != "" {
+		req.Header.Set("X-Auth-Token", cli.token)
+	}
+	resp, err := cli.httpDo.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	dados, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode/100 != 2 {
+		return nil, fmt.Errorf("judge0 wait: status %d: %s", resp.StatusCode, dados)
+	}
+	var out []RespostaJudge0
+	if err := json.Unmarshal(dados, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Saude ping simples (não usado no fluxo; diagnóstico).
 func (cli *Client) Saude(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(

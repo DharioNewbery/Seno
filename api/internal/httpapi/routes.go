@@ -161,6 +161,21 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	// handler — config em SENO_JUDGE0_CALLBACK_KEY).
 	r.POST("/v1/judge0/callback", deps.callbackJudge0)
 
+	// Execução de teste (PROJETO §Execução de teste): aluno "testar"
+	// (com histórico 7d e limite 5/min no serviço) e testar do professor
+	// no banco de tarefas (sem histórico). Escopo por regras no serviço.
+	testes := v1.Group("/atribuicoes/:id/testar")
+	testes.Use(deps.RequireAuth())
+	testes.POST("", deps.TestarTarefa)
+
+	historico := v1.Group("/me/testes")
+	historico.Use(deps.RequireAuth())
+	historico.GET("", deps.HistoricoTestes)
+
+	tarefasTestar := v1.Group("/tarefas/:id/testar")
+	tarefasTestar.Use(deps.RequireAuth())
+	tarefasTestar.POST("", deps.TestarTarefaProfessor)
+
 	// Visão do aluno na atribuição (RequireAuth só; regras no serviço —
 	// student + matrícula ativa).
 	aluno := v1.Group("/atribuicoes/:id/aluno")

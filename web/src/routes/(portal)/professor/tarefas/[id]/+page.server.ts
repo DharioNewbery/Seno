@@ -8,6 +8,7 @@ import {
   excluirTarefa,
   mensagemDaApi,
   verTarefaBruta,
+  testarTarefaProfessor,
 } from "#lib/server/ensino";
 import { tokenDaSessao } from "#lib/server/sessao";
 
@@ -110,5 +111,23 @@ export const actions: Actions = {
     return fail(r.status || 500, {
       erro: mensagemDaApi(r.body, "Não foi possível excluir."),
     });
+  },
+  /** Testar no banco: linguagem à escolha, todos os testes, sem histórico. */
+  testar: async (evento) => {
+    const token = tokenDaSessao(evento.cookies);
+    if (!token) return fail(401, { erro: "Sessão encerrada." });
+    const id = Number(evento.params.id);
+    const form = await evento.request.formData();
+    const linguagem = String(form.get("linguagem") ?? "python");
+    const codigo = String(form.get("codigo_teste") ?? "");
+    const r = await testarTarefaProfessor(evento.request, token, id, {
+      linguagem,
+      codigo,
+    });
+    if (r.status === 401) redirect(303, "/");
+    if (r.ok) {
+      return { testado: true, resultados: r.body as unknown };
+    }
+    return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
   },
 };
