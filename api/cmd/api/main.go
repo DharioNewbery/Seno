@@ -23,6 +23,7 @@ import (
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
 	"github.com/seno-project/seno/api/internal/tarefas"
+	"github.com/seno-project/seno/api/internal/tentativas"
 	"github.com/seno-project/seno/api/internal/usuarios"
 )
 
@@ -74,6 +75,7 @@ func main() {
 		TarefaS:     svcTarefas,
 		AtividadeS:  atividades.New(st, audit, svcTarefas),
 		AtribuicaoS: atribuicoes.New(st, audit),
+		TentativaS:  tentativas.New(st, audit),
 	}
 
 	if os.Getenv("SENO_MODE") != "debug" {

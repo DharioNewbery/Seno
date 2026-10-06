@@ -131,6 +131,17 @@ type Tarefa struct {
 	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
 }
 
+type Tentativa struct {
+	ID           int64              `json:"id"`
+	AtribuicaoID int64              `json:"atribuicao_id"`
+	AlunoID      int64              `json:"aluno_id"`
+	ComecouEm    pgtype.Timestamptz `json:"comecou_em"`
+	Revisao      int32              `json:"revisao"`
+	GravadoEm    pgtype.Timestamptz `json:"gravado_em"`
+	Snapshot     []byte             `json:"snapshot"`
+	CreatedBy    pgtype.Int8        `json:"created_by"`
+}
+
 type TestesTarefa struct {
 	ID             int64              `json:"id"`
 	TarefaID       int64              `json:"tarefa_id"`

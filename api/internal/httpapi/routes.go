@@ -130,4 +130,13 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	atribuicoes.GET("/:id", deps.VerAtribuicao)
 	atribuicoes.PATCH("/:id", deps.EditarAtribuicao)
 	atribuicoes.DELETE("/:id", deps.ExcluirAtribuicao)
+
+	// Tentativa: rascunho do aluno por atribuição (PROJETO §Tentativa);
+	// aqui vai só RequireAuth — o serviço exige cargo student e matrícula
+	// ativa (professor/admin são 403; sem matrícula é 404).
+	tent := v1.Group("/atribuicoes/:id/tentativa")
+	tent.Use(deps.RequireAuth())
+	tent.POST("", deps.AbrirTentativa)
+	tent.GET("", deps.LerTentativa)
+	tent.PUT("", deps.GravarTentativa)
 }

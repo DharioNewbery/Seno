@@ -14,6 +14,7 @@ import (
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
 	"github.com/seno-project/seno/api/internal/tarefas"
+	"github.com/seno-project/seno/api/internal/tentativas"
 	"github.com/seno-project/seno/api/internal/usuarios"
 )
 
@@ -32,9 +33,10 @@ type Dependencies struct {
 	Cargo    *auth.Recoverer
 	UsuarioS *usuarios.Service
 	Ensino     *ensino.Service
-	TarefaS    *tarefas.Service
-	AtividadeS *atividades.Service
+	TarefaS     *tarefas.Service
+	AtividadeS  *atividades.Service
 	AtribuicaoS *atribuicoes.Service
+	TentativaS  *tentativas.Service
 }
 
 // Healthz verifica integridade do processo e do banco (compose healthcheck).
