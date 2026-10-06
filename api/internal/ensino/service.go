@@ -159,6 +159,12 @@ func eDuplicado(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
+// eReferenciado identifica violação de chave estrangeira (23503).
+func eReferenciado(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23503"
+}
+
 func conflito(msg string) error {
 	return platform.NewAPIError(http.StatusConflict, platform.CodeConflict, msg)
 }

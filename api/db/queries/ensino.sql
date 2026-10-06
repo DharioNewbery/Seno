@@ -48,6 +48,10 @@ SELECT id, trimestre, ano, created_at
 FROM periodos_letivos
 ORDER BY ano DESC, trimestre DESC;
 
+-- name: DeletePeriodo :execrows
+DELETE FROM periodos_letivos
+WHERE id = $1;
+
 -- ============================ Turmas =============================
 
 -- name: InsertTurma :one

@@ -57,6 +57,19 @@ func (q *Queries) CountTurmas(ctx context.Context, arg CountTurmasParams) (int64
 	return count, err
 }
 
+const deletePeriodo = `-- name: DeletePeriodo :execrows
+DELETE FROM periodos_letivos
+WHERE id = $1
+`
+
+func (q *Queries) DeletePeriodo(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, deletePeriodo, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteTurma = `-- name: DeleteTurma :execrows
 DELETE FROM turmas
 WHERE id = $1
