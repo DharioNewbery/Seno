@@ -22,10 +22,10 @@ import (
 )
 
 // CadastroTurma é o corpo da criação de turma (professor dono).
+// O período letivo é escolhido entre os cadastrados pelo admin.
 type CadastroTurma struct {
 	MateriaID int64  `json:"materia_id"`
-	Trimestre int16  `json:"trimestre"`
-	Ano       int16  `json:"ano"`
+	PeriodoID int64  `json:"periodo_id"`
 	Titulo    string `json:"titulo"`
 }
 
@@ -132,25 +132,22 @@ func (s *Service) CriaTurma(ctx context.Context, actor domain.User, cad Cadastro
 		}
 		return Turma{}, err
 	}
-	if cad.Trimestre < 1 || cad.Trimestre > 3 || cad.Ano < 2000 || cad.Ano > 2100 {
-		return Turma{}, platform.NewAPIError(
-			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
-			"Período inválido: trimestre 1–3; ano plausível.")
+	// O período deve existir: escolhido entre os cadastrados pelo admin.
+	if _, err := s.store.Q.GetPeriodo(ctx, cad.PeriodoID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Turma{}, platform.NewAPIError(
+				http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+				"Período letivo inválido: escolha um período cadastrado.")
+		}
+		return Turma{}, err
 	}
 	titulo := strings.TrimSpace(cad.Titulo)
 
 	var turmaID int64
 	err = s.store.InTx(ctx, func(_ pgx.Tx, q *gen.Queries) error {
-		periodo, err := q.FindOrCreatePeriodo(ctx, gen.FindOrCreatePeriodoParams{
-			Trimestre: cad.Trimestre,
-			Ano:       cad.Ano,
-		})
-		if err != nil {
-			return fmt.Errorf("período letivo: %w", err)
-		}
 		nova, err := q.InsertTurma(ctx, gen.InsertTurmaParams{
 			MateriaID:   cad.MateriaID,
-			PeriodoID:   periodo.ID,
+			PeriodoID:   cad.PeriodoID,
 			ProfessorID: actor.ID,
 			Titulo:      tituloPtr(titulo),
 			CreatedBy:   int8Ptr(actor.ID),

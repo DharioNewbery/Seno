@@ -149,10 +149,10 @@ type CadastroPeriodo struct {
 
 // CriarPeriodo registra (ou devolve o já existente) período letivo.
 func (s *Service) CriarPeriodo(ctx context.Context, actor domain.User, cad CadastroPeriodo) (Periodo, error) {
-	if cad.Trimestre < 1 || cad.Trimestre > 3 || cad.Ano < 2000 || cad.Ano > 2100 {
+	if cad.Trimestre < 1 || cad.Trimestre > 4 || cad.Ano < 2000 || cad.Ano > 2100 {
 		return Periodo{}, platform.NewAPIError(
 			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
-			"Período inválido: trimestre 1–3; ano plausível.")
+			"Período inválido: trimestre 1–4; ano plausível.")
 	}
 	row, err := s.store.Q.FindOrCreatePeriodo(ctx, gen.FindOrCreatePeriodoParams{
 		Trimestre: cad.Trimestre, Ano: cad.Ano,

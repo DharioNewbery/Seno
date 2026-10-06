@@ -3,26 +3,38 @@ import { fail, redirect, type Actions } from "@sveltejs/kit";
 import {
   criarTurma,
   listaDeMaterias,
+  listaDePeriodos,
   listarMaterias,
+  listarPeriodos,
   mensagemDaApi,
 } from "#lib/server/ensino";
 import { tokenDaSessao } from "#lib/server/sessao";
 import type { PageServerLoad } from "./$types";
 
-// Materiais para o select; período é informado direto (a API cria o
-// período letivo na primeira turma do trimestre/ano — FindOrCreate).
+// Matérias e períodos para os selects; a turma referencia um período letivo
+// cadastrado pelo admin (nenhum trimestre/ano é digitado à mão).
 export const load: PageServerLoad = async ({ locals, cookies, request }) => {
   if (!locals.usuario) redirect(303, "/");
   const token = tokenDaSessao(cookies);
   try {
-    const r = await listarMaterias(request, token);
-    if (r.status === 401) redirect(303, "/");
+    const [rm, rp] = await Promise.all([
+      listarMaterias(request, token),
+      listarPeriodos(request, token),
+    ]);
+    if (rm.status === 401 || rp.status === 401) redirect(303, "/");
     return {
-      materias: r.ok ? listaDeMaterias(r) : [],
-      erroMaterias: r.ok ? null : mensagemDaApi(r.body),
+      materias: rm.ok ? listaDeMaterias(rm) : [],
+      periodos: rp.ok ? listaDePeriodos(rp) : [],
+      erroMaterias: rm.ok ? null : mensagemDaApi(rm.body),
+      erroPeriodos: rp.ok ? null : mensagemDaApi(rp.body),
     };
   } catch {
-    return { materias: [], erroMaterias: "Sem comunicação com a API." };
+    return {
+      materias: [],
+      periodos: [],
+      erroMaterias: "Sem comunicação com a API.",
+      erroPeriodos: null,
+    };
   }
 };
 
@@ -32,21 +44,17 @@ export const actions: Actions = {
     if (!token) return fail(401, { erro: "Sessão encerrada." });
     const form = await evento.request.formData();
     const materia_id = Number(form.get("materia_id"));
-    const trimestre = Number(form.get("trimestre"));
-    const ano = Number(form.get("ano"));
+    const periodo_id = Number(form.get("periodo_id"));
     const titulo = String(form.get("titulo") ?? "").trim();
     if (!Number.isInteger(materia_id) || materia_id < 1) {
       return fail(422, { erro: "Selecione uma matéria." });
     }
-    if (![1, 2, 3].includes(trimestre) || ano < 2000 || ano > 2100) {
-      return fail(422, {
-        erro: "Período inválido (trimestre 1–3, ano entre 2000 e 2100).",
-      });
+    if (!Number.isInteger(periodo_id) || periodo_id < 1) {
+      return fail(422, { erro: "Selecione o período letivo." });
     }
     const r = await criarTurma(evento.request, token, {
       materia_id,
-      trimestre,
-      ano,
+      periodo_id,
       titulo,
     });
     if (r.status === 401) redirect(303, "/");

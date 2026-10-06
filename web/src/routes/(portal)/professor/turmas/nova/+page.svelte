@@ -1,17 +1,18 @@
 <script lang="ts">
-  // Criação de turma em tela própria: matéria (select) + período
-  // (trimestre/ano) + título opcional. Sucesso leva ao painel da turma.
+  // Criação de turma em tela própria: matéria (select), período letivo
+  // (escolha entre os cadastrados pelo admin) e título opcional.
+  // Sucesso leva ao painel da turma.
   import type { PageProps } from "./$types";
 
   let { data, form }: PageProps = $props();
-
-  let trimestre = $state(1);
-  let ano = $state(2026);
 </script>
 
 <section class="nova-turma">
   {#if data.erroMaterias}
     <p class="aviso erro" role="alert">{data.erroMaterias}</p>
+  {/if}
+  {#if data.erroPeriodos}
+    <p class="aviso erro" role="alert">{data.erroPeriodos}</p>
   {/if}
   {#if form?.erro}
     <p class="aviso erro" role="alert">{form.erro}</p>
@@ -19,10 +20,7 @@
 
   <form method="POST" action="?/criar" class="cartao">
     <h2>Criar turma</h2>
-    <p class="dica">
-      Você será o professor dono. O período letivo é registrado na primeira
-      turma do trimestre/ano.
-    </p>
+    <p class="dica">Você será o professor dono da turma.</p>
 
     <label>
       <span>Matéria</span>
@@ -34,20 +32,15 @@
       </select>
     </label>
 
-    <div class="periodo-linha">
-      <label>
-        <span>Trimestre</span>
-        <select bind:value={trimestre}>
-          <option value={1}>1</option>
-          <option value={2}>2</option>
-          <option value={3}>3</option>
-        </select>
-      </label>
-      <label>
-        <span>Ano</span>
-        <input type="number" bind:value={ano} min={2024} max={2100} required />
-      </label>
-    </div>
+    <label>
+      <span>Período letivo</span>
+      <select name="periodo_id" required>
+        <option value="" disabled selected>Escolha o período</option>
+        {#each data.periodos as p (p.id)}
+          <option value={p.id}>{p.trimestre}T/{p.ano}</option>
+        {/each}
+      </select>
+    </label>
 
     <label>
       <span>Título (opcional)</span>
@@ -106,13 +99,6 @@
     outline: 2px solid var(--seno-blue-500);
     outline-offset: 1px;
     border-color: var(--seno-blue-500);
-  }
-  .periodo-linha {
-    display: flex;
-    gap: 0.75rem;
-  }
-  .periodo-linha label {
-    flex: 1;
   }
   button {
     background: var(--seno-blue-600);

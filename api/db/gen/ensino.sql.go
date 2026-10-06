@@ -208,6 +208,24 @@ func (q *Queries) GetMatricula(ctx context.Context, id int64) (GetMatriculaRow, 
 	return i, err
 }
 
+const getPeriodo = `-- name: GetPeriodo :one
+SELECT id, trimestre, ano, created_at
+FROM periodos_letivos
+WHERE id = $1
+`
+
+func (q *Queries) GetPeriodo(ctx context.Context, id int64) (PeriodosLetivo, error) {
+	row := q.db.QueryRow(ctx, getPeriodo, id)
+	var i PeriodosLetivo
+	err := row.Scan(
+		&i.ID,
+		&i.Trimestre,
+		&i.Ano,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getTurma = `-- name: GetTurma :one
 SELECT t.id,
        t.materia_id,

@@ -43,6 +43,11 @@ ON CONFLICT (trimestre, ano) DO UPDATE
 SET trimestre = periodos_letivos.trimestre
 RETURNING id, trimestre, ano;
 
+-- name: GetPeriodo :one
+SELECT id, trimestre, ano, created_at
+FROM periodos_letivos
+WHERE id = $1;
+
 -- name: ListPeriodos :many
 SELECT id, trimestre, ano, created_at
 FROM periodos_letivos

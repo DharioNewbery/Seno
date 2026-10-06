@@ -117,14 +117,13 @@ export async function listarTurmas(
 export async function criarTurma(
   request: Request,
   token: string,
-  cad: { materia_id: number; trimestre: number; ano: number; titulo?: string },
+  cad: { materia_id: number; periodo_id: number; titulo?: string },
 ): Promise<Resultado> {
   return chamar(request, token, "/v1/turmas", {
     method: "POST",
     body: JSON.stringify({
       materia_id: cad.materia_id,
-      trimestre: cad.trimestre,
-      ano: cad.ano,
+      periodo_id: cad.periodo_id,
       titulo: cad.titulo ?? "",
     }),
   });

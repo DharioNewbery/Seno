@@ -54,8 +54,15 @@ func TestEnsinoTurmasMatriculas(t *testing.T) {
 	tokBruno := logar(t, r, "bruno.ensino@seno.dev", "senha-bruno-1")
 
 	// -------- Turmas --------
+	w, periodo := chama(t, r, "POST", "/v1/periodos",
+		`{"trimestre":1,"ano":2026}`, autenticado(tokSuper))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("criar período: status %d corpo %v", w.Code, periodo)
+	}
+	idPeriodo := int64(periodo["id"].(float64))
+
 	w, turma := chama(t, r, "POST", "/v1/turmas",
-		`{"materia_id":`+intStr(idMateria)+`,"trimestre":1,"ano":2026,"titulo":"T1"}`,
+		`{"materia_id":`+intStr(idMateria)+`,"periodo_id":`+intStr(idPeriodo)+`,"titulo":"T1"}`,
 		autenticado(tokPaula))
 	if w.Code != http.StatusCreated {
 		t.Fatalf("criar turma: status %d corpo %v", w.Code, turma)
@@ -86,7 +93,7 @@ func TestEnsinoTurmasMatriculas(t *testing.T) {
 		t.Errorf("staff deve ver todas: %v", body["total"])
 	}
 	w, _ = chama(t, r, "POST", "/v1/turmas",
-		`{"materia_id":`+intStr(idMateria)+`,"trimestre":2,"ano":2026}`,
+		`{"materia_id":`+intStr(idMateria)+`,"periodo_id":`+intStr(idPeriodo)+`}`,
 		autenticado(tokSuper))
 	if w.Code != http.StatusForbidden {
 		t.Errorf("admin puro não cria turma: status %d", w.Code)
@@ -208,9 +215,23 @@ func TestEnsinoFiltros(t *testing.T) {
 	ativaNovoUsuario(t, r, pool, "hilda.filtros@seno.dev", "senha-hilda-1")
 	tokProf := logar(t, r, "hilda.filtros@seno.dev", "senha-hilda-1")
 
+	// Períodos dos testes: cadastrados pelo admin (super), como na vida real.
+	w, per2026 := chama(t, r, "POST", "/v1/periodos",
+		`{"trimestre":1,"ano":2026}`, autenticado(tokSuper))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("período 2026.1: status %d corpo %v", w.Code, per2026)
+	}
+	idPer2026 := int64(per2026["id"].(float64))
+	w, per2025 := chama(t, r, "POST", "/v1/periodos",
+		`{"trimestre":2,"ano":2025}`, autenticado(tokSuper))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("período 2025.2: status %d corpo %v", w.Code, per2025)
+	}
+	idPer2025 := int64(per2025["id"].(float64))
+
 	// Duas turmas: uma ativa, uma encerrada.
 	w, ativa := chama(t, r, "POST", "/v1/turmas",
-		`{"materia_id":`+intStr(idMateria)+`,"trimestre":1,"ano":2026,"titulo":"A"}`,
+		`{"materia_id":`+intStr(idMateria)+`,"periodo_id":`+intStr(idPer2026)+`,"titulo":"A"}`,
 		autenticado(tokProf))
 	if w.Code != http.StatusCreated {
 		t.Fatalf("turma ativa: status %d corpo %v", w.Code, ativa)
@@ -218,7 +239,7 @@ func TestEnsinoFiltros(t *testing.T) {
 	idAtiva := int64(ativa["id"].(float64))
 
 	w, encerrada := chama(t, r, "POST", "/v1/turmas",
-		`{"materia_id":`+intStr(idMateria)+`,"trimestre":2,"ano":2025,"titulo":"E"}`,
+		`{"materia_id":`+intStr(idMateria)+`,"periodo_id":`+intStr(idPer2025)+`,"titulo":"E"}`,
 		autenticado(tokProf))
 	if w.Code != http.StatusCreated {
 		t.Fatalf("turma a encerrar: status %d corpo %v", w.Code, encerrada)
