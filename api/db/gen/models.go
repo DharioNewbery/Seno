@@ -118,6 +118,18 @@ type Session struct {
 	UserAgent    *string            `json:"user_agent"`
 }
 
+type Submisso struct {
+	ID           int64              `json:"id"`
+	AtribuicaoID int64              `json:"atribuicao_id"`
+	AlunoID      int64              `json:"aluno_id"`
+	ComecouEm    pgtype.Timestamptz `json:"comecou_em"`
+	EntregueEm   pgtype.Timestamptz `json:"entregue_em"`
+	Atrasada     bool               `json:"atrasada"`
+	Observacao   *string            `json:"observacao"`
+	Snapshot     []byte             `json:"snapshot"`
+	CreatedBy    pgtype.Int8        `json:"created_by"`
+}
+
 type Tarefa struct {
 	ID           int64              `json:"id"`
 	ProfessorID  int64              `json:"professor_id"`

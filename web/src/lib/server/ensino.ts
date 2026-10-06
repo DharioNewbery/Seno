@@ -609,6 +609,9 @@ export interface AtribuicaoDoAluno {
   em_andamento: boolean;
   minha_revisao?: number;
   gravado_em?: string;
+  entregue: boolean;
+  entregue_em?: string;
+  atrasada: boolean;
 }
 
 export async function listarMinhasTurmas(
@@ -639,6 +642,30 @@ export async function gravarTentativa(
   return chamar(request, token, `/v1/atribuicoes/${id}/tentativa`, {
     method: "PUT",
     body: JSON.stringify(grav),
+  });
+}
+
+/** Entrega final (PROJETO §Submissão): snapshot corrente da tentativa. */
+export async function entregarAtividade(
+  request: Request,
+  token: string,
+  id: number,
+  observacao?: string,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/atribuicoes/${id}/submissao`, {
+    method: "POST",
+    body: JSON.stringify({ observacao: observacao ?? "" }),
+  });
+}
+
+/** Entregas da atribuição (professor dono|staff). */
+export async function listarEntregas(
+  request: Request,
+  token: string,
+  id: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/atribuicoes/${id}/submissoes`, {
+    method: "GET",
   });
 }
 

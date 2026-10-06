@@ -1,4 +1,4 @@
-import { mensagemDaApi, visaoAluno, gravarTentativa } from "#lib/server/ensino";
+import { mensagemDaApi, visaoAluno, gravarTentativa, entregarAtividade } from "#lib/server/ensino";
 import { fail, redirect, type Actions } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 import { tokenDaSessao } from "#lib/server/sessao";
@@ -48,8 +48,7 @@ export const load: PageServerLoad = async ({ locals, cookies, request, params })
 
 /** Autosave: recebe revisão + snapshot (JSON) via form-urlencoded. */
 export const actions: Actions = {
-  gravar: async (evento) => {
-    const token = tokenDaSessao(evento.cookies);
+  gravar: async (evento) => {    const token = tokenDaSessao(evento.cookies);
     if (!token) return fail(401, { erro: "Sessão encerrada." });
     const id = Number(evento.params.id);
     const form = await evento.request.formData();
@@ -72,6 +71,19 @@ export const actions: Actions = {
       const cor = r.body as { revisao?: number };
       return { revisao: cor.revisao };
     }
+    return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
+  },
+
+  /** Entrega final: snapshot corrente; a tentativa é apagada na API. */
+  entregar: async (evento) => {
+    const token = tokenDaSessao(evento.cookies);
+    if (!token) return fail(401, { erro: "Sessão encerrada." });
+    const id = Number(evento.params.id);
+    const form = await evento.request.formData();
+    const observacao = String(form.get("observacao") ?? "").trim();
+    const r = await entregarAtividade(evento.request, token, id, observacao);
+    if (r.status === 401) redirect(303, "/");
+    if (r.ok) redirect(303, "/aluno/atividades?entregue=1");
     return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
   },
 };

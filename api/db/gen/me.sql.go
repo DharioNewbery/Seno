@@ -25,7 +25,9 @@ SELECT a.id,
        atv.id          AS atividade_id,
        atv.nome        AS atividade_nome,
        tt.revisao      AS minha_revisao,
-       tt.gravado_em   AS meu_gravado_em
+       tt.gravado_em   AS meu_gravado_em,
+       ss.entregue_em  AS minha_entrega,
+       ss.atrasada     AS minha_atrasada
 FROM atribuicoes a
 JOIN turmas t ON t.id = a.turma_id
 JOIN materias m ON m.id = t.materia_id
@@ -36,6 +38,8 @@ JOIN matriculas mt ON mt.turma_id = t.id
   AND mt.saida_em IS NULL
 LEFT JOIN tentativas tt ON tt.atribuicao_id = a.id
   AND tt.aluno_id = $1
+LEFT JOIN submissoes ss ON ss.atribuicao_id = a.id
+  AND ss.aluno_id = $1
 WHERE ($2::bigint IS NULL OR a.turma_id = $2::bigint)
 ORDER BY a.prazo NULLS FIRST, tt.gravado_em NULLS FIRST, a.created_at DESC, a.id DESC
 `
@@ -60,6 +64,8 @@ type ListAtribuicoesAlunoRow struct {
 	AtividadeNome    string             `json:"atividade_nome"`
 	MinhaRevisao     pgtype.Int4        `json:"minha_revisao"`
 	MeuGravadoEm     pgtype.Timestamptz `json:"meu_gravado_em"`
+	MinhaEntrega     pgtype.Timestamptz `json:"minha_entrega"`
+	MinhaAtrasada    pgtype.Bool        `json:"minha_atrasada"`
 }
 
 // Atribuições da escolha do aluno (turmas com matrícula ativa), com a
@@ -89,6 +95,8 @@ func (q *Queries) ListAtribuicoesAluno(ctx context.Context, arg ListAtribuicoesA
 			&i.AtividadeNome,
 			&i.MinhaRevisao,
 			&i.MeuGravadoEm,
+			&i.MinhaEntrega,
+			&i.MinhaAtrasada,
 		); err != nil {
 			return nil, err
 		}

@@ -140,6 +140,13 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	tent.GET("", deps.LerTentativa)
 	tent.PUT("", deps.GravarTentativa)
 
+	// Submissão: entrega final do aluno + entregas do professor
+	// (regras no serviço — student + matrícula; dono|staff na listagem).
+	sub := v1.Group("/atribuicoes/:id")
+	sub.Use(deps.RequireAuth())
+	sub.POST("/submissao", deps.EntregarSubmissao)
+	sub.GET("/submissoes", deps.ListarSubmissoes)
+
 	// Visão do aluno na atribuição (RequireAuth só; regras no serviço —
 	// student + matrícula ativa).
 	aluno := v1.Group("/atribuicoes/:id/aluno")

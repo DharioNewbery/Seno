@@ -191,6 +191,26 @@ func validaSnapshot(bruto json.RawMessage) (json.RawMessage, error) {
 	return json.RawMessage(bruto), nil
 }
 
+// jáSubmeteu: tentativa não volta depois da entrega (§Submissão).
+func (s *Service) jaSubmeteu(ctx context.Context, atribuicaoID, alunoID int64) (bool, error) {
+	_, err := s.store.Q.GetSubmissaoAluno(ctx, gen.GetSubmissaoAlunoParams{
+		AtribuicaoID: atribuicaoID, AlunoID: alunoID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func entregueAntes() error {
+	return platform.NewAPIError(
+		http.StatusConflict, platform.CodeConflict,
+		"Atividade já entregue — sem rascunho.")
+}
+
 // Abrir abre (idempotente) a tentativa do aluno nesta atribuição:
 // primeira vez cria com comecou_em=agora e revisão 1; senão devolve o
 // rascunho atual.
@@ -201,6 +221,11 @@ func (s *Service) Abrir(ctx context.Context, actor domain.User, atribuicaoID int
 	}
 	if err := s.escopoAluno(ctx, actor, c); err != nil {
 		return Tentativa{}, err
+	}
+	if entregue, err := s.jaSubmeteu(ctx, atribuicaoID, actor.ID); err != nil {
+		return Tentativa{}, err
+	} else if entregue {
+		return Tentativa{}, entregueAntes()
 	}
 	if err := janela(c, time.Now(), time.Now()); err != nil {
 		return Tentativa{}, err
@@ -262,6 +287,11 @@ func (s *Service) Gravar(ctx context.Context, actor domain.User, atribuicaoID in
 	}
 	if err := s.escopoAluno(ctx, actor, c); err != nil {
 		return Tentativa{}, err
+	}
+	if entregue, err := s.jaSubmeteu(ctx, atribuicaoID, actor.ID); err != nil {
+		return Tentativa{}, err
+	} else if entregue {
+		return Tentativa{}, entregueAntes()
 	}
 	snapshot, err := validaSnapshot(cad.Snapshot)
 	if err != nil {

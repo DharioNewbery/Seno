@@ -16,6 +16,7 @@
   let estadoSave = $state<"nada" | "salvando" | "salvo" | "erro">("nada");
   let carro = $state(false);
   let carregado = $state(false);
+  let formulandoEntrega = $state(false);
 
   $effect(() => {
     if (carregado || !visao) return;
@@ -114,7 +115,22 @@
 
     <div class="rodape">
       <button onclick={salvar} disabled={carro}>Salvar rascunho agora</button>
-      <span class="nota">A entrega final (submit) chega com o módulo de submissões.</span>
+      {#if formulandoEntrega}
+        <form method="POST" action="?/entregar" class="confirma-entrega">
+          <span>
+            Entregar agora? O rascunho atual (rev. {revisao}) vira a submissão
+            e não há como voltar.
+          </span>
+          <button>Confirmar entrega</button>
+          <button type="button" class="cancelar" onclick={() => (formulandoEntrega = false)}>
+            Cancelar
+          </button>
+        </form>
+      {:else}
+        <button class="entregar" onclick={() => formulandoEntrega = true}>
+          Entregar atividade
+        </button>
+      {/if}
     </div>
   {/if}
 </section>
@@ -225,9 +241,37 @@
     opacity: 0.55;
     cursor: default;
   }
-  .nota {
-    color: var(--seno-gray-500);
-    font-size: 0.82rem;
+  .rodape .entregar {
+    background: none;
+    color: var(--seno-red);
+    border: 1px solid var(--seno-red);
+  }
+  .rodape .entregar:hover {
+    background: #fdecea;
+  }
+  .confirma-entrega {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+    background: var(--seno-gray-100);
+    border-radius: 8px;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.85rem;
+    color: var(--seno-gray-700);
+  }
+  .confirma-entrega button {
+    background: var(--seno-red);
+    color: var(--seno-white);
+    border: none;
+    border-radius: 8px;
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+  }
+  .confirma-entrega .cancelar {
+    background: none;
+    color: var(--seno-gray-700);
+    border: 1px solid var(--seno-gray-300);
   }
   .aviso.erro {
     background: #fdecea;

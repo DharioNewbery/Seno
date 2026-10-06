@@ -15,20 +15,6 @@ import (
 	"github.com/seno-project/seno/api/internal/platform"
 )
 
-// TurmaDoAluno é a turma na visão do aluno.
-type TurmaDoAluno struct {
-	ID            int64     `json:"id"`
-	Titulo        string    `json:"titulo,omitempty"`
-	MateriaCodigo string    `json:"materia_codigo"`
-	MateriaNome   string    `json:"materia_nome"`
-	Trimestre     int16     `json:"trimestre"`
-	Ano           int16     `json:"ano"`
-	Professor     string    `json:"professor"`
-	ProfessorMail string    `json:"professor_email"`
-	Ativa         bool      `json:"ativa"`
-	CreatedAt     time.Time `json:"created_at"`
-}
-
 // AtribuicaoDoAluno é a atribuição na visão do aluno, com o estado do
 // rascunho (sem submissões ainda, "em andamento" = tentativa aberta).
 type AtribuicaoDoAluno struct {
@@ -47,6 +33,22 @@ type AtribuicaoDoAluno struct {
 	EmAndamento   bool       `json:"em_andamento"`
 	MinhaRevisao  int32      `json:"minha_revisao,omitempty"`
 	GravadoEm     *time.Time `json:"gravado_em,omitempty"`
+	Entregue      bool       `json:"entregue"`
+	EntregueEm    *time.Time `json:"entregue_em,omitempty"`
+	Atrasada      bool       `json:"atrasada"`
+}
+// TurmaDoAluno é a turma na visão do aluno.
+type TurmaDoAluno struct {
+	ID            int64     `json:"id"`
+	Titulo        string    `json:"titulo,omitempty"`
+	MateriaCodigo string    `json:"materia_codigo"`
+	MateriaNome   string    `json:"materia_nome"`
+	Trimestre     int16     `json:"trimestre"`
+	Ano           int16     `json:"ano"`
+	Professor     string    `json:"professor"`
+	ProfessorMail string    `json:"professor_email"`
+	Ativa         bool      `json:"ativa"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // exigirStudent: cargo student; professores/admins não usam o portal.
@@ -147,6 +149,9 @@ func (s *Service) MinhasAtribuicoes(
 			EmAndamento:   row.MinhaRevisao.Valid,
 			MinhaRevisao:  row.MinhaRevisao.Int32,
 			GravadoEm:     horaPtr(row.MeuGravadoEm),
+			Entregue:      row.MinhaEntrega.Valid,
+			EntregueEm:    horaPtr(row.MinhaEntrega),
+			Atrasada:      row.MinhaAtrasada.Bool,
 		})
 	}
 	return out, nil

@@ -21,6 +21,10 @@
   function estado(
     a: (typeof atribuicoes)[number] | undefined,
   ): { rotulo: string; classe: string } {
+    if (a?.entregue)
+      return a?.atrasada
+        ? { rotulo: "Entregue atrasada", classe: "entregue" }
+        : { rotulo: "Entregue", classe: "entregue" };
     if (a?.em_andamento) return { rotulo: "Em andamento", classe: "andamento" };
     if (a?.prazo && new Date(a.prazo) < new Date() && !a.pode_atrasado)
       return { rotulo: "Prazo encerrado", classe: "encerrada" };
@@ -77,10 +81,12 @@
         </div>
         <div class="acao-area">
           <span class="estado {estado(a).classe}">{estado(a).rotulo}</span>
-          {#if a.turma_ativa}
+          {#if a.turma_ativa && !a.entregue}
             <a class="abrir" href={`/aluno/atividade/${a.id}`}>
               {a.em_andamento ? `Continuar (rev. ${a.minha_revisao})` : "Abrir"} →
             </a>
+          {:else if a.entregue}
+            <span class="meta">Entregue em {a.entregue_em ? new Date(a.entregue_em).toLocaleString("pt-BR") : ""}</span>
           {:else}
             <span class="estado encerrada">Turma encerrada</span>
           {/if}
@@ -205,6 +211,10 @@
   .estado.andamento {
     background: #e6f4ea;
     color: var(--seno-green);
+  }
+  .estado.entregue {
+    background: var(--seno-blue-100);
+    color: var(--seno-blue-800);
   }
   .estado.encerrada {
     background: #fdecea;

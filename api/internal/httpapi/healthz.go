@@ -13,6 +13,7 @@ import (
 	"github.com/seno-project/seno/api/internal/ensino"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
+	"github.com/seno-project/seno/api/internal/submissoes"
 	"github.com/seno-project/seno/api/internal/tarefas"
 	"github.com/seno-project/seno/api/internal/tentativas"
 	"github.com/seno-project/seno/api/internal/usuarios"
@@ -37,6 +38,7 @@ type Dependencies struct {
 	AtividadeS  *atividades.Service
 	AtribuicaoS *atribuicoes.Service
 	TentativaS  *tentativas.Service
+	SubmissaoS  *submissoes.Service
 }
 
 // Healthz verifica integridade do processo e do banco (compose healthcheck).
