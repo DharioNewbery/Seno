@@ -8,6 +8,70 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Atividade struct {
+	ID          int64              `json:"id"`
+	ProfessorID int64              `json:"professor_id"`
+	Nome        string             `json:"nome"`
+	Conteudo    []byte             `json:"conteudo"`
+	CreatedBy   pgtype.Int8        `json:"created_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type AtividadeTarefa struct {
+	AtividadeID int64  `json:"atividade_id"`
+	TarefaID    int64  `json:"tarefa_id"`
+	Ordem       int32  `json:"ordem"`
+	ValorPts    int32  `json:"valor_pts"`
+	Linguagem   string `json:"linguagem"`
+}
+
+type Atribuico struct {
+	ID           int64              `json:"id"`
+	TurmaID      int64              `json:"turma_id"`
+	AtividadeID  int64              `json:"atividade_id"`
+	Autocomplete bool               `json:"autocomplete"`
+	Inicio       pgtype.Timestamptz `json:"inicio"`
+	Prazo        pgtype.Timestamptz `json:"prazo"`
+	DuracaoSeg   pgtype.Int4        `json:"duracao_seg"`
+	PodeAtrasado bool               `json:"pode_atrasado"`
+	CreatedBy    pgtype.Int8        `json:"created_by"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+type CorrecaoTarefa struct {
+	ID         int64       `json:"id"`
+	CorrecaoID int64       `json:"correcao_id"`
+	TarefaID   int64       `json:"tarefa_id"`
+	ValorPts   int32       `json:"valor_pts"`
+	NotaAuto   pgtype.Int4 `json:"nota_auto"`
+	NotaFinal  pgtype.Int4 `json:"nota_final"`
+	Feedback   *string     `json:"feedback"`
+}
+
+type Correco struct {
+	ID            int64              `json:"id"`
+	SubmissaoID   int64              `json:"submissao_id"`
+	Status        string             `json:"status"`
+	Feedback      *string            `json:"feedback"`
+	ConfirmadaPor pgtype.Int8        `json:"confirmada_por"`
+	ConfirmadaEm  pgtype.Timestamptz `json:"confirmada_em"`
+	PublicadaEm   pgtype.Timestamptz `json:"publicada_em"`
+	CreatedBy     pgtype.Int8        `json:"created_by"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+type ExecucoesTeste struct {
+	ID           int64              `json:"id"`
+	AlunoID      int64              `json:"aluno_id"`
+	AtribuicaoID int64              `json:"atribuicao_id"`
+	TarefaID     int64              `json:"tarefa_id"`
+	Linguagem    string             `json:"linguagem"`
+	Codigo       string             `json:"codigo"`
+	Resultados   []byte             `json:"resultados"`
+	CriadoEm     pgtype.Timestamptz `json:"criado_em"`
+}
+
 type Job struct {
 	ID        int64              `json:"id"`
 	Kind      string             `json:"kind"`
@@ -75,6 +139,19 @@ type Person struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type Resultado struct {
+	ID               int64   `json:"id"`
+	CorrecaoTarefaID int64   `json:"correcao_tarefa_id"`
+	TesteID          int64   `json:"teste_id"`
+	Status           *string `json:"status"`
+	Stdout           *string `json:"stdout"`
+	Stderr           *string `json:"stderr"`
+	CompileOutput    *string `json:"compile_output"`
+	Tempo            *string `json:"tempo"`
+	Memoria          *string `json:"memoria"`
+	Cpu              *string `json:"cpu"`
+}
+
 type Session struct {
 	ID           int64              `json:"id"`
 	UserID       int64              `json:"user_id"`
@@ -85,6 +162,52 @@ type Session struct {
 	LastSeenAt   pgtype.Timestamptz `json:"last_seen_at"`
 	CreatedIp    *string            `json:"created_ip"`
 	UserAgent    *string            `json:"user_agent"`
+}
+
+type Submisso struct {
+	ID           int64              `json:"id"`
+	AtribuicaoID int64              `json:"atribuicao_id"`
+	AlunoID      int64              `json:"aluno_id"`
+	ComecouEm    pgtype.Timestamptz `json:"comecou_em"`
+	EntregueEm   pgtype.Timestamptz `json:"entregue_em"`
+	Atrasada     bool               `json:"atrasada"`
+	Observacao   *string            `json:"observacao"`
+	Snapshot     []byte             `json:"snapshot"`
+	CreatedBy    pgtype.Int8        `json:"created_by"`
+}
+
+type Tarefa struct {
+	ID           int64              `json:"id"`
+	ProfessorID  int64              `json:"professor_id"`
+	Nome         string             `json:"nome"`
+	Enunciado    string             `json:"enunciado"`
+	TempoCpuMs   int32              `json:"tempo_cpu_ms"`
+	TempoTotalMs int32              `json:"tempo_total_ms"`
+	MemoriaMb    int32              `json:"memoria_mb"`
+	CreatedBy    pgtype.Int8        `json:"created_by"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type Tentativa struct {
+	ID           int64              `json:"id"`
+	AtribuicaoID int64              `json:"atribuicao_id"`
+	AlunoID      int64              `json:"aluno_id"`
+	ComecouEm    pgtype.Timestamptz `json:"comecou_em"`
+	Revisao      int32              `json:"revisao"`
+	GravadoEm    pgtype.Timestamptz `json:"gravado_em"`
+	Snapshot     []byte             `json:"snapshot"`
+	CreatedBy    pgtype.Int8        `json:"created_by"`
+}
+
+type TestesTarefa struct {
+	ID             int64              `json:"id"`
+	TarefaID       int64              `json:"tarefa_id"`
+	Stdin          string             `json:"stdin"`
+	StdoutEsperado string             `json:"stdout_esperado"`
+	Publico        bool               `json:"publico"`
+	CreatedBy      pgtype.Int8        `json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type Turma struct {

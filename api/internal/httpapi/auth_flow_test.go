@@ -15,11 +15,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/seno-project/seno/api/db"
+	"github.com/seno-project/seno/api/internal/atividades"
+	"github.com/seno-project/seno/api/internal/atribuicoes"
 	"github.com/seno-project/seno/api/internal/auth"
+	"github.com/seno-project/seno/api/internal/correcoes"
 	"github.com/seno-project/seno/api/internal/ensino"
+	"github.com/seno-project/seno/api/internal/judge0"
 	"github.com/seno-project/seno/api/internal/mail"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
+	"github.com/seno-project/seno/api/internal/submissoes"
+	"github.com/seno-project/seno/api/internal/tarefas"
+	"github.com/seno-project/seno/api/internal/tentativas"
 	"github.com/seno-project/seno/api/internal/usuarios"
 )
 
@@ -45,7 +52,10 @@ func testeDB(t *testing.T) *pgxpool.Pool {
 		t.Fatalf("migrações: %v", err)
 	}
 	_, err = pool.Exec(ctx, `TRUNCATE persons, users, user_roles, sessions,
-		one_time_tokens, log_entries, jobs RESTART IDENTITY CASCADE`)
+		one_time_tokens, log_entries, jobs, tarefas, testes_tarefa,
+		atividades, atividade_tarefas, atribuicoes,
+		tentativas, submissoes, resultados, correcao_tarefas,
+		correcoes, execucoes_teste RESTART IDENTITY CASCADE`)
 	if err != nil {
 		t.Fatalf("limpeza do banco: %v", err)
 	}
@@ -69,6 +79,13 @@ func montaAPI(t *testing.T, pool *pgxpool.Pool) (*Dependencies, *gin.Engine) {
 	}
 	deps.UsuarioS = usuarios.New(st, audit, deps.Cargo)
 	deps.Ensino = ensino.New(st, audit, deps.Cargo)
+	deps.TarefaS = tarefas.New(st, audit)
+	deps.AtividadeS = atividades.New(st, audit, deps.TarefaS)
+	deps.AtribuicaoS = atribuicoes.New(st, audit)
+	deps.TentativaS = tentativas.New(st, audit)
+	deps.SubmissaoS = submissoes.New(st, audit)
+	judge0Cfg := judge0.CarregarConfigDasEnvLigada("", "", "", "http://localhost:5173")
+	deps.CorrecaoS = correcoes.New(st, audit, judge0.NewClient(judge0Cfg), judge0Cfg)
 	r := gin.New()
 	RegisterRoutes(r, deps)
 	return deps, r

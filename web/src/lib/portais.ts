@@ -33,19 +33,14 @@ export const PORTAIS: Record<PortalId, PortalDef> = {
       {
         rotulo: "Minhas turmas",
         href: "/aluno/turmas",
-        sub: [
-          { rotulo: "Listar turmas", href: "/aluno/turmas" },
-          { rotulo: "Professor e colegas", href: "/aluno/turmas/colegas" },
-          { rotulo: "Atividades da turma", href: "/aluno/turmas/atividades" },
-        ],
+        sub: [{ rotulo: "Listar turmas", href: "/aluno/turmas" }],
       },
-      { rotulo: "Atividades pendentes", href: "/aluno/pendentes" },
       {
-        rotulo: "Atividades entregues",
-        href: "/aluno/entregues",
+        rotulo: "Atividades",
+        href: "/aluno/atividades",
         sub: [
-          { rotulo: "Listar entregas", href: "/aluno/entregues" },
-          { rotulo: "Notas e feedback", href: "/aluno/entregues/notas" },
+          { rotulo: "Todas as atividades", href: "/aluno/atividades" },
+          { rotulo: "Execuções de teste", href: "/aluno/testes" },
         ],
       },
     ],
@@ -90,19 +85,11 @@ export const PORTAIS: Record<PortalId, PortalDef> = {
       { rotulo: "Início", href: "/admin" },
       { rotulo: "Dashboard e métricas", href: "/admin/dashboard" },
       {
-        rotulo: "Gestão de professores",
-        href: "/admin/professores",
+        rotulo: "Usuários",
+        href: "/admin/usuarios",
         sub: [
-          { rotulo: "Listar professores", href: "/admin/professores" },
-          { rotulo: "Criar professor", href: "/admin/professores/novo" },
-        ],
-      },
-      {
-        rotulo: "Gestão de alunos",
-        href: "/admin/alunos",
-        sub: [
-          { rotulo: "Listar alunos", href: "/admin/alunos" },
-          { rotulo: "Criar aluno", href: "/admin/alunos/novo" },
+          { rotulo: "Listar usuários", href: "/admin/usuarios" },
+          { rotulo: "Criar usuário", href: "/admin/usuarios/novo" },
         ],
       },
       {
@@ -120,15 +107,6 @@ export const PORTAIS: Record<PortalId, PortalDef> = {
           { rotulo: "Períodos letivos", href: "/admin/periodos" },
           { rotulo: "Novo período", href: "/admin/periodos/nova" },
           { rotulo: "Todas as turmas", href: "/admin/turmas" },
-        ],
-      },
-      {
-        rotulo: "Gestão de admins",
-        href: "/admin/admins",
-        soSuper: true,
-        sub: [
-          { rotulo: "Listar admins", href: "/admin/admins" },
-          { rotulo: "Criar admin", href: "/admin/admins/novo" },
         ],
       },
     ],

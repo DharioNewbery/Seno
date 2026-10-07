@@ -16,10 +16,18 @@ import (
 	"github.com/seno-project/seno/api/db"
 	"github.com/seno-project/seno/api/internal/auth"
 	"github.com/seno-project/seno/api/internal/ensino"
+	"github.com/seno-project/seno/api/internal/atividades"
+	"github.com/seno-project/seno/api/internal/atribuicoes"
+	"github.com/seno-project/seno/api/internal/correcoes"
 	"github.com/seno-project/seno/api/internal/httpapi"
+	"github.com/seno-project/seno/api/internal/judge0"
 	"github.com/seno-project/seno/api/internal/mail"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
+	"github.com/seno-project/seno/api/internal/submissoes"
+	"github.com/seno-project/seno/api/internal/tarefas"
+	"github.com/seno-project/seno/api/internal/testar"
+	"github.com/seno-project/seno/api/internal/tentativas"
 	"github.com/seno-project/seno/api/internal/usuarios"
 )
 
@@ -58,15 +66,28 @@ func main() {
 		os.Exit(1)
 	}
 
+	svcTarefas := tarefas.New(st, audit)
+	// Judge0 (§Execução do código): vazio = integração desligada.
+	judge0Cfg := judge0.CarregarConfigDasEnvLigada(
+		cfg.Judge0URL, cfg.Judge0Token, cfg.Judge0Secret, cfg.WebOrigin,
+	)
+	judge0Cli := judge0.NewClient(judge0Cfg)
 	deps := &httpapi.Dependencies{
-		Cfg:      cfg,
-		Pool:     pool,
-		Store:    st,
-		Audit:    audit,
-		Auth:     authSvc,
-		Cargo:    recoverer,
-		UsuarioS: usuarios.New(st, audit, recoverer),
-		Ensino:   ensino.New(st, audit, recoverer),
+		Cfg:        cfg,
+		Pool:       pool,
+		Store:      st,
+		Audit:      audit,
+		Auth:       authSvc,
+		Cargo:      recoverer,
+		UsuarioS:   usuarios.New(st, audit, recoverer),
+		Ensino:     ensino.New(st, audit, recoverer),
+		TarefaS:     svcTarefas,
+		AtividadeS:  atividades.New(st, audit, svcTarefas),
+		AtribuicaoS: atribuicoes.New(st, audit),
+		TentativaS:  tentativas.New(st, audit),
+		SubmissaoS:  submissoes.New(st, audit),
+		CorrecaoS:   correcoes.New(st, audit, judge0Cli, judge0Cfg),
+		TestarS:     testar.New(st, audit, judge0Cli, judge0Cfg),
 	}
 
 	if os.Getenv("SENO_MODE") != "debug" {

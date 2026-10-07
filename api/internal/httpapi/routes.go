@@ -29,12 +29,14 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	autenticado.POST("/logout", deps.Logout)
 	autenticado.GET("/me", deps.Me)
 
-	// Gestão de professores e admins (portal admin; alunos junto com
-	// turmas/matrículas, em outro módulo).
+	// Gestão de usuários (portal admin): criação pendente sem cargos,
+	// listagem, inspeção, cargos e ações de conta.
 	gestao := v1.Group("/users")
 	gestao.Use(deps.RequireAuth(), deps.RequireCargo(domain.RoleAdmin, domain.RoleSuper))
 	gestao.GET("", deps.ListarUsuarios)
 	gestao.POST("", deps.CriarUsuario)
+	gestao.GET("/:id", deps.VerUsuario)
+	gestao.PUT("/:id/cargos", deps.AlterarCargosUsuario)
 	gestao.PATCH("/:id", deps.AtualizarUsuario)
 	gestao.POST("/:id/desativar", deps.BloquearUsuario)
 	gestao.POST("/:id/ativar", deps.DesbloquearUsuario)
@@ -92,4 +94,100 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 		deps.RequireCargo(domain.RoleProfessor, domain.RoleAdmin, domain.RoleSuper),
 	)
 	alunos.GET("", deps.ListarAlunos)
+
+	// Banco de tarefas (professor dono; staff tudo — PROJETO §Tarefas).
+	tarefas := v1.Group("/tarefas")
+	tarefas.Use(
+		deps.RequireAuth(),
+		deps.RequireCargo(domain.RoleProfessor, domain.RoleAdmin, domain.RoleSuper),
+	)
+	tarefas.GET("", deps.ListarTarefas)
+	tarefas.POST("", deps.CriarTarefa)
+	tarefas.GET("/:id", deps.VerTarefa)
+	tarefas.PATCH("/:id", deps.EditarTarefa)
+	tarefas.POST("/:id/duplicar", deps.DuplicarTarefa)
+	tarefas.DELETE("/:id", deps.ExcluirTarefa)
+
+	// Banco de atividades (PROJETO §Atividades).
+	atividades := v1.Group("/atividades")
+	atividades.Use(
+		deps.RequireAuth(),
+		deps.RequireCargo(domain.RoleProfessor, domain.RoleAdmin, domain.RoleSuper),
+	)
+	atividades.GET("", deps.ListarAtividades)
+	atividades.POST("", deps.CriarAtividade)
+	atividades.GET("/:id", deps.VerAtividade)
+	atividades.PATCH("/:id", deps.EditarAtividade)
+	atividades.POST("/:id/duplicar", deps.DuplicarAtividade)
+	atividades.DELETE("/:id", deps.ExcluirAtividade)
+
+	// Atribuições: turma ← atividade (PROJETO §Atribuição).
+	atribuicoes := v1.Group("/atribuicoes")
+	atribuicoes.Use(
+		deps.RequireAuth(),
+		deps.RequireCargo(domain.RoleProfessor, domain.RoleAdmin, domain.RoleSuper),
+	)
+	atribuicoes.GET("", deps.ListarAtribuicoes)
+	atribuicoes.POST("", deps.CriarAtribuicao)
+	atribuicoes.GET("/:id", deps.VerAtribuicao)
+	atribuicoes.PATCH("/:id", deps.EditarAtribuicao)
+	atribuicoes.DELETE("/:id", deps.ExcluirAtribuicao)
+
+	// Tentativa: rascunho do aluno por atribuição (PROJETO §Tentativa);
+	// aqui vai só RequireAuth — o serviço exige cargo student e matrícula
+	// ativa (professor/admin são 403; sem matrícula é 404).
+	tent := v1.Group("/atribuicoes/:id/tentativa")
+	tent.Use(deps.RequireAuth())
+	tent.POST("", deps.AbrirTentativa)
+	tent.GET("", deps.LerTentativa)
+	tent.PUT("", deps.GravarTentativa)
+
+	// Submissão: entrega final do aluno + entregas do professor
+	// (regras no serviço — student + matrícula; dono|staff na listagem).
+	sub := v1.Group("/atribuicoes/:id")
+	sub.Use(deps.RequireAuth())
+	sub.POST("/submissao", deps.EntregarSubmissao)
+	sub.GET("/submissoes", deps.ListarSubmissoes)
+
+	// Correção: professor dono|staff no serviço (§5.4); aluno vê o
+	// enviado depois de publicar (§Visibilidade).
+	submissoesCorrecao := v1.Group("/submissoes/:id")
+	submissoesCorrecao.Use(deps.RequireAuth())
+	submissoesCorrecao.GET("/correcao", deps.verCorrecao)
+	submissoesCorrecao.PATCH("/correcao", deps.editarCorrecao)
+	submissoesCorrecao.POST("/correcao/confirmar", deps.confirmarCorrecao)
+	submissoesCorrecao.POST("/correcao/publicar", deps.publicarCorrecao)
+	submissoesCorrecao.GET("/minha", deps.minhaCorrecao)
+
+	// Callback do Judge0 (rede interna; chave compartilhada validada no
+	// handler — config em SENO_JUDGE0_CALLBACK_KEY).
+	r.POST("/v1/judge0/callback", deps.callbackJudge0)
+
+	// Execução de teste (PROJETO §Execução de teste): aluno "testar"
+	// (com histórico 7d e limite 5/min no serviço) e testar do professor
+	// no banco de tarefas (sem histórico). Escopo por regras no serviço.
+	testes := v1.Group("/atribuicoes/:id/testar")
+	testes.Use(deps.RequireAuth())
+	testes.POST("", deps.TestarTarefa)
+
+	historico := v1.Group("/me/testes")
+	historico.Use(deps.RequireAuth())
+	historico.GET("", deps.HistoricoTestes)
+
+	tarefasTestar := v1.Group("/tarefas/:id/testar")
+	tarefasTestar.Use(deps.RequireAuth())
+	tarefasTestar.POST("", deps.TestarTarefaProfessor)
+
+	// Visão do aluno na atribuição (RequireAuth só; regras no serviço —
+	// student + matrícula ativa).
+	aluno := v1.Group("/atribuicoes/:id/aluno")
+	aluno.Use(deps.RequireAuth())
+	aluno.GET("", deps.ViewAluno)
+
+	// Portal aluno: turmas e atribuições do próprio usuário (§Portal
+	// Aluno); cargo student exigido no serviço.
+	me := v1.Group("/me")
+	me.Use(deps.RequireAuth())
+	me.GET("/turmas", deps.MinhasTurmas)
+	me.GET("/atribuicoes", deps.MinhasAtribuicoes)
 }
