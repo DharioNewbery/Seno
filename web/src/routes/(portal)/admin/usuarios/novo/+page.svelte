@@ -5,4 +5,4 @@
   let { form }: PageProps = $props();
 </script>
 
-<CriarUsuario cargo="professor" {form} />
+<CriarUsuario {form} />

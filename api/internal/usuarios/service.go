@@ -1,8 +1,8 @@
-// Package usuarios — gestão de professores e admins pelo portal admin
-// (PROJETO §Portal Admin, ARQUITETURA §5.4). Criação segue §5.3: o novo
-// usuário nasce pendente e recebe convite por e-mail para definir a senha.
+// Package usuarios — gestão de usuários pelo portal admin (PROJETO
+// §Portal Admin, ARQUITETURA §5.4). Criação segue §5.3: o novo usuário nasce
+// pendente e SEM cargos, recebendo convite por e-mail para definir a senha;
+// os cargos são atribuídos depois, na tela de inspeção (§Cargos).
 // Super admin é singleton (bootstrap): não se cria, não se bloqueia.
-// Alunos entram junto com turmas/matrículas, em outra rodada.
 package usuarios
 
 import (
@@ -24,13 +24,14 @@ import (
 
 // Tipos de evento do Log (PROJETO §Log).
 const (
-	LogKindCreate  = "user.create"
-	LogKindUpdate  = "user.update"
-	LogKindDisable = "user.disable"
-	LogKindEnable  = "user.enable"
+	LogKindCreate     = "user.create"
+	LogKindUpdate     = "user.update"
+	LogKindDisable    = "user.disable"
+	LogKindEnable     = "user.enable"
+	LogKindRoleChange = "user.roles"
 )
 
-// Service coordena o CRUD de professores e admins.
+// Service coordena o CRUD de usuários.
 type Service struct {
 	store     *store.Store
 	audit     *platform.Audit
@@ -62,8 +63,9 @@ var statusValidos = map[string]bool{
 	"": true, "active": true, "pending": true, "disabled": true,
 }
 
-// Listar devolve os usuários com filtros e o total da consulta.
-func (s *Service) Listar(ctx context.Context, f Filtros) (Pagina, error) {
+// Listar devolve os usuários com filtros e o total da consulta. O super
+// só aparece quando quem lista é o próprio super.
+func (s *Service) Listar(ctx context.Context, actor domain.User, f Filtros) (Pagina, error) {
 	if !statusValidos[f.Status] {
 		return Pagina{}, platform.NewAPIError(
 			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
@@ -87,6 +89,7 @@ func (s *Service) Listar(ctx context.Context, f Filtros) (Pagina, error) {
 
 	total, err := s.store.Q.CountUsers(ctx, gen.CountUsersParams{
 		Column1: f.Busca, Column2: f.Status, Column3: string(f.Cargo),
+		Column4: !actor.IsSuper(),
 	})
 	if err != nil {
 		return Pagina{}, err
@@ -95,6 +98,7 @@ func (s *Service) Listar(ctx context.Context, f Filtros) (Pagina, error) {
 		Column1: f.Busca,
 		Column2: f.Status,
 		Column3: string(f.Cargo),
+		Column4: !actor.IsSuper(),
 		Limit:   int32(f.Por),
 		Offset:  int32((f.Pagina - 1) * f.Por),
 	})
@@ -135,33 +139,17 @@ func (s *Service) Listar(ctx context.Context, f Filtros) (Pagina, error) {
 	return Pagina{Total: total, Pagina: f.Pagina, Por: f.Por, Usuarios: users}, nil
 }
 
-// Cadastro é o corpo da criação de usuário (professor ou admin).
+// Cadastro é o corpo da criação de usuário (sem cargos — nascem na
+// tela de inspeção, atribuídos depois por quem administra).
 type Cadastro struct {
-	Email     string      `json:"email"`
-	FirstName string      `json:"first_name"`
-	LastName  string      `json:"last_name"`
-	Cargo     domain.Role `json:"cargo"`
+	Email     string `json:"email"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
 }
 
-// Criar cadastra professor/admin como pendente e envia convite por e-mail.
+// Criar cadastra o usuário como pendente e SEM cargos, enviando convite
+// por e-mail (§5.3).
 func (s *Service) Criar(ctx context.Context, actor domain.User, cad Cadastro) (domain.User, error) {
-	switch cad.Cargo {
-	case domain.RoleProfessor:
-	case domain.RoleAdmin:
-		if !actor.IsSuper() {
-			return domain.User{}, platform.NewAPIError(
-				http.StatusForbidden, platform.CodeForbidden,
-				"Só o super admin cria outros admins.")
-		}
-	case domain.RoleSuper:
-		return domain.User{}, platform.NewAPIError(
-			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
-			"Existe apenas um super admin, criado na inicialização.")
-	default:
-		return domain.User{}, platform.NewAPIError(
-			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
-			"Gestão de alunos entra junto com turmas e matérias; use professor ou admin.")
-	}
 	if strings.TrimSpace(cad.Email) == "" ||
 		strings.TrimSpace(cad.FirstName) == "" ||
 		strings.TrimSpace(cad.LastName) == "" {
@@ -182,37 +170,141 @@ func (s *Service) Criar(ctx context.Context, actor domain.User, cad Cadastro) (d
 	if err != nil {
 		return domain.User{}, err
 	}
-
 	roles, err := s.store.Q.GetUserRoles(ctx, row.ID)
 	if err != nil {
 		return domain.User{}, err
-	}
-	if !domain.HasAnyRole(rolesToSlice(roles), cad.Cargo) {
-		if err := s.store.Q.InsertUserRole(ctx, gen.InsertUserRoleParams{
-			UserID: row.ID, Role: string(cad.Cargo),
-		}); err != nil {
-			return domain.User{}, err
-		}
 	}
 	s.audit.Record(ctx, platform.LogEntry{
 		ActorID: &actor.ID,
 		Actor:   actor.Email,
 		Kind:    LogKindCreate,
-		Detail:  fmt.Sprintf("usuario=%d cargo=%s", row.ID, cad.Cargo),
+		Detail:  fmt.Sprintf("usuario=%d sem cargos", row.ID),
 	})
-	rolesFinais := rolesToSlice(roles)
-	if !domain.HasAnyRole(rolesFinais, cad.Cargo) {
-		rolesFinais = append(rolesFinais, cad.Cargo)
-	}
 	return domain.User{
 		ID:        row.ID,
 		Email:     row.Email,
 		FirstName: row.FirstName,
 		LastName:  row.LastName,
 		Status:    row.Status,
-		Roles:     rolesFinais,
+		Roles:     rolesToSlice(roles),
 		CreatedAt: row.CreatedAt.Time,
 	}, nil
+}
+
+// Ver devolve o usuário detalhado com os cargos atuais. Ninguém inspeciona
+// o super, exceto o próprio super.
+func (s *Service) Ver(ctx context.Context, actor domain.User, id int64) (domain.User, error) {
+	target, _, err := s.alvo(ctx, id)
+	if err != nil {
+		return domain.User{}, err
+	}
+	if target.IsSuper() && actor.ID != target.ID {
+		return domain.User{}, platform.NewAPIError(
+			http.StatusForbidden, platform.CodeForbidden,
+			"O super admin só é visível a si mesmo.")
+	}
+	return target, nil
+}
+
+// AlterarCargos substitui por completo o conjunto de cargos do usuário.
+// Regras (ARQUITETURA §5.4):
+//   - super pode atribuir student/professor/admin; admin comum só
+//     student/professor (a API garante);
+//   - alvos admin/super só são alterados pelo super — exceto o próprio
+//     admin comum alterando a si mesmo;
+//   - ninguém remove o próprio cargo de admin/super.
+func (s *Service) AlterarCargos(ctx context.Context, actor domain.User, id int64, cargos []domain.Role) (domain.User, error) {
+	permitidos := []domain.Role{domain.RoleStudent, domain.RoleProfessor}
+	if actor.IsSuper() {
+		permitidos = append(permitidos, domain.RoleAdmin)
+	}
+	pedidos := deduplicar(cargos)
+	for _, cargo := range pedidos {
+		if !domain.IsValidRole(cargo) {
+			return domain.User{}, platform.NewAPIError(
+				http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+				"Cargo inválido.")
+		}
+		if !domain.HasAnyRole([]domain.Role{cargo}, permitidos...) {
+			return domain.User{}, platform.NewAPIError(
+				http.StatusForbidden, platform.CodeForbidden,
+				"Não é permitido atribuir este cargo.")
+		}
+	}
+	target, _, err := s.alvo(ctx, id)
+	if err != nil {
+		return domain.User{}, err
+	}
+	alvoStaff := domain.HasAnyRole(target.Roles, domain.RoleAdmin, domain.RoleSuper)
+	if alvoStaff && actor.ID != target.ID &&
+		!actor.IsSuper() {
+		return domain.User{}, platform.NewAPIError(
+			http.StatusForbidden, platform.CodeForbidden,
+			"Só o super admin altera cargos de admin.")
+	}
+	if alvoStaff && actor.ID == target.ID &&
+		!domain.HasAnyRole(pedidos, domain.RoleAdmin, domain.RoleSuper) {
+		return domain.User{}, platform.NewAPIError(
+			http.StatusForbidden, platform.CodeForbidden,
+			"Você não pode remover o próprio cargo de admin.")
+	}
+	if target.IsSuper() && !domain.HasAnyRole(pedidos, domain.RoleSuper) {
+		return domain.User{}, platform.NewAPIError(
+			http.StatusForbidden, platform.CodeForbidden,
+			"Você não pode remover o próprio cargo de super.")
+	}
+	if err := s.store.InTx(ctx, func(_ pgx.Tx, q *gen.Queries) error {
+		if err := q.DeleteUserRoles(ctx, id); err != nil {
+			return err
+		}
+		for _, cargo := range pedidos {
+			if err := q.InsertUserRole(ctx, gen.InsertUserRoleParams{
+				UserID: id, Role: string(cargo),
+			}); err != nil {
+				return err
+			}
+		}
+		return q.SetUserUpdatedBy(ctx, gen.SetUserUpdatedByParams{
+			ID: id, UpdatedBy: int8Ptr(actor.ID),
+		})
+	}); err != nil {
+		return domain.User{}, err
+	}
+	detalhe := ""
+	if len(pedidos) == 0 {
+		detalhe = "sem cargos"
+	} else {
+		nomes := make([]string, 0, len(pedidos))
+		for _, cargo := range pedidos {
+			nomes = append(nomes, string(cargo))
+		}
+		detalhe = "cargos=" + strings.Join(nomes, ",")
+	}
+	s.audit.Record(ctx, platform.LogEntry{
+		ActorID: &actor.ID,
+		Actor:   actor.Email,
+		Kind:    LogKindRoleChange,
+		Detail:  fmt.Sprintf("usuario=%d %s", id, detalhe),
+	})
+	return s.alvoFinal(ctx, id)
+}
+
+// alvoFinal carrega o usuário sem o ID da pessoa (uso pós-mutação).
+func (s *Service) alvoFinal(ctx context.Context, id int64) (domain.User, error) {
+	u, _, err := s.alvo(ctx, id)
+	return u, err
+}
+
+func deduplicar(in []domain.Role) []domain.Role {
+	vistos := map[domain.Role]bool{}
+	out := make([]domain.Role, 0, len(in))
+	for _, r := range in {
+		if !vistos[r] {
+			vistos[r] = true
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // EditarDados atualiza nome/sobrenome e registra o agente (updated_by).

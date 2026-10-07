@@ -36,7 +36,7 @@ WHERE (COALESCE($1::text, '') = ''
         SELECT 1 FROM user_roles r WHERE r.user_id = u.id AND r.role = $3::text))
   AND (NOT $4::boolean OR NOT EXISTS (
         SELECT 1 FROM user_roles r
-        WHERE r.user_id = u.id AND r.role IN ('admin', 'super')))
+        WHERE r.user_id = u.id AND r.role = 'super'))
 `
 
 type CountUsersParams struct {
@@ -361,7 +361,7 @@ WHERE (COALESCE($1::text, '') = ''
         WHERE r.user_id = u.id AND r.role = $3::text))
   AND (NOT $4::boolean OR NOT EXISTS (
         SELECT 1 FROM user_roles r
-        WHERE r.user_id = u.id AND r.role IN ('admin', 'super')))
+        WHERE r.user_id = u.id AND r.role = 'super'))
 ORDER BY u.created_at DESC, u.id DESC
 LIMIT $5
 OFFSET $6

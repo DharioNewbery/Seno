@@ -1,13 +1,12 @@
 <script lang="ts">
-  // Página "novo" dos portais: form único de criação — o usuário nasce
-  // pendente e recebe convite por e-mail (ARQUITETURA §5.3). Sucesso
-  // redireciona à listagem (no server); falhas voltam com o aviso.
+  // Tela de criação de usuário: o usuário + pessoa nascem pendentes, SEM
+  // cargos — eles são atribuídos depois, na tela de inspeção. O convite por
+  // e-mail (uso único, 7 dias) define a senha. Falhas voltam com o aviso.
   interface Props {
-    cargo: "professor" | "admin";
     form?: { erro?: string } | null;
   }
 
-  let { cargo, form }: Props = $props();
+  let { form }: Props = $props();
 </script>
 
 <section class="criacao">
@@ -16,10 +15,11 @@
   {/if}
 
   <form method="POST" action="?/criar" class="cartao">
-    <h2>{cargo === "professor" ? "Convidar professor" : "Criar admin"}</h2>
+    <h2>Criar usuário</h2>
     <p class="dica">
-      O novo usuário nasce <strong>pendente</strong> e recebe um e-mail de
-      convite para definir a própria senha (uso único, 7 dias).
+      O novo usuário nasce <strong>pendente</strong>, sem cargos, e recebe um
+      e-mail de convite para definir a própria senha (uso único, 7 dias). Os
+      cargos são atribuídos depois, na inspeção do usuário.
     </p>
     <label>
       <span>Nome</span>
@@ -33,7 +33,7 @@
       <span>E-mail</span>
       <input name="email" type="email" required placeholder="voce@ufpa.br" />
     </label>
-    <button>{cargo === "professor" ? "Enviar convite" : "Criar e convidar"}</button>
+    <button>Criar e convidar</button>
   </form>
 </section>
 

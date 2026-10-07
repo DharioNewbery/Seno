@@ -29,12 +29,14 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	autenticado.POST("/logout", deps.Logout)
 	autenticado.GET("/me", deps.Me)
 
-	// Gestão de professores e admins (portal admin; alunos junto com
-	// turmas/matrículas, em outro módulo).
+	// Gestão de usuários (portal admin): criação pendente sem cargos,
+	// listagem, inspeção, cargos e ações de conta.
 	gestao := v1.Group("/users")
 	gestao.Use(deps.RequireAuth(), deps.RequireCargo(domain.RoleAdmin, domain.RoleSuper))
 	gestao.GET("", deps.ListarUsuarios)
 	gestao.POST("", deps.CriarUsuario)
+	gestao.GET("/:id", deps.VerUsuario)
+	gestao.PUT("/:id/cargos", deps.AlterarCargosUsuario)
 	gestao.PATCH("/:id", deps.AtualizarUsuario)
 	gestao.POST("/:id/desativar", deps.BloquearUsuario)
 	gestao.POST("/:id/ativar", deps.DesbloquearUsuario)

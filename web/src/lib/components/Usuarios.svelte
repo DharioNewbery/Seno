@@ -1,44 +1,39 @@
 <script lang="ts">
-  // Tela de gestão de professores/admins: lista com busca e filtro de
-  // estado, criação via convite (pendente), edição inline de nome,
-  // bloqueio/desbloqueio e reset de senha. Ações via form actions do
-  // server (+page.server.ts), preservando os filtros da página.
+  // Tela de listagem de usuários: filtros de busca (nome/e-mail), estado e
+  // cargo; o próprio perfil aparece em evidência, como primeiro item. Ações
+  // via form actions do server (+page.server.ts), preservando os filtros.
+  // A gestão de cargos/bloqueio/reseta-senha vive na inspeção: clique no
+  // usuário para navegar até ela.
   import { page } from "$app/state";
   import { SvelteURLSearchParams } from "svelte/reactivity";
   import type { Usuario } from "#lib/tipos";
   import { ROTULO_CARGO, type Cargo } from "#lib/tipos";
 
   interface Props {
-    cargo: "professor" | "admin";
     usuarios: Usuario[];
     total: number;
     atual: number;
     por: number;
     busca: string;
     filtroStatus: string;
+    filtroCargo: string;
     erro: string | null;
     form?: { ok?: string; erro?: string } | null;
-    eSuper: boolean;
     usuarioId: number;
   }
 
   let {
-    cargo,
     usuarios,
     total,
     atual,
     por,
     busca,
     filtroStatus,
+    filtroCargo,
     erro,
     form,
-    eSuper,
     usuarioId,
   }: Props = $props();
-
-  let editandoId = $state<number | null>(null);
-  let nomeEdicao = $state("");
-  let sobrenomeEdicao = $state("");
 
   const ROTULO_STATUS: Record<string, string> = {
     active: "Ativo",
@@ -46,24 +41,11 @@
     disabled: "Bloqueado",
   };
 
-  /** URL da ação, preservando busca/status/página da listagem atual. */
-  function urlAcao(rotulo: string): string {
-    const filtro = new SvelteURLSearchParams(page.url.searchParams.toString());
-    const extra = filtro.size ? `&${filtro.toString()}` : "";
-    return `?/${rotulo}${extra}`;
-  }
-
-  function comecarEdicao(u: Usuario) {
-    editandoId = u.id;
-    nomeEdicao = u.first_name;
-    sobrenomeEdicao = u.last_name;
-  }
-
-  function cancelarEdicao() {
-    editandoId = null;
-    nomeEdicao = "";
-    sobrenomeEdicao = "";
-  }
+  // Próprio perfil em evidência, primeiro item da lista.
+  const ordenados = $derived([
+    ...usuarios.filter((u) => u.id === usuarioId),
+    ...usuarios.filter((u) => u.id !== usuarioId),
+  ]);
 
   function proximaPagina(delta: number): string {
     const filtro = new SvelteURLSearchParams(page.url.searchParams.toString());
@@ -84,20 +66,23 @@
   {/if}
 
   <div class="cabecalho">
-    <h2>{cargo === "professor" ? "Professores" : "Contas de admin"}</h2>
+    <h2>Usuários</h2>
     <span class="total">{total} conta(s)</span>
+    <a class="ir-criar" href="/admin/usuarios/novo">Criar usuário →</a>
   </div>
 
   <form method="get" class="busca">
     <input
       name="busca"
       value={busca}
-      placeholder="Buscar por e-mail ou nome"
+      placeholder="Buscar por nome ou e-mail"
       aria-label="Buscar"
     />
     <select name="status" aria-label="Filtrar por estado">
       <option value="">Todos os estados</option>
-      <option value="active" selected={filtroStatus === "active"}>Ativos</option>
+      <option value="active" selected={filtroStatus === "active"}>
+        Ativos
+      </option>
       <option value="pending" selected={filtroStatus === "pending"}>
         Pendentes
       </option>
@@ -105,71 +90,50 @@
         Bloqueados
       </option>
     </select>
+    <select name="cargo" aria-label="Filtrar por cargo">
+      <option value="">Todos os cargos</option>
+      <option value="student" selected={filtroCargo === "student"}>
+        Aluno
+      </option>
+      <option value="professor" selected={filtroCargo === "professor"}>
+        Professor
+      </option>
+      <option value="admin" selected={filtroCargo === "admin"}>
+        Admin
+      </option>
+    </select>
     <button>Buscar</button>
   </form>
 
-  <a
-    class="ir-criar"
-    href={`/admin/${cargo === "professor" ? "professores" : "admins"}/novo`}
-  >
-    {cargo === "professor" ? "Convidar professor →" : "Criar admin →"}
-  </a>
-  {#if cargo === "admin" && !eSuper}
-    <p class="nota">
-      Só o super admin cria contas de admin (ARQUITETURA §5.4).
-    </p>
-  {/if}
-
   <ul class="lista">
-    {#each usuarios as u (u.id)}
-      <li>
-        <div class="identidade">
-          <strong>{u.first_name} {u.last_name}</strong>
-          <span class="email">{u.email}</span>
-          <span class="chips">
-            {#each u.roles as cargo1 (cargo1)}
-              <em>{ROTULO_CARGO[cargo1 as Cargo] ?? cargo1}</em>
-            {/each}
-          </span>
-        </div>
-
-        {#if editandoId === u.id}
-          <form method="POST" action={urlAcao("editar")} class="edicao">
-            <input type="hidden" name="id" value={u.id} />
-            <input name="first_name" bind:value={nomeEdicao} required />
-            <input name="last_name" bind:value={sobrenomeEdicao} required />
-            <button>Salvar</button>
-            <button type="button" onclick={cancelarEdicao}>Cancelar</button>
-          </form>
-        {:else}
-          <div class="acoes">
-            <span class={`estado ${u.status}`}>
-              {ROTULO_STATUS[u.status] ?? u.status}
+    {#each ordenados as u (u.id)}
+      <li class:destaque={u.id === usuarioId}>
+        <a
+          class="card"
+          href={`/admin/usuarios/${u.id}`}
+          aria-label={`Inspecionar ${u.first_name} ${u.last_name}`}
+        >
+          <div class="identidade">
+            <strong>
+              {u.first_name} {u.last_name}
+              {#if u.id === usuarioId}
+                <em class="vc">(você)</em>
+              {/if}
+            </strong>
+            <span class="email">{u.email}</span>
+            <span class="chips">
+              {#each u.roles as cargo (cargo)}
+                <em>{ROTULO_CARGO[cargo as Cargo] ?? cargo}</em>
+              {/each}
             </span>
-            <button class="acao" onclick={() => comecarEdicao(u)}>Editar</button>
-            {#if u.status !== "disabled" && u.id !== usuarioId && !u.roles.includes("super")}
-              <form method="POST" action={urlAcao("bloquear")}>
-                <input type="hidden" name="id" value={u.id} />
-                <button class="acao ruim">Bloquear</button>
-              </form>
-            {/if}
-            {#if u.status === "disabled"}
-              <form method="POST" action={urlAcao("desbloquear")}>
-                <input type="hidden" name="id" value={u.id} />
-                <button class="acao">Desbloquear</button>
-              </form>
-            {/if}
-            {#if u.status !== "pending"}
-              <form method="POST" action={urlAcao("resetar")}>
-                <input type="hidden" name="id" value={u.id} />
-                <button class="acao">Resetar senha</button>
-              </form>
-            {/if}
           </div>
-        {/if}
+          <span class={`estado ${u.status}`}>
+            {ROTULO_STATUS[u.status] ?? u.status}
+          </span>
+        </a>
       </li>
     {:else}
-      <li class="vazio">Nenhuma conta com estes filtros.</li>
+      <li class="vazio">Nenhum usuário com estes filtros.</li>
     {/each}
   </ul>
 
@@ -203,7 +167,7 @@
 
   .cabecalho {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 1rem;
   }
 
@@ -232,16 +196,14 @@
     color: var(--seno-blue-800);
   }
 
-  .busca,
-  .criar {
+  .busca {
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
   }
 
   .busca input,
-  .busca select,
-  .edicao input {
+  .busca select {
     border: 1px solid var(--seno-gray-300);
     border-radius: 8px;
     padding: 0.5rem 0.65rem;
@@ -249,22 +211,7 @@
     font-size: 0.9rem;
   }
 
-  .ir-criar {
-    align-self: flex-start;
-    background: var(--seno-blue-600);
-    color: var(--seno-white);
-    border-radius: 8px;
-    padding: 0.5rem 0.9rem;
-    font-size: 0.9rem;
-    text-decoration: none;
-  }
-
-  .ir-criar:hover {
-    background: var(--seno-blue-700);
-  }
-
   .busca button,
-  .edicao button,
   .acao {
     background: var(--seno-blue-600);
     color: var(--seno-white);
@@ -275,20 +222,22 @@
     cursor: pointer;
   }
 
-  .busca button:hover,
-  .edicao button:hover,
-  .acao:hover {
+  .busca button:hover {
     background: var(--seno-blue-700);
   }
 
-  .acao.ruin {
-    background: none;
-    color: var(--seno-red);
-    border: 1px solid var(--seno-red);
+  .ir-criar {
+    margin-left: auto;
+    background: var(--seno-blue-600);
+    color: var(--seno-white);
+    border-radius: 8px;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.9rem;
+    text-decoration: none;
   }
 
-  .acao.ruin:hover {
-    background: #fdecea;
+  .ir-criar:hover {
+    background: var(--seno-blue-700);
   }
 
   .lista {
@@ -304,12 +253,22 @@
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
     border-radius: 10px;
-    padding: 0.9rem 1.1rem;
+  }
+
+  .lista li.destaque {
+    border: 2px solid var(--seno-blue-500);
+    background: var(--seno-blue-100);
+  }
+
+  .card {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
     flex-wrap: wrap;
+    padding: 0.9rem 1.1rem;
+    text-decoration: none;
+    color: inherit;
   }
 
   .identidade {
@@ -321,6 +280,12 @@
   .identidade .email {
     color: var(--seno-gray-700);
     font-size: 0.88rem;
+  }
+
+  .vc {
+    font-style: normal;
+    font-size: 0.75rem;
+    color: var(--seno-blue-700);
   }
 
   .chips {
@@ -335,17 +300,6 @@
     color: var(--seno-blue-800);
     border-radius: 999px;
     padding: 0.15rem 0.55rem;
-  }
-
-  .acoes {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    flex-wrap: wrap;
-  }
-
-  .acoes form {
-    display: contents;
   }
 
   .estado {
@@ -371,11 +325,10 @@
     color: var(--seno-red);
   }
 
-  .edicao {
-    display: flex;
-    gap: 0.4rem;
-    align-items: center;
-    flex-wrap: wrap;
+  .vazio {
+    color: var(--seno-gray-500);
+    text-align: center;
+    padding: 1rem;
   }
 
   .paginacao {
@@ -395,11 +348,5 @@
   .botao-pag.desabilitado {
     color: var(--seno-gray-300);
     pointer-events: none;
-  }
-
-  .nota {
-    color: var(--seno-gray-500);
-    font-size: 0.8rem;
-    margin: -0.5rem 0 0;
   }
 </style>

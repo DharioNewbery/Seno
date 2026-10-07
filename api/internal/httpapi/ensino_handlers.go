@@ -106,8 +106,9 @@ func (d *Dependencies) CriarPeriodo(c *gin.Context) {
 // para matricular (professor+staff; cargo de student fixo no filtro),
 // devolvendo {total, usuarios}.
 func (d *Dependencies) ListarAlunos(c *gin.Context) {
+	user, _ := currentUser(c)
 	pagina, por := numPagina(c)
-	lista, err := d.UsuarioS.Listar(c.Request.Context(), usuarios.Filtros{
+	lista, err := d.UsuarioS.Listar(c.Request.Context(), user, usuarios.Filtros{
 		Busca:  c.Query("busca"),
 		Status: c.Query("status"),
 		Cargo:  domain.RoleStudent,

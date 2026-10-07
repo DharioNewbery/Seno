@@ -313,14 +313,21 @@ func intOf(v any) int {
 	return -1
 }
 
-// criarProfessor via gestao de usuários (super): nasce pendente + convite.
+// criarProfessor via gestao de usuários (super): nasce pendente, sem
+// cargos, e o super atribui professor pela rota de cargos.
 func criarProfessor(t *testing.T, r *gin.Engine, tokSuper, email, nome, sobrenome string) {
 	t.Helper()
 	w, body := chama(t, r, "POST", "/v1/users",
-		`{"email":"`+email+`","first_name":"`+nome+`","last_name":"`+sobrenome+`","cargo":"professor"}`,
+		`{"email":"`+email+`","first_name":"`+nome+`","last_name":"`+sobrenome+`"}`,
 		autenticado(tokSuper))
 	if w.Code != http.StatusCreated {
 		t.Fatalf("criar professor %s: status %d corpo %v", email, w.Code, body)
+	}
+	id := int64(body["id"].(float64))
+	w, body = chama(t, r, "PUT", "/v1/users/"+intStr(id)+"/cargos",
+		`{"cargos":["professor"]}`, autenticado(tokSuper))
+	if w.Code != http.StatusOK {
+		t.Fatalf("cargo de professor %s: status %d corpo %v", email, w.Code, body)
 	}
 }
 

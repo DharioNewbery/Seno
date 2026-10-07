@@ -11,11 +11,12 @@ import (
 	"github.com/seno-project/seno/api/internal/usuarios"
 )
 
-// Handlers da gestão de professores e admins (portal admin; apenas o
-// super administra contas de admin — ARQUITETURA §5.4).
+// Handlers da gestão de usuários do portal admin (apenas o super
+// administra contas de admin — ARQUITETURA §5.4).
 
 // ListarUsuarios: GET /v1/users?busca&status&cargo&pagina&por
 func (d *Dependencies) ListarUsuarios(c *gin.Context) {
+	user, _ := currentUser(c)
 	f := usuarios.Filtros{
 		Busca:  c.Query("busca"),
 		Status: c.Query("status"),
@@ -27,7 +28,7 @@ func (d *Dependencies) ListarUsuarios(c *gin.Context) {
 	if n, err := strconv.Atoi(c.Query("por")); err == nil {
 		f.Por = n
 	}
-	pagina, err := d.UsuarioS.Listar(c.Request.Context(), f)
+	pagina, err := d.UsuarioS.Listar(c.Request.Context(), user, f)
 	if err != nil {
 		platform.ErrorBody(c, err)
 		return
@@ -35,12 +36,12 @@ func (d *Dependencies) ListarUsuarios(c *gin.Context) {
 	c.JSON(http.StatusOK, pagina)
 }
 
-// criarPedido é o corpo do POST /v1/users.
+// criarPedido é o corpo do POST /v1/users — sem cargos: nascem depois,
+// atribuídos na inspeção.
 type criarPedido struct {
-	Email     string      `json:"email"`
-	FirstName string      `json:"first_name"`
-	LastName  string      `json:"last_name"`
-	Cargo     domain.Role `json:"cargo"`
+	Email     string `json:"email"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
 }
 
 // CriarUsuario: POST /v1/users — nasce pendente com convite por e-mail.
@@ -54,13 +55,52 @@ func (d *Dependencies) CriarUsuario(c *gin.Context) {
 		Email:     req.Email,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
-		Cargo:     req.Cargo,
 	})
 	if err != nil {
 		platform.ErrorBody(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, criado)
+}
+
+// VerUsuario: GET /v1/users/:id — inspeção detalhada.
+func (d *Dependencies) VerUsuario(c *gin.Context) {
+	user, _ := currentUser(c)
+	id, ok := idDaRota(c)
+	if !ok {
+		return
+	}
+	alvo, err := d.UsuarioS.Ver(c.Request.Context(), user, id)
+	if err != nil {
+		platform.ErrorBody(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, alvo)
+}
+
+// cargosPedido é o corpo do PUT /v1/users/:id/cargos.
+type cargosPedido struct {
+	Cargos []domain.Role `json:"cargos"`
+}
+
+// AlterarCargosUsuario: PUT /v1/users/:id/cargos — substitui os cargos.
+func (d *Dependencies) AlterarCargosUsuario(c *gin.Context) {
+	user, _ := currentUser(c)
+	id, ok := idDaRota(c)
+	if !ok {
+		return
+	}
+	var req cargosPedido
+	if !bindJSON(c, &req) {
+		return
+	}
+	editado, err := d.UsuarioS.AlterarCargos(
+		c.Request.Context(), user, id, req.Cargos)
+	if err != nil {
+		platform.ErrorBody(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, editado)
 }
 
 // editarPedido é o corpo do PATCH /v1/users/:id.

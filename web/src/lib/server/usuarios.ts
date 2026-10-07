@@ -38,15 +38,29 @@ export async function listarUsuarios(
   return { res, body };
 }
 
+/** Detalhe de um usuário: GET /v1/users/:id (inspeção). */
+export async function obterUsuario(
+  request: Request,
+  token: string,
+  id: number,
+): Promise<{ res: Response; body: Usuario | unknown }> {
+  const res = await apiFetch(`/v1/users/${id}`, request, {
+    method: "GET",
+    headers: comBearer(token),
+  });
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    // corpo não-JSON da API: mantém null
+  }
+  return { res, body };
+}
+
 export async function criarUsuario(
   request: Request,
   token: string,
-  cadastro: {
-    email: string;
-    first_name: string;
-    last_name: string;
-    cargo: Cargo;
-  },
+  cadastro: { email: string; first_name: string; last_name: string },
 ): Promise<Response> {
   return apiFetch("/v1/users", request, {
     method: "POST",
@@ -65,6 +79,20 @@ export async function editarUsuario(
     method: "PATCH",
     headers: comBearer(token),
     body: JSON.stringify(dados),
+  });
+}
+
+/** Substitui o conjunto de cargos: PUT /v1/users/:id/cargos. */
+export async function alterarCargos(
+  request: Request,
+  token: string,
+  id: number,
+  cargos: Cargo[],
+): Promise<Response> {
+  return apiFetch(`/v1/users/${id}/cargos`, request, {
+    method: "PUT",
+    headers: comBearer(token),
+    body: JSON.stringify({ cargos }),
   });
 }
 
