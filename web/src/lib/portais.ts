@@ -40,7 +40,7 @@ export const PORTAIS: Record<PortalId, PortalDef> = {
         href: "/aluno/atividades",
         sub: [
           { rotulo: "Todas as atividades", href: "/aluno/atividades" },
-          { rotulo: "Continuar em andamento", href: "/aluno/atividades" },
+          { rotulo: "Execuções de teste", href: "/aluno/testes" },
         ],
       },
     ],
