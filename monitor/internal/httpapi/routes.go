@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/seno-project/seno/monitor/internal/atividades"
 	"github.com/seno-project/seno/monitor/internal/platform"
 )
 
@@ -18,13 +19,15 @@ type PGXPool interface {
 // Dependencies carrega os serviços compartilhados dos handlers. Rotas de
 // aluno (Fase 4) e rotas internas HMAC (Fase 2) entram aqui nas fases seguintes.
 type Dependencies struct {
-	Cfg  *platform.Config
-	Pool PGXPool
+	Cfg        *platform.Config
+	Pool       PGXPool
+	AtividadeS *atividades.Service
 }
 
 // RegisterRoutes registra as rotas correntes do Monitor.
 func RegisterRoutes(r *gin.Engine, d *Dependencies) {
 	r.GET("/healthz", d.Healthz)
+	r.POST("/interna/v1/atividades", d.ReceberAtividade)
 }
 
 // Healthz verifica integridade do processo e do banco (compose healthcheck).

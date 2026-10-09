@@ -11,9 +11,9 @@ import (
 // Config carrega toda a configuração do Monitor a partir de variáveis de
 // ambiente (spec §7, MONITOR_FLUXO_ALUNO.md). Nenhum segredo vive no código.
 type Config struct {
-	Addr             string        // endereço HTTP escutado
-	DatabaseURL      string        // DSN do PostgreSQL do Monitor
-	Secret           string        // HMAC compartilhado com a API (rotas internas + SSO)
+	Addr             string // endereço HTTP escutado
+	DatabaseURL      string // DSN do PostgreSQL do Monitor
+	Secret           string // HMAC compartilhado com a API (rotas internas + SSO)
 	ShutdownDeadline time.Duration
 
 	// Limiares (valores são defaults de ambiente, usados nas fases seguintes).
@@ -24,6 +24,7 @@ type Config struct {
 	PreAvaTTL          time.Duration // janela de escolha após pré-avaliação
 	AlunoExecMaxPerMin int           // limite de ensaios por minuto
 	ExecucaoRetencao   time.Duration // retenção da tabela execucao
+	HMACJanela         time.Duration // tolerância de relógio nas rotas internas (anti-replay)
 
 	// Judge0 (Fase 5; placeholder para validar o .env desde o começo).
 	Judge0URL    string
@@ -44,6 +45,7 @@ func LoadConfig() (*Config, error) {
 		PreAvaTTL:          envDuration("SENO_PRE_AVA_TTL_S", 15*time.Minute),
 		AlunoExecMaxPerMin: envInt("SENO_ALUNO_EXEC_MAX_PER_MIN", 5),
 		ExecucaoRetencao:   envDuration("SENO_EXECUCAO_RETENCAO_D", 7*24*time.Hour),
+		HMACJanela:         envDuration("SENO_MONITOR_HMAC_JANELA_S", 60*time.Second),
 		Judge0URL:          os.Getenv("SENO_JUDGE0_URL"),
 		Judge0Token:        os.Getenv("SENO_JUDGE0_TOKEN"),
 		Judge0Secret:       os.Getenv("SENO_JUDGE0_CALLBACK_SECRET"),

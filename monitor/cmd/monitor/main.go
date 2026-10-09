@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/seno-project/seno/monitor/db"
+	"github.com/seno-project/seno/monitor/internal/atividades"
 	"github.com/seno-project/seno/monitor/internal/httpapi"
 	"github.com/seno-project/seno/monitor/internal/platform"
 )
@@ -57,8 +58,9 @@ func main() {
 	}
 	r := gin.New()
 	httpapi.RegisterRoutes(r, &httpapi.Dependencies{
-		Cfg:  cfg,
-		Pool: pool,
+		Cfg:        cfg,
+		Pool:       pool,
+		AtividadeS: atividades.New(pool),
 	})
 
 	srv := &http.Server{Addr: cfg.Addr, Handler: r}

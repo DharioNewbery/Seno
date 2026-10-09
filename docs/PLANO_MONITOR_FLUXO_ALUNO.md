@@ -73,6 +73,28 @@ uma atividade no Monitor.
 segredo) e é persistida; reenvio é idempotente; MAC inválido → 401. Testes Go
 cobrindo os 4 erros. O item 4 só é verificado depois da Fase 9.
 
+### Deviação documentada — assinatura MAC (Fase 2)
+
+A spec §2 define `hmac sha256(SENO_MONITOR_SECRET, corpo)` com MAC apenas do
+corpo. **Desvio decidido**: o MAC cobre `tempo "\n" corpo` (vetor de
+`contract/hmac.go`). Motivo: com o MAC só do corpo, o `X-Monitor-Time` não é
+protegido e a janela "anti-replay" da spec não protege — capturar corpo+MAC e
+reenviar com Time novo passaria. Cobrindo o tempo, a retransmissão dentro da
+janela é a única sobrevivente e fora dela é bloqueada claramente. Nomes de
+header mantidos (`X-Monitor-MAC`, `X-Monitor-Time`).
+
+### Deviação documentada — st.go na Fase 3, não na 2
+
+O plano original pôs `st.go` no `contract/` na Fase 2. Ficou para uma fase só
+de SSO (Fase 3) — cheque difuso: nada da Fase 2 usa o token.
+
+### Deviação documentada — sqlc adiado
+
+O Monitor acessa o banco com pgx direto nos services (`internal/atividades`
+recebe/consulta com SQL textual). A CLI `sqlc` não está no ambiente de dev;
+instalá-la e introduzir `db/queries` + `sqlc.yaml` no monitor entra como tarefa
+de higiene antes da Fase 4 (a API usa o padrão com gerado commitado).
+
 ## Fase 3 — SSO e sessão do aluno (testável sem a API)
 
 **Objetivo:** aluno entra no Monitor com cookie próprio — e o Monitor é
