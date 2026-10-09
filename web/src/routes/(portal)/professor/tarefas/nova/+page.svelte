@@ -72,7 +72,7 @@
           <textarea name="stdout" rows="2" bind:value={t.stdout}
             placeholder="Saída esperada"></textarea>
           <label class="linha-pequena">
-            <input type="checkbox" bind:value={t.publico} />
+            <input type="checkbox" bind:checked={t.publico} />
             <span>Público</span>
           </label>
           <button type="button" class="pequeno vermelho" onclick={() => delTeste(i)}>
