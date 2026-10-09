@@ -25,23 +25,82 @@ const (
 	subTest = 12
 )
 
-// semeiaAtividadeDB insere/reinsere a atividade de teste com status dado e
-// as matrículas do snapshot, com janela aberta (prazo = +30 min).
+// Marcadores exclusivos do fixture para o teste anti-vazamento: se o JSON
+// de resposta de aluno contiver qualquer um, um privado escapou.
+const (
+	privStdin  = "PRIV-STDIN-secreto-Uai7Equ"
+	privStdout = "PRIV-STDOUT-secreto-Ohsom3Es"
+	pubStdin   = "3"
+	pubStdout  = "6"
+)
+
+// semeiaAtividadeDB insere/reinsere a atividade de teste (envelope completo:
+// janela+regras+carga com 1 tarefa, 1 teste público e 1 privado) com status
+// dado e as matrículas do snapshot.
 func semeiaAtividadeDB(pool *pgxpool.Pool, status string, alunos ...int64) error {
-	janela := map[string]any{
-		"inicio":        time.Now().Add(-5 * time.Minute),
-		"prazo":         time.Now().Add(30 * time.Minute),
-		"duracao_seg":   1800,
-		"pode_atrasado": true,
+	tt := contract.Transferencia{
+		APIID:    7,
+		GeradaEm: time.Now(),
+		Turma:    contract.Turma{APIID: 7, Nome: "2026.1 Filas"},
+		Janela: contract.Janela{
+			Inicio:       time.Now().Add(-5 * time.Minute),
+			Prazo:        time.Now().Add(30 * time.Minute),
+			DuracaoSeg:   intPtr(1800),
+			PodeAtrasado: true,
+		},
+		Regras: contract.Regras{MaxSubmissoes: 1, LinguagensPermitidas: []string{"python"}},
+		Carga: contract.Carga{
+			Atividade: contract.AtividadeCarga{APIID: 12, Nome: "Prova 1", Enunciado: "Implemente o dobro."},
+			Tarefas: []contract.TarefaCarga{{
+				Ordem: 1, TarefaAPIID: 5, Nome: "Dobro", ValorPts: 10,
+				Enunciado: "Leia um inteiro e imprima o dobro.", Linguagem: "python",
+				Limites: &contract.Limites{TempoCPUMs: 2000, TempoTotalMs: 5000, MemoriaMB: 256},
+				Testes: []contract.TesteCarga{
+					{Stdin: pubStdin, StdoutEsperado: pubStdout, Publico: true},
+					{Stdin: privStdin, StdoutEsperado: privStdout, Publico: false},
+				},
+			}},
+		},
 	}
-	carga, err := json.Marshal(map[string]any{"janela": janela})
+	carga, err := json.Marshal(tt)
 	if err != nil {
 		return err
 	}
 	if _, err := pool.Exec(context.Background(), `INSERT INTO atividade
-	    (monitor_id, api_id, carga, recebida_em, status) VALUES ($1, 7, $2::jsonb, now(), $3)
-	    ON CONFLICT (monitor_id) DO UPDATE SET status = excluded.status`,
-		midTest, string(carga), status); err != nil {
+	    (monitor_id, api_id, carga, recebida_em, status) VALUES ($1, $2, $3::jsonb, now(), $4)
+	    ON CONFLICT (monitor_id) DO UPDATE SET status = excluded.status, carga = excluded.carga`,
+		midTest, tt.APIID, string(carga), status); err != nil {
+		return err
+	}
+	if _, err := pool.Exec(context.Background(),
+		`DELETE FROM atividade_aluno WHERE monitor_id = $1`, midTest); err != nil {
+		return err
+	}
+	for _, a := range alunos {
+		if _, err := pool.Exec(context.Background(),
+			`INSERT INTO atividade_aluno (monitor_id, aluno_api_id) VALUES ($1, $2)`,
+			midTest, a); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func intPtr(i int) *int { return &i }
+
+// semeiaAtividadeJanelaDB: variante com janela própria (testes de 409/410).
+func semeiaAtividadeJanelaDB(pool *pgxpool.Pool, status string, j contract.Janela, alunos ...int64) error {
+	tt := contract.Transferencia{
+		APIID: 7, GeradaEm: time.Now(),
+		Turma:  contract.Turma{APIID: 7, Nome: "T"},
+		Janela: j,
+		Regras: contract.Regras{MaxSubmissoes: 1},
+	}
+	carga, _ := json.Marshal(tt)
+	if _, err := pool.Exec(context.Background(), `INSERT INTO atividade
+	    (monitor_id, api_id, carga, recebida_em, status) VALUES ($1, $2, $3::jsonb, now(), $4)
+	    ON CONFLICT (monitor_id) DO UPDATE SET status = excluded.status, carga = excluded.carga`,
+		midTest, tt.APIID, string(carga), status); err != nil {
 		return err
 	}
 	if _, err := pool.Exec(context.Background(),

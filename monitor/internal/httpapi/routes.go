@@ -11,6 +11,7 @@ import (
 	"github.com/seno-project/seno/monitor/internal/atividades"
 	"github.com/seno-project/seno/monitor/internal/platform"
 	"github.com/seno-project/seno/monitor/internal/sessao"
+	"github.com/seno-project/seno/monitor/internal/tentativas"
 )
 
 // PGXPool é a interface mínima do pool usada pelos handlers (facilita testes).
@@ -26,6 +27,7 @@ type Dependencies struct {
 	DB         *pgxpool.Pool
 	AtividadeS *atividades.Service
 	SessaoS    *sessao.Service
+	TentativaS *tentativas.Service
 	Entradas   *sessao.Limiter
 }
 
@@ -35,9 +37,10 @@ func RegisterRoutes(r *gin.Engine, d *Dependencies) {
 	r.POST("/interna/v1/atividades", d.ReceberAtividade)
 	r.GET("/entrar", d.Entrar)
 
-	// rotas de aluno: protegidas por sessão de entrada (Fase 4 as preenche)
+	// rotas de aluno: protegidas por sessão de entrada
 	a := r.Group("/a", d.RequireSessao)
-	_ = a
+	a.POST("/atividade/:monitor_id/abrir", d.AbrirAtividade)
+	a.PUT("/atividade/:monitor_id/tentativa", d.SalvarTentativa)
 }
 
 // Healthz verifica integridade do processo e do banco (compose healthcheck).

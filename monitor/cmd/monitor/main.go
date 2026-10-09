@@ -22,6 +22,7 @@ import (
 	"github.com/seno-project/seno/monitor/internal/httpapi"
 	"github.com/seno-project/seno/monitor/internal/platform"
 	"github.com/seno-project/seno/monitor/internal/sessao"
+	"github.com/seno-project/seno/monitor/internal/tentativas"
 )
 
 func main() {
@@ -64,6 +65,7 @@ func main() {
 		DB:         pool,
 		AtividadeS: atividades.New(pool),
 		SessaoS:    sessao.New(pool),
+		TentativaS: tentativas.New(pool, cfg.SnapshotIntervalo),
 		Entradas:   sessao.NovoLimiter(10, 5*time.Minute),
 	})
 

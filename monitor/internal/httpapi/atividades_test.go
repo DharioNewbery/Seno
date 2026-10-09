@@ -18,6 +18,7 @@ import (
 	"github.com/seno-project/seno/monitor/internal/atividades"
 	"github.com/seno-project/seno/monitor/internal/platform"
 	"github.com/seno-project/seno/monitor/internal/sessao"
+	"github.com/seno-project/seno/monitor/internal/tentativas"
 )
 
 const segTest = "segredo-de-teste-para-o-monitor-32-bytes!!"
@@ -59,9 +60,10 @@ func montaMonitor(t *testing.T, pool *pgxpool.Pool) (*Dependencies, *gin.Engine)
 	cfg := &platform.Config{
 		Secret:            segTest,
 		MaxPayloadBytes:   512 * 1024,
+		MaxSnapshotBytes:  4096,
 		TokenSSOTTL:       5 * time.Minute,
 		HMACJanela:        time.Minute,
-		SnapshotIntervalo: 60 * time.Second,
+		SnapshotIntervalo: 0, // snapshota toda gravação: facilita assert
 	}
 	deps := &Dependencies{
 		Cfg:        cfg,
@@ -69,6 +71,7 @@ func montaMonitor(t *testing.T, pool *pgxpool.Pool) (*Dependencies, *gin.Engine)
 		DB:         pool,
 		AtividadeS: atividades.New(pool),
 		SessaoS:    sessao.New(pool),
+		TentativaS: tentativas.New(pool, cfg.SnapshotIntervalo),
 		Entradas:   sessao.NovoLimiter(10, 5*time.Minute),
 	}
 	r := gin.New()
