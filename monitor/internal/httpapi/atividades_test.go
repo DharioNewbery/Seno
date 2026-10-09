@@ -17,6 +17,7 @@ import (
 	"github.com/seno-project/seno/monitor/db"
 	"github.com/seno-project/seno/monitor/internal/atividades"
 	"github.com/seno-project/seno/monitor/internal/platform"
+	"github.com/seno-project/seno/monitor/internal/sessao"
 )
 
 const segTest = "segredo-de-teste-para-o-monitor-32-bytes!!"
@@ -42,8 +43,8 @@ func testeDB(t *testing.T) *pgxpool.Pool {
 	if err := platform.MigrateUp(ctx, pool, db.Migrations); err != nil {
 		t.Fatalf("migrações: %v", err)
 	}
-	_, err = pool.Exec(ctx, `TRUNCATE pre_avaliacao, submissao, execucao,
-		rascunho_ponto, tentativa, sessao, atividade_aluno, atividade
+	_, err = pool.Exec(ctx, `TRUNCATE sso_consumo, pre_avaliacao, submissao,
+		execucao, rascunho_ponto, tentativa, sessao, atividade_aluno, atividade
 		RESTART IDENTITY CASCADE`)
 	if err != nil {
 		t.Fatalf("limpeza do banco: %v", err)
@@ -62,7 +63,14 @@ func montaMonitor(t *testing.T, pool *pgxpool.Pool) (*Dependencies, *gin.Engine)
 		HMACJanela:        time.Minute,
 		SnapshotIntervalo: 60 * time.Second,
 	}
-	deps := &Dependencies{Cfg: cfg, Pool: pool, AtividadeS: atividades.New(pool)}
+	deps := &Dependencies{
+		Cfg:        cfg,
+		Pool:       pool,
+		DB:         pool,
+		AtividadeS: atividades.New(pool),
+		SessaoS:    sessao.New(pool),
+		Entradas:   sessao.NovoLimiter(10, 5*time.Minute),
+	}
 	r := gin.New()
 	RegisterRoutes(r, deps)
 	return deps, r

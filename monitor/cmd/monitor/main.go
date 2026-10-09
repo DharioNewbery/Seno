@@ -21,6 +21,7 @@ import (
 	"github.com/seno-project/seno/monitor/internal/atividades"
 	"github.com/seno-project/seno/monitor/internal/httpapi"
 	"github.com/seno-project/seno/monitor/internal/platform"
+	"github.com/seno-project/seno/monitor/internal/sessao"
 )
 
 func main() {
@@ -60,7 +61,10 @@ func main() {
 	httpapi.RegisterRoutes(r, &httpapi.Dependencies{
 		Cfg:        cfg,
 		Pool:       pool,
+		DB:         pool,
 		AtividadeS: atividades.New(pool),
+		SessaoS:    sessao.New(pool),
+		Entradas:   sessao.NovoLimiter(10, 5*time.Minute),
 	})
 
 	srv := &http.Server{Addr: cfg.Addr, Handler: r}

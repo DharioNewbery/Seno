@@ -6,9 +6,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/seno-project/seno/monitor/internal/atividades"
 	"github.com/seno-project/seno/monitor/internal/platform"
+	"github.com/seno-project/seno/monitor/internal/sessao"
 )
 
 // PGXPool é a interface mínima do pool usada pelos handlers (facilita testes).
@@ -21,13 +23,21 @@ type PGXPool interface {
 type Dependencies struct {
 	Cfg        *platform.Config
 	Pool       PGXPool
+	DB         *pgxpool.Pool
 	AtividadeS *atividades.Service
+	SessaoS    *sessao.Service
+	Entradas   *sessao.Limiter
 }
 
 // RegisterRoutes registra as rotas correntes do Monitor.
 func RegisterRoutes(r *gin.Engine, d *Dependencies) {
 	r.GET("/healthz", d.Healthz)
 	r.POST("/interna/v1/atividades", d.ReceberAtividade)
+	r.GET("/entrar", d.Entrar)
+
+	// rotas de aluno: protegidas por sessão de entrada (Fase 4 as preenche)
+	a := r.Group("/a", d.RequireSessao)
+	_ = a
 }
 
 // Healthz verifica integridade do processo e do banco (compose healthcheck).

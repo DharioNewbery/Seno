@@ -18,6 +18,7 @@ const (
 	CodeFinalizada   = "FINALIZADA"         // cota de submissões atingida (403)
 	CodeInicioFuturo = "INICIO"             // 409 {erro:"inicio"}
 	CodeRateLimited  = "LIMITE_EXCEDIDO"
+	CodeSemPermissao = "SEM_PERMISSAO" // aluno de fora do snapshot (403)
 )
 
 // ErroEnvelope é o JSON completo no fio: {"erro": {...}}.

@@ -25,6 +25,7 @@ type Config struct {
 	AlunoExecMaxPerMin int           // limite de ensaios por minuto
 	ExecucaoRetencao   time.Duration // retenção da tabela execucao
 	HMACJanela         time.Duration // tolerância de relógio nas rotas internas (anti-replay)
+	CookieSecure       bool          // Secure do hm_sess (produção true; dev HTTP localhost false)
 
 	// Judge0 (Fase 5; placeholder para validar o .env desde o começo).
 	Judge0URL    string
@@ -46,6 +47,7 @@ func LoadConfig() (*Config, error) {
 		AlunoExecMaxPerMin: envInt("SENO_ALUNO_EXEC_MAX_PER_MIN", 5),
 		ExecucaoRetencao:   envDuration("SENO_EXECUCAO_RETENCAO_D", 7*24*time.Hour),
 		HMACJanela:         envDuration("SENO_MONITOR_HMAC_JANELA_S", 60*time.Second),
+		CookieSecure:       envBool("SENO_COOKIE_SECURE", true),
 		Judge0URL:          os.Getenv("SENO_JUDGE0_URL"),
 		Judge0Token:        os.Getenv("SENO_JUDGE0_TOKEN"),
 		Judge0Secret:       os.Getenv("SENO_JUDGE0_CALLBACK_SECRET"),
@@ -73,6 +75,13 @@ func envInt(key string, def int) int {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
 		}
+	}
+	return def
+}
+
+func envBool(key string, def bool) bool {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		return v == "true" || v == "1" || v == "yes"
 	}
 	return def
 }
