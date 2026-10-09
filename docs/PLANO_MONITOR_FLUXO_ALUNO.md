@@ -212,7 +212,7 @@ Monitor e a listagem na API reflete o estado.
 |---|---|
 | Monitor como 4º serviço Go no monorepo | Sim; raiz `monitor/`, padrões copiados de `api/` |
 | Reusar código da API por imports | Apenas um módulo **contrato** compartilhado (`contract/`: HMAC, token `st`, structs de transferência/estado, **erros de rede**, importado por api e monitor); plataforma mínima (`internal/platform`, **inclui logger**) segue **duplicada**, e pacotes `judge0`/`tentativas` são portados, não importados |
-| Banco do Monitor | Instância PostgreSQL própria (container + volume + backup) |
+| Banco do Monitor | Banco separado (`seno_monitor`) no **mesmo servidor PostgreSQL** — revisado do "instância própria": um container a menos para operar; a independência que a spec exige é lógica (o Monitor não ver seno); backup via `pg_dump` por database |
 | Assinatura do `st` | HMAC já usado nas rotas internas (evita JWT + dependência) |
 | Estado para a API | Poll via job periódico primeiro; pós-evento depois, se necessário |
 | `st` e transferência em dev | Emissores de teste (`cmd/*`) que usam só `SENO_MONITOR_SECRET` — a API é opcional em dev |
