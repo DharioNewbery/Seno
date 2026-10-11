@@ -13,3 +13,6 @@ COPY --from=build /bin/seno-api /seno-api
 USER nonroot:nonroot
 EXPOSE 8080
 ENTRYPOINT ["/seno-api"]
+# shortcut: build não inclui contract/ (a API importa o contrato desde a
+# Fase 9.2) — quando compuser a stack de produção, use contexto na raiz do
+# monorepo com os COPY de monitor/Dockerfile como guia.

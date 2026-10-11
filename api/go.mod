@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/jackc/pgx/v5 v5.11.0
+	github.com/seno-project/seno/contract v0.0.0
 	golang.org/x/crypto v0.57.0
 )
 
@@ -44,3 +45,5 @@ require (
 	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
+
+replace github.com/seno-project/seno/contract => ../contract

@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/seno-project/seno/contract"
 )
 
 // Config carrega toda a configuração da API a partir de variáveis de
@@ -32,6 +34,12 @@ type Config struct {
 	Judge0URL    string
 	Judge0Token  string // X-Auth-Token (se exigido pela instância)
 	Judge0Secret string // chave compartilhada do callback (?key=)
+
+	// Monitor (Fase 9 do PLANO_MONITOR): vazio = integração desligada.
+	MonitorURL       string        // base do Monitor vista pela API (ex.: http://monitor:8081)
+	MonitorPublicURL string        // base do Monitor vista pelo NAVEGADOR (redirect do BFF)
+	MonitorSecret    string        // HMAC compartilhado (rotas internas + token st)
+	PollEstado       time.Duration // intervalo do job que consome GET /interna/.../estado
 }
 
 // LoadConfig lê o ambiente e devolve a configuração validada.
@@ -53,6 +61,10 @@ func LoadConfig() (*Config, error) {
 		Judge0URL:        os.Getenv("SENO_JUDGE0_URL"),
 		Judge0Token:      os.Getenv("SENO_JUDGE0_TOKEN"),
 		Judge0Secret:     os.Getenv("SENO_JUDGE0_CALLBACK_KEY"),
+		MonitorURL:       strings.TrimSuffix(strings.TrimSpace(os.Getenv("SENO_MONITOR_URL")), "/"),
+		MonitorPublicURL: strings.TrimSuffix(strings.TrimSpace(os.Getenv("SENO_MONITOR_PUBLIC_URL")), "/"),
+		MonitorSecret:    os.Getenv("SENO_MONITOR_SECRET"),
+		PollEstado:       envDuration("SENO_POLL_ESTADO_S", 30*time.Second),
 	}
 
 	c.DatabaseURL = os.Getenv("SENO_DATABASE_URL")
@@ -64,6 +76,12 @@ func LoadConfig() (*Config, error) {
 	}
 	if c.WebOrigin == "" {
 		return nil, fmt.Errorf("SENO_WEB_ORIGIN é obrigatório (origem do BFF, ex.: https://seno.ufpa.br)")
+	}
+	if (c.MonitorURL != "" || c.MonitorPublicURL != "") && len(c.MonitorSecret) < contract.HMACMinSecretLen {
+		return nil, fmt.Errorf("integração com o Monitor exige SENO_MONITOR_SECRET de pelo menos %d bytes", contract.HMACMinSecretLen)
+	}
+	if (c.MonitorURL == "") != (c.MonitorPublicURL == "") {
+		return nil, fmt.Errorf("SENO_MONITOR_URL e SENO_MONITOR_PUBLIC_URL são configurados juntos (interno e navegador)")
 	}
 	return c, nil
 }
