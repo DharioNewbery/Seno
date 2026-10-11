@@ -108,6 +108,22 @@ func (d *Dependencies) ViewAluno(c *gin.Context) {
 	c.JSON(http.StatusOK, visao)
 }
 
+// EntrarMonitor: GET /v1/atribuicoes/:id/entrar — emite `st` + URL do
+// Monitor (Fase 9.1; regras no serviço — student + matrícula + transferida).
+func (d *Dependencies) EntrarMonitor(c *gin.Context) {
+	user, _ := currentUser(c)
+	id, ok := idDaRota(c)
+	if !ok {
+		return
+	}
+	url, err := d.Monitor.Entrar(c.Request.Context(), user, id)
+	if err != nil {
+		platform.ErrorBody(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"url": url})
+}
+
 // ExcluirAtribuicao: DELETE /v1/atribuicoes/:id — dono|staff.
 func (d *Dependencies) ExcluirAtribuicao(c *gin.Context) {
 	user, _ := currentUser(c)

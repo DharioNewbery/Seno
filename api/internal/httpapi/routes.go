@@ -184,6 +184,10 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	aluno.Use(deps.RequireAuth())
 	aluno.GET("", deps.ViewAluno)
 
+	// Entrar no Monitor (Fase 9.1): aluno autenticado recebe `st` curto +
+	// URL de entrada; regras (student, matrícula, transferido) no serviço.
+	sub.GET("/entrar", deps.EntrarMonitor)
+
 	// Portal aluno: turmas e atribuições do próprio usuário (§Portal
 	// Aluno); cargo student exigido no serviço.
 	me := v1.Group("/me")

@@ -82,7 +82,9 @@
         <div class="acao-area">
           <span class="estado {estado(a).classe}">{estado(a).rotulo}</span>
           {#if a.turma_ativa && !a.entregue}
-            <a class="abrir" href={`/aluno/atividade/${a.id}`}>
+            <!-- Fase 9.4: entra pelo BFF (st → Monitor); cai no editor se a
+                 integração estiver desligada -->
+            <a class="abrir" href={`/aluno/monitor/${a.id}`}>
               {a.em_andamento ? `Continuar (rev. ${a.minha_revisao})` : "Abrir"} →
             </a>
           {:else if a.entregue}

@@ -15,12 +15,15 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/seno-project/seno/contract"
 
+	"github.com/seno-project/seno/api/db/gen"
+	"github.com/seno-project/seno/api/internal/domain"
 	"github.com/seno-project/seno/api/internal/fila"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
@@ -30,21 +33,23 @@ import (
 const KindTransferir = "monitor_transferir"
 
 type Service struct {
-	st     *store.Store
-	audit  *platform.Audit
-	url    string // base do Monitor vista pela API (ex.: http://monitor:8081)
-	secret []byte
-	http   *http.Client
+	st        *store.Store
+	audit     *platform.Audit
+	url       string // base do Monitor vista pela API (ex.: http://monitor:8081)
+	publicURL string // base do Monitor vista pelo NAVEGADOR (redirect)
+	secret    []byte
+	http      *http.Client
 }
 
 // New cria o serviço; url vazio = integração desligada (Enfileirar no-op).
-func New(st *store.Store, audit *platform.Audit, url, secret string) *Service {
+func New(st *store.Store, audit *platform.Audit, url, publicURL, secret string) *Service {
 	if url == "" {
 		return &Service{st: st}
 	}
 	return &Service{
-		st: st, audit: audit, url: url, secret: []byte(secret),
-		http: &http.Client{Timeout: 30 * time.Second},
+		st: st, audit: audit, url: url, publicURL: publicURL,
+		secret: []byte(secret),
+		http:   &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -362,4 +367,56 @@ func (s *Service) gravarMonitorID(ctx context.Context, atribuicaoID int64, mid s
 		return fmt.Errorf("monitor_transferir: gravando monitor_id: %w", err)
 	}
 	return nil
+}
+
+// URLDevolve no /entrar (Fase 9.1): sessão real + matrícula ativa (BFF já
+// autenticou) e emite o token `st` do SSO (§3) com a URL de entrada do
+// Monitor vista pelo navegador.
+func (s *Service) Entrar(ctx context.Context, aluno domain.User, atribuicaoID int64) (string, error) {
+	if !s.Ligado() {
+		return "", platform.NewAPIError(
+			http.StatusServiceUnavailable, platform.CodeConflict,
+			"Realização pelo Monitor desligada nesta instalação.")
+	}
+	if !domain.HasAnyRole(aluno.Roles, domain.RoleStudent) {
+		return "", platform.NewAPIError(
+			http.StatusForbidden, platform.CodeForbidden,
+			"Operação exclusiva de alunos.")
+	}
+	var turmaID int64
+	var mid *string
+	if err := s.st.Pool.QueryRow(ctx,
+		`SELECT turma_id, monitor_id FROM atribuicoes WHERE id = $1`, atribuicaoID,
+	).Scan(&turmaID, &mid); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", platform.NewAPIError(
+				http.StatusNotFound, platform.CodeNotFound, "Atribuição não encontrada.")
+		}
+		return "", err
+	}
+	mat, err := s.st.Q.MatriculaAtiva(ctx, gen.MatriculaAtivaParams{
+		TurmaID: turmaID, AlunoID: aluno.ID,
+	})
+	if err != nil {
+		return "", err
+	}
+	if !mat {
+		return "", platform.NewAPIError(
+			http.StatusNotFound, platform.CodeNotFound, "Atribuição não encontrada.")
+	}
+	if mid == nil || *mid == "" {
+		return "", platform.NewAPIError(
+			http.StatusConflict, platform.CodeConflict,
+			"Atribuição ainda não transferida ao Monitor.")
+	}
+	jti, err := contract.STNonce()
+	if err != nil {
+		return "", err
+	}
+	st, err := contract.AssinarST(s.secret, time.Now(), 5*time.Minute,
+		contract.SSOIss, contract.SSOAud, aluno.ID, *mid, jti)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(s.publicURL, "/") + "/entrar?st=" + st, nil
 }

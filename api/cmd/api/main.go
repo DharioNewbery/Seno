@@ -74,7 +74,7 @@ func main() {
 		cfg.Judge0URL, cfg.Judge0Token, cfg.Judge0Secret, cfg.WebOrigin,
 	)
 	judge0Cli := judge0.NewClient(judge0Cfg)
-	monitorSvc := monitor.New(st, audit, cfg.MonitorURL, cfg.MonitorSecret)
+	monitorSvc := monitor.New(st, audit, cfg.MonitorURL, cfg.MonitorPublicURL, cfg.MonitorSecret)
 	deps := &httpapi.Dependencies{
 		Cfg:        cfg,
 		Pool:       pool,

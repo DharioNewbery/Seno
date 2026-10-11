@@ -8,12 +8,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/seno-project/seno/api/db"
+	"github.com/seno-project/seno/api/internal/domain"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
 	"github.com/seno-project/seno/contract"
@@ -136,7 +138,7 @@ func TestTransferenciaE2E(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	svc := New(st, platform.NewAudit(st.Pool), srv.URL, segTeste)
+	svc := New(st, platform.NewAudit(st.Pool), srv.URL, "http://monitor-publico", segTeste)
 
 	// Montagem: envelope íntegro (alunos, carga, testes privados, regras).
 	tr, err := svc.Montar(ctx, atrID)
@@ -191,5 +193,51 @@ func TestTransferenciaE2E(t *testing.T) {
 	}
 	if recebidos[2].Turma.Nome == "" || recebidos[2].Carga.Atividade.APIID == 0 {
 		t.Fatalf("último envelope incompleto: %+v", recebidos[2])
+	}
+}
+
+// TestEntrarEmissor — Fase 9.1: /entrar valida student+matrícula, exige
+// monitor_id transferido e emite `st` temporário para o redirect do BFF.
+func TestEntrarEmissor(t *testing.T) {
+	st := testeDB(t)
+	ctx := context.Background()
+	atrID, alunoID := semeia(t, st, ctx)
+	svc := New(st, platform.NewAudit(st.Pool), "http://monitor-interno", "http://monitor-publico", segTeste)
+	aluno := domain.User{ID: alunoID, Roles: []domain.Role{domain.RoleStudent}}
+
+	// Sem monitor_id: 409 (ainda não transferida).
+	if _, err := svc.Entrar(ctx, aluno, atrID); err == nil {
+		t.Fatal("entrar deve falhar sem monitor_id transferido")
+	}
+	if _, err := st.Pool.Exec(ctx,
+		`UPDATE atribuicoes SET monitor_id = 'atv_entrar_1' WHERE id = $1`, atrID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Professor: 403 (exclusivo de alunos).
+	var profID int64
+	if err := st.Pool.QueryRow(ctx,
+		`SELECT professor_id FROM atribuicoes a JOIN turmas t ON t.id = a.turma_id WHERE a.id = $1`,
+		atrID).Scan(&profID); err != nil {
+		t.Fatal(err)
+	}
+	prof := domain.User{ID: profID, Roles: []domain.Role{domain.RoleProfessor}}
+	if _, err := svc.Entrar(ctx, prof, atrID); err == nil {
+		t.Fatal("professor não deveria receber st")
+	}
+
+	url, err := svc.Entrar(ctx, aluno, atrID)
+	if err != nil {
+		t.Fatalf("entrar: %v", err)
+	}
+	const prefixo = "/entrar?st="
+	if !strings.HasPrefix(url, "http://monitor-publico"+prefixo) {
+		t.Fatalf("URL inesperada: %s", url)
+	}
+	claims, err := contract.VerificarST([]byte(segTeste),
+		strings.TrimPrefix(url, "http://monitor-publico"+prefixo),
+		contract.SSOAud, time.Now())
+	if err != nil || claims.Sub != alunoID || claims.Mid != "atv_entrar_1" || claims.Iss != contract.SSOIss {
+		t.Fatalf("claims inesperadas: %+v err=%v", claims, err)
 	}
 }
