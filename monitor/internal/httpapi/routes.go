@@ -13,6 +13,7 @@ import (
 	"github.com/seno-project/seno/monitor/internal/platform"
 	"github.com/seno-project/seno/monitor/internal/preavaliacao"
 	"github.com/seno-project/seno/monitor/internal/sessao"
+	"github.com/seno-project/seno/monitor/internal/submissoes"
 	"github.com/seno-project/seno/monitor/internal/tentativas"
 )
 
@@ -32,6 +33,7 @@ type Dependencies struct {
 	TentativaS *tentativas.Service
 	EnsaiosS   *ensaios.Service
 	PreAvaS    *preavaliacao.Service
+	SubmissaoS *submissoes.Service
 	Entradas   *sessao.Limiter
 }
 
@@ -41,13 +43,15 @@ func RegisterRoutes(r *gin.Engine, d *Dependencies) {
 	r.POST("/interna/v1/atividades", d.ReceberAtividade)
 	r.GET("/entrar", d.Entrar)
 
-	// rotas de aluno: protegidas por sessão de entrada
-	a := r.Group("/a", d.RequireSessao)
+	// rotas de aluno: sessão obrigatória + bloqueio final (cota esgotada)
+	a := r.Group("/a", d.RequireSessao, d.BloquearFinalizado)
 	a.POST("/atividade/:monitor_id/abrir", d.AbrirAtividade)
 	a.PUT("/atividade/:monitor_id/tentativa", d.SalvarTentativa)
 	a.POST("/atividade/:monitor_id/testar", d.Ensaio)
 	a.GET("/atividade/:monitor_id/testar/:run_id", d.EnsaioResultado)
 	a.POST("/atividade/:monitor_id/submissao/avaliar", d.PreAvaliar)
+	a.POST("/atividade/:monitor_id/submissao/cancelar", d.CancelarSubmissao)
+	a.POST("/atividade/:monitor_id/submissao/confirmar", d.ConfirmarSubmissao)
 
 	// callback do Judge0 (autenticado por ?key=, não HMAC)
 	r.PUT("/interna/callbacks/judge0", d.CallbackJudge0)

@@ -50,6 +50,7 @@ type EstadoJanela struct {
 	Atrasada          bool // passou o prazo, atraso ainda possível
 	Terminada         bool // entrega não mais possível (nem atrasada)
 	FimReal           time.Time
+	Prazo             time.Time // prazo bruto da janela (para segundos_atraso)
 	SegundosRestantes int64
 }
 
@@ -100,11 +101,28 @@ func (s *Service) Abrir(ctx context.Context, mid string, aluno int64, agora time
 	}
 
 	// Idempotente: primeira chamada define aberta_em.
+	// §5.6: com submissões múltiplas, Nova tentativa transporta o conteúdo
+	// da última submissão (seq_submissão segue o contador global).
+	var seqSub int
+	var dadosIniciais string
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM submissao
+	    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno).Scan(&seqSub); err != nil {
+		return nil, fmt.Errorf("tentativas: contador de submissões: %w", err)
+	}
+	dadosIniciais = "{}"
+	if seqSub > 0 && c.regras.SubmissoesMultiplas {
+		var ultimo []byte
+		if err := s.pool.QueryRow(ctx, `SELECT dados FROM submissao
+		    WHERE monitor_id = $1 AND aluno_api_id = $2 ORDER BY n_t DESC LIMIT 1`,
+			mid, aluno).Scan(&ultimo); err == nil {
+			dadosIniciais = string(ultimo)
+		}
+	}
 	if _, err := s.pool.Exec(ctx, `INSERT INTO tentativa
-	    (monitor_id, aluno_api_id, aberta_em, fim_real, revisao, dados)
-	    VALUES ($1, $2, $3, $4, 0, '{}'::jsonb)
+	    (monitor_id, aluno_api_id, aberta_em, fim_real, revisao, seq_submissao, dados)
+	    VALUES ($1, $2, $3, $4, 0, $5, $6::jsonb)
 	    ON CONFLICT (monitor_id, aluno_api_id) DO NOTHING`,
-		mid, aluno, agora, fimReal); err != nil {
+		mid, aluno, agora, fimReal, seqSub, dadosIniciais); err != nil {
 		return nil, fmt.Errorf("tentativas: abrindo: %w", err)
 	}
 
@@ -296,7 +314,7 @@ func avaliarJanela(j contract.Janela, agora time.Time) EstadoJanela {
 	if agora.Before(j.Inicio) {
 		return EstadoJanela{} // Iniciada=false; handler deriva ErroInicio
 	}
-	est := EstadoJanela{Iniciada: true, FimReal: j.Prazo}
+	est := EstadoJanela{Iniciada: true, FimReal: j.Prazo, Prazo: j.Prazo}
 	if j.DuracaoSeg != nil {
 		if d := j.Inicio.Add(time.Duration(*j.DuracaoSeg) * time.Second); d.Before(est.FimReal) {
 			est.FimReal = d

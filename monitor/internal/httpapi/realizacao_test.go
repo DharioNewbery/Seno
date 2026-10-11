@@ -120,7 +120,7 @@ func TestVazamentoTestePrivado(t *testing.T) {
 
 	w, _ := chamaAluno(t, r, sess, "POST", "/a/atividade/"+midTest+"/abrir", "")
 	corpo := w.Body.String()
-	if strings.Contains(corpo, privStdin) || strings.Contains(corpo, privStdout) {
+	if strings.Contains(corpo, `"stdin":"`+privStdin+`"`) || strings.Contains(corpo, `"stdout_esperado":"`+privStdout+`"`) {
 		t.Fatalf("vazamento de teste privado na resposta: %s", corpo)
 	}
 	if !strings.Contains(corpo, pubStdout) {

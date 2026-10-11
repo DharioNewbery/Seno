@@ -26,6 +26,7 @@ import (
 	"github.com/seno-project/seno/monitor/internal/platform"
 	"github.com/seno-project/seno/monitor/internal/preavaliacao"
 	"github.com/seno-project/seno/monitor/internal/sessao"
+	"github.com/seno-project/seno/monitor/internal/submissoes"
 	"github.com/seno-project/seno/monitor/internal/tentativas"
 )
 
@@ -71,9 +72,11 @@ func main() {
 		cfg.CallbackBase, cfg.Judge0Secret,
 		cfg.AlunoExecMaxPerMin, cfg.ExecucaoRetencao)
 	preAvaS := preavaliacao.New(pool, j0Cli, tentativaS, cfg.PreAvaTTL)
+	submissaoS := submissoes.New(pool, tentativaS, j0Cli)
 
 	fila.Start(ctx, pool, map[string]fila.Handler{
-		ensaios.KindEnsaio: ensaiosS.Handler(),
+		ensaios.KindEnsaio:      ensaiosS.Handler(),
+		submissoes.KindCorrecao: submissaoS.Handler(),
 	}, 8)
 
 	r := gin.New()
@@ -86,6 +89,7 @@ func main() {
 		TentativaS: tentativaS,
 		EnsaiosS:   ensaiosS,
 		PreAvaS:    preAvaS,
+		SubmissaoS: submissaoS,
 		Entradas:   sessao.NovoLimiter(10, 5*time.Minute),
 	})
 

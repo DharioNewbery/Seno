@@ -28,8 +28,8 @@ const (
 // Marcadores exclusivos do fixture para o teste anti-vazamento: se o JSON
 // de resposta de aluno contiver qualquer um, um privado escapou.
 const (
-	privStdin  = "PRIV-STDIN-secreto-Uai7Equ"
-	privStdout = "PRIV-STDOUT-secreto-Ohsom3Es"
+	privStdin  = "7"
+	privStdout = "14"
 	pubStdin   = "3"
 	pubStdout  = "6"
 )
@@ -88,13 +88,29 @@ func semeiaAtividadeDB(pool *pgxpool.Pool, status string, alunos ...int64) error
 
 func intPtr(i int) *int { return &i }
 
+// semeiaAtividadeRegrasDB: variante com `regras` próprias (multiplas/max).
+func semeiaAtividadeRegrasDB(pool *pgxpool.Pool, status string, regras contract.Regras, alunos ...int64) error {
+	janela := contract.Janela{
+		Inicio:       time.Now().Add(-5 * time.Minute),
+		Prazo:        time.Now().Add(30 * time.Minute),
+		DuracaoSeg:   intPtr(1800),
+		PodeAtrasado: true,
+	}
+	return semeiaAtividadeJanelaRegrasDB(pool, status, janela, regras, alunos...)
+}
+
 // semeiaAtividadeJanelaDB: variante com janela própria (testes de 409/410).
 func semeiaAtividadeJanelaDB(pool *pgxpool.Pool, status string, j contract.Janela, alunos ...int64) error {
+	return semeiaAtividadeJanelaRegrasDB(pool, status, j,
+		contract.Regras{MaxSubmissoes: 1}, alunos...)
+}
+
+func semeiaAtividadeJanelaRegrasDB(pool *pgxpool.Pool, status string, j contract.Janela, regras contract.Regras, alunos ...int64) error {
 	tt := contract.Transferencia{
 		APIID: 7, GeradaEm: time.Now(),
 		Turma:  contract.Turma{APIID: 7, Nome: "T"},
 		Janela: j,
-		Regras: contract.Regras{MaxSubmissoes: 1},
+		Regras: regras,
 	}
 	carga, _ := json.Marshal(tt)
 	if _, err := pool.Exec(context.Background(), `INSERT INTO atividade

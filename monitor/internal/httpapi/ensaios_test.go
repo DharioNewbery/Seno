@@ -22,6 +22,7 @@ import (
 	"github.com/seno-project/seno/monitor/internal/platform"
 	"github.com/seno-project/seno/monitor/internal/preavaliacao"
 	"github.com/seno-project/seno/monitor/internal/sessao"
+	"github.com/seno-project/seno/monitor/internal/submissoes"
 	"github.com/seno-project/seno/monitor/internal/tentativas"
 )
 
@@ -76,6 +77,7 @@ func montaMonitorJudge0(t *testing.T, pool *pgxpool.Pool) (*Dependencies, *gin.E
 
 	deps.EnsaiosS = ensaios.New(pool, j0, tentativaS, base, callbackKeyTest, 5, 7*24*time.Hour)
 	deps.PreAvaS = preavaliacao.New(pool, j0, tentativaS, cfg.PreAvaTTL)
+	deps.SubmissaoS = submissoes.New(pool, tentativaS, j0)
 
 	// fila real no teste (worker embutido); lookup corrente: deps apoteará
 	ctx, stop := context.WithCancel(context.Background())
@@ -83,6 +85,9 @@ func montaMonitorJudge0(t *testing.T, pool *pgxpool.Pool) (*Dependencies, *gin.E
 	fila.Start(ctx, pool, map[string]fila.Handler{
 		ensaios.KindEnsaio: func(ctx context.Context, payload json.RawMessage) error {
 			return deps.EnsaiosS.Handler()(ctx, payload)
+		},
+		submissoes.KindCorrecao: func(ctx context.Context, payload json.RawMessage) error {
+			return deps.SubmissaoS.Handler()(ctx, payload)
 		},
 	}, 4)
 	return deps, r
