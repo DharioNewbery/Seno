@@ -19,6 +19,7 @@ import (
 	"github.com/seno-project/seno/api/internal/atividades"
 	"github.com/seno-project/seno/api/internal/atribuicoes"
 	"github.com/seno-project/seno/api/internal/correcoes"
+	"github.com/seno-project/seno/api/internal/fila"
 	"github.com/seno-project/seno/api/internal/httpapi"
 	"github.com/seno-project/seno/api/internal/judge0"
 	"github.com/seno-project/seno/api/internal/mail"
@@ -95,6 +96,10 @@ func main() {
 	}
 	r := gin.New()
 	httpapi.RegisterRoutes(r, deps)
+
+	// Worker embutido da fila PostgreSQL (ARQUITETURA §6): handlers entram
+	// aos poucos (monitor_transferir na Fase 9; 4 workers).
+	fila.Start(ctx, st, make(map[string]fila.Handler), 4)
 
 	srv := &http.Server{Addr: cfg.Addr, Handler: r}
 	go func() {
