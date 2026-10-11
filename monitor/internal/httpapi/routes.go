@@ -62,10 +62,15 @@ func RegisterRoutes(r *gin.Engine, d *Dependencies) {
 
 	// tela da realização (assets embebidos; a página não tem sessão própria:
 	// o app.js descobre a sessão chamando os endpoints /a, protegidos).
-	app := r.Group("/a/app")
-	app.GET("", d.AppServir("index.html"))
-	app.GET("/app.css", d.AppServir("app.css"))
-	app.GET("/app.js", d.AppServir("app.js"))
+	// A página vive em /a/app (sem slash): hrefs relativos resolvem
+	// /a/app.{css,js} — que também são registrados por serem os caminhos
+	// naturais do navegador.
+	r.GET("/a/app", d.AppServir("index.html"))
+	r.GET("/a/app/", d.AppServir("index.html"))
+	r.GET("/a/app/app.css", d.AppServir("app.css"))
+	r.GET("/a/app/app.js", d.AppServir("app.js"))
+	r.GET("/a/app.css", d.AppServir("app.css"))
+	r.GET("/a/app.js", d.AppServir("app.js"))
 
 	// callback do Judge0 (autenticado por ?key=, não HMAC)
 	r.PUT("/interna/callbacks/judge0", d.CallbackJudge0)

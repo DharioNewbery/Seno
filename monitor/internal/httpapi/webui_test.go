@@ -31,10 +31,13 @@ func TestWebuiServidos(t *testing.T) {
 	pool := testeDB(t)
 	_, r := montaMonitorJudge0(t, pool)
 
+	// caminhos do navegador: página em /a/app resolve relativos para
+	// /a/app.{css,js} (e /a/app/ para /a/app/app.*)
 	for _, alvo := range []struct{ path, conter string }{
 		{"/a/app", "<dialog"},
-		{"/a/app/app.js", "/abrir"},
-		{"/a/app/app.css", "background"},
+		{"/a/app.js", "/abrir"},
+		{"/a/app.css", "background"},
+		{"/a/app/app.js", "fetch"},
 	} {
 		w := reqR(t, r, "GET", alvo.path, "", "")
 		if w.Code != 200 {
