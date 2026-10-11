@@ -213,6 +213,24 @@ func (s *Service) precisaSnapshot(ctx context.Context, tx pgx.Tx, mid string, al
 	return agora.Sub(*ultimo) >= s.intervalo
 }
 
+// VerificarJanela revalida a janela da atividade para operações fora do
+// abrir/salvar (ensaios, pré-avaliação): devolve erro de negócio conforme
+// EstadoJanela (ErroInicio/ErrEncerrada) ou nil.
+func (s *Service) VerificarJanela(ctx context.Context, mid string, aluno int64, agora time.Time) (EstadoJanela, error) {
+	c, err := s.carregar(ctx, mid)
+	if err != nil {
+		return EstadoJanela{}, ErrEncerrada // atividade ausente: bloqueia
+	}
+	est := avaliarJanela(c.janela, agora)
+	if !est.Iniciada {
+		return est, &ErroInicio{Segundos: int64(c.janela.Inicio.Sub(agora) / time.Second)}
+	}
+	if est.Terminada {
+		return est, ErrEncerrada
+	}
+	return est, nil
+}
+
 // RevisaoAtual devolve a revisão corrente (para o 409 com detalhe ao cliente).
 func (s *Service) RevisaoAtual(ctx context.Context, mid string, aluno int64) (int, error) {
 	var r int

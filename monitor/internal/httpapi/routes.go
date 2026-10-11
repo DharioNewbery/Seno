@@ -9,7 +9,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/seno-project/seno/monitor/internal/atividades"
+	"github.com/seno-project/seno/monitor/internal/ensaios"
 	"github.com/seno-project/seno/monitor/internal/platform"
+	"github.com/seno-project/seno/monitor/internal/preavaliacao"
 	"github.com/seno-project/seno/monitor/internal/sessao"
 	"github.com/seno-project/seno/monitor/internal/tentativas"
 )
@@ -28,6 +30,8 @@ type Dependencies struct {
 	AtividadeS *atividades.Service
 	SessaoS    *sessao.Service
 	TentativaS *tentativas.Service
+	EnsaiosS   *ensaios.Service
+	PreAvaS    *preavaliacao.Service
 	Entradas   *sessao.Limiter
 }
 
@@ -41,6 +45,12 @@ func RegisterRoutes(r *gin.Engine, d *Dependencies) {
 	a := r.Group("/a", d.RequireSessao)
 	a.POST("/atividade/:monitor_id/abrir", d.AbrirAtividade)
 	a.PUT("/atividade/:monitor_id/tentativa", d.SalvarTentativa)
+	a.POST("/atividade/:monitor_id/testar", d.Ensaio)
+	a.GET("/atividade/:monitor_id/testar/:run_id", d.EnsaioResultado)
+	a.POST("/atividade/:monitor_id/submissao/avaliar", d.PreAvaliar)
+
+	// callback do Judge0 (autenticado por ?key=, não HMAC)
+	r.PUT("/interna/callbacks/judge0", d.CallbackJudge0)
 }
 
 // Healthz verifica integridade do processo e do banco (compose healthcheck).

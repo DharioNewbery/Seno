@@ -27,10 +27,14 @@ type Config struct {
 	HMACJanela         time.Duration // tolerância de relógio nas rotas internas (anti-replay)
 	CookieSecure       bool          // Secure do hm_sess (produção true; dev HTTP localhost false)
 
-	// Judge0 (Fase 5; placeholder para validar o .env desde o começo).
+	// Judge0 (Fase 5; vazio = integração desligada).
 	Judge0URL    string
 	Judge0Token  string // X-Auth-Token (se exigido pela instância)
-	Judge0Secret string // segredo do callback
+	Judge0Secret string // segredo em ?key= na callback_url (validado no callback)
+
+	// Base do Monitor vista PELO Judge0 (callback_url): dev: host.docker.internal,
+	// produção: rede interna (ex.: http://monitor:8081).
+	CallbackBase string
 }
 
 // LoadConfig lê o ambiente e devolve a configuração validada.
@@ -51,6 +55,7 @@ func LoadConfig() (*Config, error) {
 		Judge0URL:          os.Getenv("SENO_JUDGE0_URL"),
 		Judge0Token:        os.Getenv("SENO_JUDGE0_TOKEN"),
 		Judge0Secret:       os.Getenv("SENO_JUDGE0_CALLBACK_SECRET"),
+		CallbackBase:       os.Getenv("SENO_MONITOR_CALLBACK_URL"),
 	}
 
 	c.DatabaseURL = os.Getenv("SENO_DATABASE_URL")

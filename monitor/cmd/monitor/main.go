@@ -19,8 +19,12 @@ import (
 
 	"github.com/seno-project/seno/monitor/db"
 	"github.com/seno-project/seno/monitor/internal/atividades"
+	"github.com/seno-project/seno/monitor/internal/ensaios"
+	"github.com/seno-project/seno/monitor/internal/fila"
 	"github.com/seno-project/seno/monitor/internal/httpapi"
+	"github.com/seno-project/seno/monitor/internal/judge0"
 	"github.com/seno-project/seno/monitor/internal/platform"
+	"github.com/seno-project/seno/monitor/internal/preavaliacao"
 	"github.com/seno-project/seno/monitor/internal/sessao"
 	"github.com/seno-project/seno/monitor/internal/tentativas"
 )
@@ -58,6 +62,20 @@ func main() {
 	if os.Getenv("SENO_MODE") != "debug" {
 		gin.SetMode(gin.ReleaseMode)
 	}
+
+	// Judge0 (vazio = desligado): ensaios falham com fila re-a-agendando,
+	// mas o resto do fluxo permanece funcional (correção manual no professor).
+	j0Cli := judge0.NewClient(judge0.CarregarConfig(cfg.Judge0URL, cfg.Judge0Token))
+	tentativaS := tentativas.New(pool, cfg.SnapshotIntervalo)
+	ensaiosS := ensaios.New(pool, j0Cli, tentativaS,
+		cfg.CallbackBase, cfg.Judge0Secret,
+		cfg.AlunoExecMaxPerMin, cfg.ExecucaoRetencao)
+	preAvaS := preavaliacao.New(pool, j0Cli, tentativaS, cfg.PreAvaTTL)
+
+	fila.Start(ctx, pool, map[string]fila.Handler{
+		ensaios.KindEnsaio: ensaiosS.Handler(),
+	}, 8)
+
 	r := gin.New()
 	httpapi.RegisterRoutes(r, &httpapi.Dependencies{
 		Cfg:        cfg,
@@ -65,7 +83,9 @@ func main() {
 		DB:         pool,
 		AtividadeS: atividades.New(pool),
 		SessaoS:    sessao.New(pool),
-		TentativaS: tentativas.New(pool, cfg.SnapshotIntervalo),
+		TentativaS: tentativaS,
+		EnsaiosS:   ensaiosS,
+		PreAvaS:    preAvaS,
 		Entradas:   sessao.NovoLimiter(10, 5*time.Minute),
 	})
 
