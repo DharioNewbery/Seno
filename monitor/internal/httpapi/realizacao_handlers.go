@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -106,6 +107,7 @@ func mapearErroTentativa(c *gin.Context, err error) {
 		respondErro(c, http.StatusConflict, contract.CodeConflito,
 			"Abra a atividade antes de continuar.", nil)
 	default:
+		slog.Error("monitor: erro inesperado em rota de aluno", "err", err)
 		respondErro(c, http.StatusInternalServerError, contract.CodeInternal,
 			"Erro interno do servidor.", nil)
 	}

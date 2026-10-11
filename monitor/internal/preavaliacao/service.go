@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -102,6 +103,25 @@ func (s *Service) Avaliar(ctx context.Context, mid string, aluno int64, agora ti
 	rel := &Relatorio{PreID: preID}
 	for _, tarefa := range t.Carga.Tarefas {
 		codigo := codigoPara(respostas, tarefa.Ordem)
+		if strings.TrimSpace(codigo) == "" {
+			// resposta vazia: Judge0 rejeita source_code blank (422); relata
+			// "wrong_answer" sem submissão (caminho real do aluno: não avaliar
+			// código que não existe).
+			rel.Tarefas = append(rel.Tarefas, TarefaPre{
+				Ordem: tarefa.Ordem, Veredito: "wrong_answer",
+			})
+			continue
+		}
+		if strings.TrimSpace(codigo) == "" {
+			// resposta vazia: teste roda sinalizando "sem resposta" (status
+			// "wrong_answer" com stdout null) — o Judge0 rejeita source blank
+			// (422), então não há submissão real a fazer.
+			rel.Tarefas = append(rel.Tarefas, TarefaPre{
+				Ordem: tarefa.Ordem, Veredito: "wrong_answer",
+				Testes: nil, // nenhum teste público entregue
+			})
+			continue
+		}
 		lim := tarefa.Limites
 		if lim == nil {
 			lim = &contract.Limites{TempoCPUMs: 5000, TempoTotalMs: 10000, MemoriaMB: 128}
