@@ -80,21 +80,28 @@ type TesteCarga struct {
 
 // EstadoAtividade é o estado consolidado da atividade exposto à API
 // principal (spec §6, GET /interna/v1/atividades/{monitor_id}/estado).
+// Snapshot integral por chamada; quem persiste é a API (job periódico —
+// decisão da Fase 7).
 type EstadoAtividade struct {
-	MonitorID string `json:"monitor_id"`
-	Status    string `json:"status"`
-	Agregados struct {
-		Abertas   int `json:"abertas"`
-		Entregues int `json:"entregues"`
-		Atrasos   int `json:"atrasos"`
-		Total     int `json:"total"`
-	} `json:"agregados"`
-	Alunos []EstadoAluno `json:"alunos"`
+	MonitorID string          `json:"monitor_id"`
+	Status    string          `json:"status"` // ativa | encerrada | cancelada
+	Agregados AgregadosEstado `json:"agregados"`
+	Alunos    []EstadoAluno   `json:"alunos"`
 }
 
+// AgregadosEstado do painel do professor (§6).
+type AgregadosEstado struct {
+	Abertas   int `json:"abertas"`
+	Entregues int `json:"entregues"`
+	Atrasos   int `json:"atrasos"`
+	Total     int `json:"total"`
+}
+
+// EstadoAluno do listado do aluno na API (§6). Estado: "pendente"
+// (não abriu) | "aberta" | "entregue" (atraso vai no agregado).
 type EstadoAluno struct {
 	AlunoAPIID      int64      `json:"aluno_api_id"`
-	Estado          string     `json:"estado"` // aberta | entregue | atrasada (hierarquia definida na Fase 7)
+	Estado          string     `json:"estado"`
 	NT              int        `json:"n_t"`
 	UltimaSubmissao *time.Time `json:"ultima_submissao"`
 	PrazoEfetivo    *time.Time `json:"prazo_efetivo"`

@@ -182,18 +182,23 @@ equivalente ao do fluxo atual; rate limit e callback testados.
 cancelar → reavaliar → confirmar → bloqueio funciona; entrega atrasada marca
 `atrasada=true`; múltiplas submissões recarregam a anterior.
 
-## Fase 7 — Estado consolidado (rota pronta para a integração)
+## Fase 7 — Estado consolidado (rota pronta para a integração) ✓
 
-**Objetivo:** deixar pronto o contrato do qual a API, na Fase 9, dependerá —
-sem mudar a API agora.
+**Objetivo:** rota HMAC de leitura pura; quem persiste é a API (job periódico —
+decisão registrada abaixo). O Monitor responde o snapshot e não guarda nada.
 
-1. `GET /interna/v1/atividades/{monitor_id}/estado` (HMAC, spec §6): agregados +
-   estado por aluno.
-2. Teste e2e sem API: cliente de teste (script ou job no `compose.dev.yaml`)
-   assina HMAC, faz poll e confere os agregados — fragmento de execução para
-   provar a rota sozinha.
+Implementado:
+- `internal/estado`: ONE SELECT com LATERAL por aluno (tentativa existente,
+  última submissão, correção da última) + prazo vindo de `fim_real` (com
+  tentativa) ou da janela da carga (não abriu); estados `pendente`/`aberta`/
+  `entregue` (atraso fica no agregado `atrasos`).
+- `GET /interna/v1/atividades/:monitor_id/estado` (HMAC): 401 sem/segredo
+  conflante, 404 `NAO_ENCONTRADO`, snapshot integral `contract.EstadoAtividade`
+  (`Agregados` nomeado no contrato).
+- e2e serviço: continuando polls capturam a correção de `executando` →
+  `concluida` com `nota_auto`; testes cobrem agregados, campos e 401/404.
 
-**Pronto quando:** a rota devolve agregados coerentes em teste e2e.
+**Pronto quando:** a rota devolve agregados coerentes em teste e2e. ✓
 
 ## Fase 8 — Deploy, observabilidade e endurecimento
 
@@ -236,6 +241,8 @@ Monitor e a listagem na API reflete o estado.
 | Reusar código da API por imports | Apenas um módulo **contrato** compartilhado (`contract/`: HMAC, token `st`, structs de transferência/estado, **erros de rede**, importado por api e monitor); plataforma mínima (`internal/platform`, **inclui logger**) segue **duplicada**, e pacotes `judge0`/`tentativas` são portados, não importados |
 | Banco do Monitor | Banco separado (`seno_monitor`) no **mesmo servidor PostgreSQL** — revisado do "instância própria": um container a menos para operar; a independência que a spec exige é lógica (o Monitor não ver seno); backup via `pg_dump` por database |
 | Assinatura do `st` | HMAC já usado nas rotas internas (evita JWT + dependência) |
+| Estado `/estado` | Snapshot integral por chamada; **a API principal persiste** (Fase 7, decisão) — Monitor é read-only nesse fluxo |
+| Estados de aluno no `/estado` | `pendente` (não abriu) / `aberta` / `entregue`; atraso fica no agregado `atrasos` |
 | Estado para a API | Poll via job periódico primeiro; pós-evento depois, se necessário |
 | `st` e transferência em dev | Emissores de teste (`cmd/*`) que usam só `SENO_MONITOR_SECRET` — a API é opcional em dev |
 

@@ -16,6 +16,7 @@ import (
 	"github.com/seno-project/seno/contract"
 	"github.com/seno-project/seno/monitor/db"
 	"github.com/seno-project/seno/monitor/internal/atividades"
+	"github.com/seno-project/seno/monitor/internal/estado"
 	"github.com/seno-project/seno/monitor/internal/platform"
 	"github.com/seno-project/seno/monitor/internal/sessao"
 	"github.com/seno-project/seno/monitor/internal/tentativas"
@@ -72,6 +73,7 @@ func montaMonitor(t *testing.T, pool *pgxpool.Pool) (*Dependencies, *gin.Engine)
 		AtividadeS: atividades.New(pool),
 		SessaoS:    sessao.New(pool),
 		TentativaS: tentativas.New(pool, cfg.SnapshotIntervalo),
+		EstadoS:    estado.New(pool),
 		Entradas:   sessao.NovoLimiter(10, 5*time.Minute),
 	}
 	r := gin.New()

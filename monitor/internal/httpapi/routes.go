@@ -10,6 +10,7 @@ import (
 
 	"github.com/seno-project/seno/monitor/internal/atividades"
 	"github.com/seno-project/seno/monitor/internal/ensaios"
+	"github.com/seno-project/seno/monitor/internal/estado"
 	"github.com/seno-project/seno/monitor/internal/platform"
 	"github.com/seno-project/seno/monitor/internal/preavaliacao"
 	"github.com/seno-project/seno/monitor/internal/sessao"
@@ -34,6 +35,7 @@ type Dependencies struct {
 	EnsaiosS   *ensaios.Service
 	PreAvaS    *preavaliacao.Service
 	SubmissaoS *submissoes.Service
+	EstadoS    *estado.Service
 	Entradas   *sessao.Limiter
 }
 
@@ -42,6 +44,7 @@ func RegisterRoutes(r *gin.Engine, d *Dependencies) {
 	r.GET("/healthz", d.Healthz)
 	r.POST("/interna/v1/atividades", d.ReceberAtividade)
 	r.GET("/entrar", d.Entrar)
+	r.GET("/interna/v1/atividades/:monitor_id/estado", d.EstadoAtividade)
 
 	// rotas de aluno: sessão obrigatória + bloqueio final (cota esgotada)
 	a := r.Group("/a", d.RequireSessao, d.BloquearFinalizado)
