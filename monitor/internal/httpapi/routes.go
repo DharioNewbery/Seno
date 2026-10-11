@@ -40,7 +40,8 @@ type Dependencies struct {
 	Entradas   *sessao.Limiter
 }
 
-// RegisterRoutes registra as rotas correntes do Monitor.
+// Ligo o redirect do /entrar p/ a tela da prova (§AppServir) e as rotas
+// estáticas da realização; middleware da rota de aluno valida sessão.
 func RegisterRoutes(r *gin.Engine, d *Dependencies) {
 	r.Use(d.limiteCorpo)
 	r.GET("/healthz", d.Healthz)
@@ -48,8 +49,9 @@ func RegisterRoutes(r *gin.Engine, d *Dependencies) {
 	r.GET("/entrar", d.Entrar)
 	r.GET("/interna/v1/atividades/:monitor_id/estado", d.EstadoAtividade)
 
-	// rotas de aluno: sessão obrigatória + bloqueio final (cota esgotada)
-	a := r.Group("/a", d.RequireSessao, d.BloquearFinalizado)
+	// rotas de aluno: sessão obrigatória + bloqueio final + guarda de Origin
+	// (as mutações /a são tudo POST/PUT — SameSite Lax + origem conhecida).
+	a := r.Group("/a", d.RequireSessao, d.guardaOrigin, d.BloquearFinalizado)
 	a.POST("/atividade/:monitor_id/abrir", d.AbrirAtividade)
 	a.PUT("/atividade/:monitor_id/tentativa", d.SalvarTentativa)
 	a.POST("/atividade/:monitor_id/testar", d.Ensaio)
@@ -57,6 +59,13 @@ func RegisterRoutes(r *gin.Engine, d *Dependencies) {
 	a.POST("/atividade/:monitor_id/submissao/avaliar", d.PreAvaliar)
 	a.POST("/atividade/:monitor_id/submissao/cancelar", d.CancelarSubmissao)
 	a.POST("/atividade/:monitor_id/submissao/confirmar", d.ConfirmarSubmissao)
+
+	// tela da realização (assets embebidos; a página não tem sessão própria:
+	// o app.js descobre a sessão chamando os endpoints /a, protegidos).
+	app := r.Group("/a/app")
+	app.GET("", d.AppServir("index.html"))
+	app.GET("/app.css", d.AppServir("app.css"))
+	app.GET("/app.js", d.AppServir("app.js"))
 
 	// callback do Judge0 (autenticado por ?key=, não HMAC)
 	r.PUT("/interna/callbacks/judge0", d.CallbackJudge0)

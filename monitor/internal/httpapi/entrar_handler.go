@@ -3,7 +3,9 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -66,6 +68,14 @@ func (d *Dependencies) Entrar(c *gin.Context) {
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(sessao.CookieNome, token, int(expira.Seconds()), "/",
 		"", d.Cfg.CookieSecure, true)
+
+	if strings.Contains(c.GetHeader("Accept"), "text/html") {
+		// navegação de navegador (redirect do BFF): tela da prova; JSON
+		// continua sendo o contrato para clientes programáticos.
+		c.Redirect(http.StatusFound, "/a/app?anid="+url.QueryEscape(claims.Mid)+
+			"&web="+url.QueryEscape(d.Cfg.WebURL))
+		return
+	}
 
 	d.Audit.Record(c.Request.Context(), platform.LogEntry{
 		Agent:     "ip:" + ip,

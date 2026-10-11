@@ -2,47 +2,16 @@ package ensino
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/seno-project/seno/api/db"
-	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
+	"github.com/seno-project/seno/api/internal/testutil"
 )
 
-// testeDB (mesmo padrão dos outros pacotes: banco seno_test + limpeza).
+// testeDB do pacote: banco dedicado (evita colisão com httpapi em ./...).
 func testeDB(t *testing.T) *store.Store {
-	t.Helper()
-	dsn := os.Getenv("SENO_DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgres://seno:seno@localhost:5432/seno_test?sslmode=disable"
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Skipf("Postgres de teste indisponível (%v)", err)
-	}
-	t.Cleanup(pool.Close)
-	if err := pool.Ping(ctx); err != nil {
-		t.Skipf("Postgres de teste indisponível (%v)", err)
-	}
-	if err := platform.MigrateUp(ctx, pool, db.Migrations); err != nil {
-		t.Fatalf("migrações: %v", err)
-	}
-	_, err = pool.Exec(ctx, `TRUNCATE persons, users, user_roles, sessions,
-		one_time_tokens, log_entries, jobs, tarefas, testes_tarefa,
-		atividades, atividade_tarefas, atribuicoes,
-		tentativas, submissoes, resultados, correcao_tarefas,
-		correcoes, execucoes_teste, materias, periodos_letivos, turmas, matriculas,
-		monitor_estado_aluno RESTART IDENTITY CASCADE`)
-	if err != nil {
-		t.Fatalf("limpeza: %v", err)
-	}
-	return store.New(pool)
+	return testutil.TestDB(t, "seno_test_ensino")
 }
 
 // seedAtribuicaoParaAluno devolve (atribuicao_id, aluno_id).

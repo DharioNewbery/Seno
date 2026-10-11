@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -113,9 +114,15 @@ func (d *Dependencies) BloquearFinalizado(c *gin.Context) {
 		return
 	}
 	if finalizada {
+		det := gin.H{}
+		if apiID != 0 {
+			// URL do portal de correção: relativa ao web; base do navegador
+			// via SENO_WEB_URL (vazio = relativa; cliente decide).
+			det["correcao_url"] = strings.TrimSuffix(d.Cfg.WebURL, "/") +
+				"/aluno/atividades/" + strconv.FormatInt(apiID, 10)
+		}
 		respondErro(c, http.StatusForbidden, contract.CodeFinalizada,
-			"Atividade encerrada para você.",
-			gin.H{"correcao_url": "/aluno/atividades/" + strconv.FormatInt(apiID, 10)})
+			"Atividade encerrada para você.", det)
 		return
 	}
 	c.Next()

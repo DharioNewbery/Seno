@@ -36,6 +36,10 @@ type Config struct {
 	// Base do Monitor vista PELO Judge0 (callback_url): dev: host.docker.internal,
 	// produção: rede interna (ex.: http://monitor:8081).
 	CallbackBase string
+
+	// Base do web (BFF) vista pelo NAVEGADOR — usada na tela da prova para
+	// o link "ver entregas" do bloqueio final. Vazio = sem link.
+	WebURL string
 }
 
 // LoadConfig lê o ambiente e devolve a configuração validada.
@@ -58,6 +62,7 @@ func LoadConfig() (*Config, error) {
 		Judge0Token:        os.Getenv("SENO_JUDGE0_TOKEN"),
 		Judge0Secret:       os.Getenv("SENO_JUDGE0_CALLBACK_SECRET"),
 		CallbackBase:       os.Getenv("SENO_MONITOR_CALLBACK_URL"),
+		WebURL:             strings.TrimSuffix(strings.TrimSpace(os.Getenv("SENO_WEB_URL")), "/"),
 	}
 
 	c.DatabaseURL = os.Getenv("SENO_DATABASE_URL")
