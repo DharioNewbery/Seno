@@ -14,11 +14,11 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/seno-project/seno/api/db"
-	"github.com/seno-project/seno/api/internal/auth"
-	"github.com/seno-project/seno/api/internal/ensino"
 	"github.com/seno-project/seno/api/internal/atividades"
 	"github.com/seno-project/seno/api/internal/atribuicoes"
+	"github.com/seno-project/seno/api/internal/auth"
 	"github.com/seno-project/seno/api/internal/correcoes"
+	"github.com/seno-project/seno/api/internal/ensino"
 	"github.com/seno-project/seno/api/internal/fila"
 	"github.com/seno-project/seno/api/internal/httpapi"
 	"github.com/seno-project/seno/api/internal/judge0"
@@ -28,8 +28,8 @@ import (
 	"github.com/seno-project/seno/api/internal/store"
 	"github.com/seno-project/seno/api/internal/submissoes"
 	"github.com/seno-project/seno/api/internal/tarefas"
-	"github.com/seno-project/seno/api/internal/testar"
 	"github.com/seno-project/seno/api/internal/tentativas"
+	"github.com/seno-project/seno/api/internal/testar"
 	"github.com/seno-project/seno/api/internal/usuarios"
 )
 
@@ -76,14 +76,14 @@ func main() {
 	judge0Cli := judge0.NewClient(judge0Cfg)
 	monitorSvc := monitor.New(st, audit, cfg.MonitorURL, cfg.MonitorPublicURL, cfg.MonitorSecret)
 	deps := &httpapi.Dependencies{
-		Cfg:        cfg,
-		Pool:       pool,
-		Store:      st,
-		Audit:      audit,
-		Auth:       authSvc,
-		Cargo:      recoverer,
-		UsuarioS:   usuarios.New(st, audit, recoverer),
-		Ensino:     ensino.New(st, audit, recoverer),
+		Cfg:         cfg,
+		Pool:        pool,
+		Store:       st,
+		Audit:       audit,
+		Auth:        authSvc,
+		Cargo:       recoverer,
+		UsuarioS:    usuarios.New(st, audit, recoverer),
+		Ensino:      ensino.New(st, audit, recoverer),
 		TarefaS:     svcTarefas,
 		AtividadeS:  atividades.New(st, audit, svcTarefas),
 		AtribuicaoS: atribuicoes.New(st, audit),
@@ -101,10 +101,11 @@ func main() {
 	httpapi.RegisterRoutes(r, deps)
 
 	// Worker embutido da fila PostgreSQL (ARQUITETURA §6): transferência ao
-	// Monitor (Fase 9.2) + handlers às futuras fases; 4 workers.
+	// Monitor (Fase 9.2) + poll do estado (Fase 9.3, ticker independente).
 	fila.Start(ctx, st, map[string]fila.Handler{
 		monitor.KindTransferir: monitorSvc.Handler(),
 	}, 4)
+	go monitorSvc.Ciclo(ctx, cfg.PollEstado)
 
 	srv := &http.Server{Addr: cfg.Addr, Handler: r}
 	go func() {

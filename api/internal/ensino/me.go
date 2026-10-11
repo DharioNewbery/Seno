@@ -14,6 +14,7 @@ import (
 	"github.com/seno-project/seno/api/db/gen"
 	"github.com/seno-project/seno/api/internal/domain"
 	"github.com/seno-project/seno/api/internal/platform"
+	"github.com/seno-project/seno/api/internal/store"
 )
 
 // AtribuicaoDoAluno é a atribuição na visão do aluno, com o estado do
@@ -40,6 +41,7 @@ type AtribuicaoDoAluno struct {
 	PublicadaEm   *time.Time `json:"publicada_em,omitempty"`
 	NotaFinal     *int32     `json:"nota_final,omitempty"`
 }
+
 // TurmaDoAluno é a turma na visão do aluno.
 type TurmaDoAluno struct {
 	ID            int64     `json:"id"`
@@ -177,5 +179,52 @@ func (s *Service) MinhasAtribuicoes(
 			NotaFinal:     notaPtrMeu(row.MinhaNotaTexto, row.PublicadaEm),
 		})
 	}
+	aplicaEstadoMonitor(ctx, s.store, actor.ID, out)
 	return out, nil
+}
+
+// aplicaEstadoMonitor sobrepõe o estado do rascunho local com o estado
+// do Monitor (Fase 9.3) quando o aluno foi trabalhar lá (metadados de
+// exibição; a nota continua saindo do fluxo de correção publicada da API —
+// a visibilidade "publicada" não é derivada do snapshot do Monitor).
+func aplicaEstadoMonitor(ctx context.Context, st *store.Store, alunoID int64, itens []AtribuicaoDoAluno) {
+	if len(itens) == 0 {
+		return
+	}
+	type Estado struct {
+		AtribuicaoID  int64
+		Estado        string
+		UltimaEntrega pgtype.Timestamptz
+	}
+	rows, err := st.Pool.Query(ctx, `
+		SELECT atribuicao_id, estado, entregue_em
+		FROM monitor_estado_aluno
+		WHERE aluno_id = $1`, alunoID)
+	if err != nil {
+		return // sem estado do Monitor: mantém o estado local
+	}
+	defer rows.Close()
+	pair := map[int64]Estado{}
+	for rows.Next() {
+		var est Estado
+		if err := rows.Scan(&est.AtribuicaoID, &est.Estado, &est.UltimaEntrega); err != nil {
+			return
+		}
+		pair[est.AtribuicaoID] = est
+	}
+	for i := range itens {
+		est, ok := pair[itens[i].ID]
+		if !ok {
+			continue
+		}
+		if est.Estado == "aberta" {
+			itens[i].EmAndamento = true
+		}
+		if est.Estado == "entregue" {
+			itens[i].Entregue = true
+			if est.UltimaEntrega.Valid {
+				itens[i].EntregueEm = horaPtr(est.UltimaEntrega)
+			}
+		}
+	}
 }

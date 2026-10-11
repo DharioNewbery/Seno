@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/seno-project/seno/contract"
 
@@ -357,6 +358,142 @@ func (s *Service) Enviar(ctx context.Context, t *contract.Transferencia) (string
 		return "", fmt.Errorf("monitor_transferir: resposta ilegível: %s", string(body))
 	}
 	return out.MonitorID, nil
+}
+
+// --- estado (Fase 9.3) ------------------------------------------------------
+
+// Ciclo roda o poll do estado em loop (ticker; embutido no main). O uso
+// da fila fica restrito à transferência: um job auto-reagendado com falha
+// após reagendar criava ciclos duplicados — ticker não tem esse problema.
+func (s *Service) Ciclo(ctx context.Context, intervalo time.Duration) {
+	pollOnce := func() {
+		w, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		if err := s.PollEstado(w); err != nil {
+			slog.Warn("monitor: poll de estado", "err", err)
+		}
+	}
+	for {
+		pollOnce()
+		t := time.NewTicker(intervalo)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return
+		case <-t.C:
+			t.Stop()
+		}
+	}
+}
+
+// PollEstado consome GET /interna/v1/atividades/:monitor_id/estado de cada
+// atribuição transferida e grava o snapshot em monitor_estado_aluno.
+func (s *Service) PollEstado(ctx context.Context) error {
+	if !s.Ligado() {
+		return nil
+	}
+	rows, err := s.st.Pool.Query(ctx,
+		`SELECT id, monitor_id FROM atribuicoes WHERE monitor_id IS NOT NULL`)
+	if err != nil {
+		return fmt.Errorf("poll: listando: %w", err)
+	}
+	type alvo struct {
+		ID  int64
+		Mid string
+	}
+	var alvos []alvo
+	for rows.Next() {
+		var a alvo
+		if err := rows.Scan(&a.ID, &a.Mid); err != nil {
+			rows.Close()
+			return fmt.Errorf("poll: scan: %w", err)
+		}
+		alvos = append(alvos, a)
+	}
+	rows.Close()
+	for _, a := range alvos {
+		est, err := s.pegaEstado(ctx, a.Mid)
+		if err != nil {
+			// 404 = atividade ainda não no Monitor (transferência em
+			// andamento): pula; resto é retry no ciclo seguinte.
+			slog.Warn("monitor: estado inacessível", "monitor_id", a.Mid, "err", err)
+			continue
+		}
+		for _, al := range est.Alunos {
+			if err := s.gravaEstado(ctx, a.ID, &al); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// pegaEstado assina o GET (MAC sobre tempo+"\n"+corpo — corpo vazio aqui).
+func (s *Service) pegaEstado(ctx context.Context, mid string) (*contract.EstadoAtividade, error) {
+	mac, tempo := contract.AssinarMAC(s.secret, time.Now(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		s.url+"/interna/v1/atividades/"+mid+"/estado", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set(contract.HeaderMAC, mac)
+	req.Header.Set(contract.HeaderTime, tempo)
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	corpo, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusNotFound { // ainda não transferida
+		return nil, errEstadoIndisponivel
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("estado %s: %d (%s)", mid, resp.StatusCode, string(corpo))
+	}
+	var est contract.EstadoAtividade
+	if err := json.Unmarshal(corpo, &est); err != nil {
+		return nil, fmt.Errorf("estado %s ilegível: %w", mid, err)
+	}
+	return &est, nil
+}
+
+var errEstadoIndisponivel = errors.New("monitor: estado não encontrado")
+
+// gravaEstado faz o upsert do snapshot de exibição do aluno.
+func (s *Service) gravaEstado(ctx context.Context, atribuicaoID int64, al *contract.EstadoAluno) error {
+	var nt pgtype.Int4
+	if al.NT > 0 {
+		nt = pgtype.Int4{Int32: int32(al.NT), Valid: true}
+	}
+	var entrega pgtype.Timestamptz
+	if al.UltimaSubmissao != nil {
+		entrega = pgtype.Timestamptz{Time: *al.UltimaSubmissao, Valid: true}
+	}
+	var nota pgtype.Numeric
+	if al.NotaAuto != nil {
+		if err := nota.Scan(fmt.Sprint(*al.NotaAuto)); err != nil {
+			return fmt.Errorf("poll: nota: %w", err)
+		}
+		nota.Valid = true
+	}
+	var prazo pgtype.Timestamptz
+	if al.PrazoEfetivo != nil {
+		prazo = pgtype.Timestamptz{Time: *al.PrazoEfetivo, Valid: true}
+	}
+	const q = `INSERT INTO monitor_estado_aluno
+	    (atribuicao_id, aluno_id, estado, n_t, entregue_em, nota_auto, correcao_status, prazo_efetivo, atualizado_em)
+	    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+	    ON CONFLICT (atribuicao_id, aluno_id) DO UPDATE SET
+	      estado = $3, n_t = $4, entregue_em = $5, nota_auto = $6,
+	      correcao_status = $7, prazo_efetivo = $8, atualizado_em = now()`
+	if _, err := s.st.Pool.Exec(ctx, q, atribuicaoID, al.AlunoAPIID, al.Estado,
+		nt, entrega, nota, al.CorrecaoStatus, prazo); err != nil {
+		return fmt.Errorf("poll: upsert de estado aluno=%d: %w", al.AlunoAPIID, err)
+	}
+	return nil
 }
 
 // gravarMonitorID persiste o mapa API↔Monitor (idempotente).
