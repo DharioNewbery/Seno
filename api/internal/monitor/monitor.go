@@ -411,6 +411,9 @@ func (s *Service) PollEstado(ctx context.Context) error {
 		alvos = append(alvos, a)
 	}
 	rows.Close()
+	if len(alvos) > 0 {
+		slog.Debug("monitor: poll de estado", "alvos", len(alvos))
+	}
 	for _, a := range alvos {
 		est, err := s.pegaEstado(ctx, a.Mid)
 		if err != nil {
