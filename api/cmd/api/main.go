@@ -23,6 +23,7 @@ import (
 	"github.com/seno-project/seno/api/internal/httpapi"
 	"github.com/seno-project/seno/api/internal/judge0"
 	"github.com/seno-project/seno/api/internal/mail"
+	"github.com/seno-project/seno/api/internal/monitor"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
 	"github.com/seno-project/seno/api/internal/submissoes"
@@ -73,6 +74,7 @@ func main() {
 		cfg.Judge0URL, cfg.Judge0Token, cfg.Judge0Secret, cfg.WebOrigin,
 	)
 	judge0Cli := judge0.NewClient(judge0Cfg)
+	monitorSvc := monitor.New(st, audit, cfg.MonitorURL, cfg.MonitorSecret)
 	deps := &httpapi.Dependencies{
 		Cfg:        cfg,
 		Pool:       pool,
@@ -89,6 +91,7 @@ func main() {
 		SubmissaoS:  submissoes.New(st, audit),
 		CorrecaoS:   correcoes.New(st, audit, judge0Cli, judge0Cfg),
 		TestarS:     testar.New(st, audit, judge0Cli, judge0Cfg),
+		Monitor:     monitorSvc,
 	}
 
 	if os.Getenv("SENO_MODE") != "debug" {
@@ -97,9 +100,11 @@ func main() {
 	r := gin.New()
 	httpapi.RegisterRoutes(r, deps)
 
-	// Worker embutido da fila PostgreSQL (ARQUITETURA §6): handlers entram
-	// aos poucos (monitor_transferir na Fase 9; 4 workers).
-	fila.Start(ctx, st, make(map[string]fila.Handler), 4)
+	// Worker embutido da fila PostgreSQL (ARQUITETURA §6): transferência ao
+	// Monitor (Fase 9.2) + handlers às futuras fases; 4 workers.
+	fila.Start(ctx, st, map[string]fila.Handler{
+		monitor.KindTransferir: monitorSvc.Handler(),
+	}, 4)
 
 	srv := &http.Server{Addr: cfg.Addr, Handler: r}
 	go func() {

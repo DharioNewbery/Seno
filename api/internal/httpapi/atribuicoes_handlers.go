@@ -28,10 +28,10 @@ func (d *Dependencies) ListarAtribuicoes(c *gin.Context) {
 	pagina, por := numPagina(c)
 	lista, err := d.AtribuicaoS.Listar(
 		c.Request.Context(), user, atribuicoes.FiltroAtribuicoes{
-			TurmaID:       turma,
-			AtividadeID:   atividade,
-			Pagina:        &pagina,
-			Por:           &por,
+			TurmaID:     turma,
+			AtividadeID: atividade,
+			Pagina:      &pagina,
+			Por:         &por,
 		})
 	if err != nil {
 		platform.ErrorBody(c, err)
@@ -53,6 +53,8 @@ func (d *Dependencies) CriarAtribuicao(c *gin.Context) {
 		platform.ErrorBody(c, err)
 		return
 	}
+	// Transferência ao Monitor (Fase 9.2): assíncrona, nunca bloqueia.
+	d.Monitor.Enfileirar(c.Request.Context(), atribuicao.ID)
 	c.JSON(http.StatusCreated, atribuicao)
 }
 

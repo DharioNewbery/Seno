@@ -12,12 +12,13 @@ import (
 	"github.com/seno-project/seno/api/internal/auth"
 	"github.com/seno-project/seno/api/internal/correcoes"
 	"github.com/seno-project/seno/api/internal/ensino"
+	"github.com/seno-project/seno/api/internal/monitor"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
 	"github.com/seno-project/seno/api/internal/submissoes"
 	"github.com/seno-project/seno/api/internal/tarefas"
-	"github.com/seno-project/seno/api/internal/testar"
 	"github.com/seno-project/seno/api/internal/tentativas"
+	"github.com/seno-project/seno/api/internal/testar"
 	"github.com/seno-project/seno/api/internal/usuarios"
 )
 
@@ -28,14 +29,14 @@ type PGXPool interface {
 
 // Dependencies carrega os serviços compartilhados dos handlers.
 type Dependencies struct {
-	Cfg      *platform.Config
-	Pool     PGXPool
-	Store    *store.Store
-	Audit    *platform.Audit
-	Auth     *auth.Service
-	Cargo    *auth.Recoverer
-	UsuarioS *usuarios.Service
-	Ensino     *ensino.Service
+	Cfg         *platform.Config
+	Pool        PGXPool
+	Store       *store.Store
+	Audit       *platform.Audit
+	Auth        *auth.Service
+	Cargo       *auth.Recoverer
+	UsuarioS    *usuarios.Service
+	Ensino      *ensino.Service
 	TarefaS     *tarefas.Service
 	AtividadeS  *atividades.Service
 	AtribuicaoS *atribuicoes.Service
@@ -43,6 +44,7 @@ type Dependencies struct {
 	SubmissaoS  *submissoes.Service
 	CorrecaoS   *correcoes.Service
 	TestarS     *testar.Service
+	Monitor     *monitor.Service // integração Fase 9; nil = desligada
 }
 
 // Healthz verifica integridade do processo e do banco (compose healthcheck).
