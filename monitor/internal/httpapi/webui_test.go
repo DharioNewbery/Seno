@@ -103,11 +103,8 @@ func TestGuardaOrigin(t *testing.T) {
 		t.Fatalf("origin estranha: %d", c)
 	}
 
-	deps.Cfg.WebURL = "https://portal"
-	if c := code("https://portal"); c != 200 {
-		t.Fatalf("origem do web: %d", c)
-	}
-	if c := code("https://outra"); c != http.StatusForbidden {
-		t.Fatalf("origin alheia com WebURL: %d", c)
+	deps.Cfg.WebURL = "https://portal" // não altera a guarda (só correcao_url)
+	if c := code("https://portal"); c != http.StatusForbidden {
+		t.Fatalf("origin de outra base deveria seguir 403: %d", c)
 	}
 }

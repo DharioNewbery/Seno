@@ -16,20 +16,18 @@ import (
 	"github.com/seno-project/seno/contract"
 )
 
-// guardaOrigin valida o cabeçalho Origin das requisições mutantes do /a.
+// guardaOrigin valida o cabeçalho Origin das requisições mutantes do /a:
+// a página da prova é sempre servida pelo próprio Monitor/podendo estar atrás
+// de um proxy (que passa o host público em Host) — a origem legítima é
+// scheme://host da requisição. SENO_WEB_URL não entra aqui: só prefixa o
+// correcao_url da tela.
 func (d *Dependencies) guardaOrigin(c *gin.Context) {
 	origin := c.GetHeader("Origin")
 	if origin == "" {
-		c.Next()
+		c.Next() // cliente programático (curl, testes, verificação)
 		return
 	}
-	esperada := origem(urlDaRequisicao(c)) // scheme://host da requisição (proxy passa o host público)
-	if d.Cfg != nil && d.Cfg.WebURL != "" {
-		if b := origem(d.Cfg.WebURL); b != "" {
-			esperada = b
-		}
-	}
-	if origin != esperada {
+	if origin != origem(urlDaRequisicao(c)) {
 		respondErro(c, http.StatusForbidden, contract.CodeSemPermissao,
 			"Origem da requisição não permitida.", nil)
 		return

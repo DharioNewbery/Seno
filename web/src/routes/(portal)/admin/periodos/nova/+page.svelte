@@ -19,7 +19,7 @@
     <p class="dica">Existe já? A API devolve o período existente.</p>
     <label>
       <span>Trimestre</span>
-      <select bind:value={trimestre}>
+      <select name="trimestre" bind:value={trimestre}>
         <option value={1}>1</option>
         <option value={2}>2</option>
         <option value={3}>3</option>
@@ -28,7 +28,7 @@
     </label>
     <label>
       <span>Ano</span>
-      <input type="number" bind:value={ano} min={2024} max={2100} required />
+      <input type="number" name="ano" bind:value={ano} min={2024} max={2100} required />
     </label>
     <button>Registrar período</button>
   </form>

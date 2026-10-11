@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/seno-project/seno/contract"
@@ -24,15 +26,19 @@ import (
 
 const segTest = "segredo-de-teste-para-o-monitor-32-bytes!!"
 
-// testeDB conecta ao Postgres de teste (dev local ou CI: banco seno_monitor),
-// aplica migrações e esvazia as tabelas antes de cada teste.
+// testeDB conecta ao Postgres de teste (banco DEDICADO seno_monitor_test —
+// NUNCA o banco de dev seno_monitor: os testes truncam tudo; binários de
+// teste rodam em paralelo e o dev precisa sobreviver). Skipa sem servidor.
 func testeDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	dsn := os.Getenv("SENO_DATABASE_URL")
 	if dsn == "" {
-		dsn = "postgres://seno:seno@localhost:5432/seno_monitor?sslmode=disable"
+		dsn = "postgres://seno:seno@localhost:5432/seno_monitor_test?sslmode=disable"
+		if os.Getenv("SENO_TEST_PROTECT_DEV") == "" {
+			garanteBanco(t, dsn)
+		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
@@ -41,6 +47,12 @@ func testeDB(t *testing.T) *pgxpool.Pool {
 	t.Cleanup(pool.Close)
 	if err := pool.Ping(ctx); err != nil {
 		t.Skipf("Postgres de teste indisponível (%v)", err)
+	}
+	// Colchão: o banco de teste nunca é o de dev (compartilhado por acidente).
+	if !strings.HasSuffix(strings.TrimSpace(pool.Config().ConnConfig.Database), "test") &&
+		pool.Config().ConnConfig.Database != "seno_test" {
+		t.Skipf("banco de teste sem sufixo 'test' (%s): protegendo o banco de dev",
+			pool.Config().ConnConfig.Database)
 	}
 	if err := platform.MigrateUp(ctx, pool, db.Migrations); err != nil {
 		t.Fatalf("migrações: %v", err)
@@ -52,6 +64,38 @@ func testeDB(t *testing.T) *pgxpool.Pool {
 		t.Fatalf("limpeza do banco: %v", err)
 	}
 	return pool
+}
+
+// garanteBanco cria o banco de teste dedicado se ele não existir no servidor
+// do DSN (POSTGRES_USER é superuser no compose de dev e no CI). Mesma
+// mecânica do ensureDatabase do Monitor.
+func garanteBanco(t *testing.T, dsn string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cfg, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return
+	}
+	if cfg.Database == "" {
+		return
+	}
+	alvo := cfg.Database
+	cfg.Database = "postgres"
+	cfg.RuntimeParams = nil
+	conn, err := pgx.ConnectConfig(ctx, cfg)
+	if err != nil {
+		return
+	}
+	defer conn.Close(ctx)
+	var existe bool
+	if err := conn.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)`, alvo).Scan(&existe); err != nil || existe {
+		return
+	}
+	if _, err := conn.Exec(ctx, fmt.Sprintf("CREATE DATABASE %s", pgx.Identifier{alvo}.Sanitize())); err != nil {
+		t.Skipf("não foi possível criar o banco de teste %s (%v)", alvo, err)
+	}
 }
 
 // montaMonitor constrói o roteador do Monitor (deps reais, config de teste).
