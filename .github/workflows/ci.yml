@@ -50,6 +50,41 @@ jobs:
       - name: go test
         run: go test ./... -race
 
+  monitor:
+    name: "Monitor (Go)"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: monitor
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: seno_monitor
+          POSTGRES_USER: seno
+          POSTGRES_PASSWORD: seno
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U seno"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      SENO_DATABASE_URL: postgres://seno:seno@localhost:5432/seno_monitor?sslmode=disable
+      SENO_MONITOR_SECRET: segredo-de-ci-para-o-monitor-com-mais-de-32-bytes!!
+      SENO_JUDGE0_CALLBACK_SECRET: dev-callback-secret-judge0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache-dependency-path: monitor/go.sum
+      - name: gofmt
+        run: test -z "$(gofmt -l .)"
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test ./... -race
+
   web:
     name: "Web (SvelteKit)"
     runs-on: ubuntu-latest

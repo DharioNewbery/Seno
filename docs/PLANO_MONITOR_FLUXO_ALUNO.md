@@ -200,20 +200,40 @@ Implementado:
 
 **Pronto quando:** a rota devolve agregados coerentes em teste e2e. ✓
 
-## Fase 8 — Deploy, observabilidade e endurecimento
+## Fase 8 — Deploy, observabilidade e endurecimento ✓
 
-1. Compose prod com healthcheck, volume próprio do banco do Monitor e inclusão
-   no backup (§9.1 da ARQUITETURA); LGPD/retensão de 2 anos nos dados do Monitor.
-2. Log de auditoria das escritas (segundo §9.3): tabela `log` no banco do Monitor.
-3. Endurecimento: timeouts, tamanho de corpo global, `SameSite` do `hm_sess`,
-   replay window do HMAC, teste de concorrência de duas abas (revisão).
-4. Teste e2e completo do fluxo do aluno **sem a API**: fixtures (Fase 2.3)
-   alimentam atividade, helper de `st` (Fase 3.1) autentica, Judge0 local cuida
-   das execuções — prova a separação em prática.
-5. Docs: atualizar `ARQUITETURA.md` (§1 visão geral e §8.3 compose) com o Monitor.
+**Objetivo:** rota HMAC de leitura pura já fechada na 7; esta fase fecha o pacote
+de operação. Implementado:
+
+1. `deploy/compose.yaml` (produção): postgres (`pgdata`), monitor (build com
+   contexto na raiz; `contract/` agora Copiado — go.mod ganhou `replace`),
+   sidecar de backup (`pg_dump -Fc` diário de `seno_monitor`, retenção 120 d
+   em `/backups`) e Judge0 por `include` — healthcheck do monitor via modo
+   `-healthcheck` do binário (distroless não tem curl/wget). CI ganhou job
+   "Monitor (Go)" (fmt/vet/test com Postgres).
+2. Log de auditoria (§9.3): migração `0006_log` (tabela `log`: ocorrida_em/
+   agente/tipo/descrição) + `platform/audit.go` (duplicado da API, falha nunca
+   derruba request). Eventos: transferência (agente `api`), entrada (login, IP),
+   primeira abertura, cancelar, confirmar. Autosave fica em `rascunho_ponto` e
+   ensaios em `execucao` (histórios próprios — decisão registrada).
+3. Endurecimento: timeouts do `http.Server` (ReadHeader 10 s / Read 60 s /
+   Write e Idle 120 s), middleware global de limite de corpo
+   (`MaxBytesReader` por `MaxPayloadBytes`), janela HMAC validada no startup
+   (`> 0`), cookie `hm_sess` já coberto na Fase 3 (Lax + Secure + SHA-256 no
+   banco) e **teste de concorrência de duas abas** (mesma revisão ao vivo:
+   exatamente 1 vence, as demais 409).
+4. Retenção LGPD (§9.2): `SENO_RETENCAO_DADOS_D` (default 730 d) +
+   `LacaRetensao` no main (limpa `log` e a cadeia `pre_avaliacao` →
+   `submissao`); `execucao` continua 7 d na inserção.
+5. e2e sem a API já existe e é verde: fixtures (Fase 2.3) → st (Fase 3.1) →
+   fluxo completo com Judge0 real (`submissao_test.go`, `ensaios_test.go`).
+6. Docs: ARQUITETURA §1 (6 serviços, monitor no diagrama) e §8.3 (compose
+   atual), §9.2 (retenção do Monitor).
 
 **Pronto quando:** Monitor e Judge0 sobem com `docker compose up -d` e o fluxo e2e
 completo (transferência → prova → entrega → correção) roda **sem a API em execução**.
+✓ (fluxo e2e validado em testes com Judge0 real; subida da stack pelo compose
+indicada em deploy/compose.yaml — validar no servidor da UFPA.)
 
 ## Fase 9 — Integração com a API (só depois de tudo testado)
 

@@ -24,6 +24,7 @@ type Config struct {
 	PreAvaTTL          time.Duration // janela de escolha após pré-avaliação
 	AlunoExecMaxPerMin int           // limite de ensaios por minuto
 	ExecucaoRetencao   time.Duration // retenção da tabela execucao
+	DadosRetencao      time.Duration // LGPD: retenção de submissão e log (§9.2)
 	HMACJanela         time.Duration // tolerância de relógio nas rotas internas (anti-replay)
 	CookieSecure       bool          // Secure do hm_sess (produção true; dev HTTP localhost false)
 
@@ -50,6 +51,7 @@ func LoadConfig() (*Config, error) {
 		PreAvaTTL:          envDuration("SENO_PRE_AVA_TTL_S", 15*time.Minute),
 		AlunoExecMaxPerMin: envInt("SENO_ALUNO_EXEC_MAX_PER_MIN", 5),
 		ExecucaoRetencao:   envDuration("SENO_EXECUCAO_RETENCAO_D", 7*24*time.Hour),
+		DadosRetencao:      envDurationDays("SENO_RETENCAO_DADOS_D", 730),
 		HMACJanela:         envDuration("SENO_MONITOR_HMAC_JANELA_S", 60*time.Second),
 		CookieSecure:       envBool("SENO_COOKIE_SECURE", true),
 		Judge0URL:          os.Getenv("SENO_JUDGE0_URL"),
@@ -65,7 +67,20 @@ func LoadConfig() (*Config, error) {
 	if len(c.Secret) < 32 {
 		return nil, fmt.Errorf("SENO_MONITOR_SECRET é obrigatório e precisa de pelo menos 32 bytes")
 	}
+	if c.HMACJanela <= 0 {
+		return nil, fmt.Errorf("SENO_MONITOR_HMAC_JANELA_S precisa ser positivo (anti-replay)")
+	}
 	return c, nil
+}
+
+// envDurationDays lê dias inteiros (chaves em _D) e devolve a duração.
+func envDurationDays(key string, defDays int) time.Duration {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return time.Duration(n) * 24 * time.Hour
+		}
+	}
+	return time.Duration(defDays) * 24 * time.Hour
 }
 
 func env(key, def string) string {

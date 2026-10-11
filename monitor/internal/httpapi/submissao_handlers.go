@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/seno-project/seno/contract"
+	"github.com/seno-project/seno/monitor/internal/platform"
 	"github.com/seno-project/seno/monitor/internal/submissoes"
 )
 
@@ -39,6 +40,11 @@ func (d *Dependencies) CancelarSubmissao(c *gin.Context) {
 			"Erro interno do servidor.", nil)
 		return
 	}
+	d.Audit.Record(c.Request.Context(), platform.LogEntry{
+		Agent:     "aluno:" + strconv.FormatInt(aluno, 10),
+		Kind:      "cancelar",
+		Descricao: "envio cancelado (pre_id=" + req.PreID + ") em monitor_id=" + mid,
+	})
 	c.JSON(http.StatusOK, gin.H{"cancelada": true})
 }
 
@@ -78,6 +84,10 @@ func (d *Dependencies) ConfirmarSubmissao(c *gin.Context) {
 			"Erro interno do servidor.", nil)
 		return
 	default:
+		d.Audit.Record(c.Request.Context(), platform.LogEntry{
+			Agent: "aluno:" + strconv.FormatInt(aluno, 10), Kind: "confirmar",
+			Descricao: "submissão n_t=" + strconv.Itoa(entrega.NT) + " em monitor_id=" + mid + " (atrasada=" + strconv.FormatBool(entrega.Atrasada) + ")",
+		})
 		c.JSON(http.StatusOK, entrega)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/seno-project/seno/contract"
+	"github.com/seno-project/seno/monitor/internal/platform"
 	"github.com/seno-project/seno/monitor/internal/sessao"
 )
 
@@ -65,6 +66,12 @@ func (d *Dependencies) Entrar(c *gin.Context) {
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(sessao.CookieNome, token, int(expira.Seconds()), "/",
 		"", d.Cfg.CookieSecure, true)
+
+	d.Audit.Record(c.Request.Context(), platform.LogEntry{
+		Agent:     "ip:" + ip,
+		Kind:      "entrada",
+		Descricao: "sessão concedida para monitor_id=" + claims.Mid + " aluno_api_id=" + strconv.FormatInt(claims.Sub, 10),
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"sessao":       "ok",

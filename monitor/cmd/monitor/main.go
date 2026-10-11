@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -33,6 +34,12 @@ import (
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
+	// modo do healthcheck do compose (distroless não tem curl/wget): GET
+	// /healthz no próprio processo e sai com 0/1.
+	if len(os.Args) > 1 && os.Args[1] == "-healthcheck" {
+		os.Exit(healthcheckSelf())
+	}
 
 	cfg, err := platform.LoadConfig()
 	if err != nil {
@@ -76,6 +83,9 @@ func main() {
 	submissaoS := submissoes.New(pool, tentativaS, j0Cli)
 	estadoS := estado.New(pool)
 
+	// Retenção LGPD (§9.2): submissão e log por 2 anos (default); ciclo diário.
+	platform.LacaRetensao(ctx, pool, cfg.DadosRetencao, 24*time.Hour)
+
 	fila.Start(ctx, pool, map[string]fila.Handler{
 		ensaios.KindEnsaio:      ensaiosS.Handler(),
 		submissoes.KindCorrecao: submissaoS.Handler(),
@@ -86,6 +96,7 @@ func main() {
 		Cfg:        cfg,
 		Pool:       pool,
 		DB:         pool,
+		Audit:      platform.NewAudit(pool),
 		AtividadeS: atividades.New(pool),
 		SessaoS:    sessao.New(pool),
 		TentativaS: tentativaS,
@@ -96,7 +107,17 @@ func main() {
 		Entradas:   sessao.NovoLimiter(10, 5*time.Minute),
 	})
 
-	srv := &http.Server{Addr: cfg.Addr, Handler: r}
+	// Timeouts de endurecimento (Fase 8.3): nada do Monitor responde rápido
+	// além do Judge0 — o fluxo pesado é assíncrono (fila), então 2 min de
+	// escrita cobre as rotas de aluno com folga.
+	srv := &http.Server{
+		Addr:              cfg.Addr,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,  // corpo até 1 MB (envelope)
+		WriteTimeout:      120 * time.Second, // pré-avaliação sequencial pode demorar
+		IdleTimeout:       120 * time.Second,
+	}
 	go func() {
 		slog.Info("monitor escutando", "addr", cfg.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -112,6 +133,31 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("encerramento com falhas", "err", err)
 	}
+}
+
+// healthcheckSelf consulta o /healthz da própria instância.
+func healthcheckSelf() int {
+	cfg, err := platform.LoadConfig()
+	if err != nil {
+		return 1
+	}
+	porta := strings.TrimPrefix(cfg.Addr, ":")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		"http://127.0.0.1:"+porta+"/healthz", nil)
+	if err != nil {
+		return 1
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 1
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 1
+	}
+	return 0
 }
 
 // ensureDatabase garante que o banco do Monitor exista no servidor apontado

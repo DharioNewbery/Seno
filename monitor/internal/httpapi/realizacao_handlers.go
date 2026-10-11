@@ -5,12 +5,14 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/seno-project/seno/contract"
 	"github.com/seno-project/seno/monitor/internal/atividades"
+	"github.com/seno-project/seno/monitor/internal/platform"
 	"github.com/seno-project/seno/monitor/internal/tentativas"
 )
 
@@ -37,6 +39,13 @@ func (d *Dependencies) AbrirAtividade(c *gin.Context) {
 	if err != nil {
 		mapearErroTentativa(c, err)
 		return
+	}
+	if idempotente := aberta.Revisao == 0; idempotente { // primeira abertura é escrita; reabrir não é
+		d.Audit.Record(c.Request.Context(), platform.LogEntry{
+			Agent:     "aluno:" + strconv.FormatInt(aluno, 10),
+			Kind:      "abrir",
+			Descricao: "tentativa aberta para monitor_id=" + mid,
+		})
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"atividade": atividades.Sanitizada(aberta.Carga),

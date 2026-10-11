@@ -3,12 +3,14 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/seno-project/seno/contract"
+	"github.com/seno-project/seno/monitor/internal/platform"
 )
 
 // ReceberAtividade — POST /interna/v1/atividades (spec §2).
@@ -52,6 +54,13 @@ func (d *Dependencies) ReceberAtividade(c *gin.Context) {
 		respondErro(c, http.StatusInternalServerError, contract.CodeInternal,
 			"Erro interno do servidor.", nil)
 		return
+	}
+	if !existente {
+		d.Audit.Record(c.Request.Context(), platform.LogEntry{
+			Agent:     "api",
+			Kind:      "transferencia",
+			Descricao: fmt.Sprintf("atividade api_id=%d recebida (monitor_id=%s, %d alunos)", t.APIID, monitorID, len(t.Alunos)),
+		})
 	}
 	status := http.StatusCreated
 	if existente {

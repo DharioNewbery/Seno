@@ -6,7 +6,7 @@ Decisões registradas (com as escolhas feitas nesta sessão): monorepo; sessão 
 
 ## 1. Visão geral
 
-O Seno é um sistema **local** (rede da UFPA, sem nuvem), composto por cinco serviços em Docker:
+O Seno é um sistema **local** (rede da UFPA, sem nuvem), composto por seis serviços em Docker:
 
 ```mermaid
 flowchart LR
@@ -15,7 +15,10 @@ flowchart LR
     W -->     A["api (Go + Gin)<br/>RBAC, fila, integrações"]
     A --> D[("PostgreSQL<br/>dados, sessões, fila, tokens")]
     A --> J["Judge0 CE<br/>rede interna, sem internet"]
-    A --> M["SMTP da UFPA<br/>(MailPit em dev)"]
+    A --> S["SMTP da UFPA<br/>(MailPit em dev)"]
+    A -. "transferência + estado<br/>(HMAC assíncrono)" .-> mon["monitor (Go + Gin)<br/>realização da prova"]
+    mon --> M[("PostgreSQL<br/>seno_monitor")]
+    mon <--> J
 ```
 
 | Serviço | Papel |
@@ -23,8 +26,9 @@ flowchart LR
 | **Caddy** | Único ponto de entrada (HTTPS 443). Expõe o certificado real da UFPA e só encaminha para o `web`. |
 | **web** | Servidor SvelteKit: atende as páginas e atua como **BFF** (sessão/cookie, agregação de chamadas). O front no navegador nunca fala com a API. |
 | **api** | Único dono da regra de negócio: autenticação, autorização, visibilidade de dados, fila de jobs, integração com Judge0 e e-mail. |
-| **PostgreSQL** | Única fonte de estado: dados do sistema, sessões, tokens de convite/recuperação, fila de jobs, Log e auditoria. |
-| **Judge0** | Execução de código (Python, C, C++). Fala apenas com a API. |
+| **monitor** | Serviço da realização da prova pelo aluno (ver `docs/MONITOR_FLUXO_ALUNO.md`): recebe a atividade da API por HMAC, guarda tentativa/autosave, ensaios e submissão. **Nunca chama a API** — integração é só por prova HMAC (transferência e `/estado`). Banco próprio `seno_monitor` no mesmo PostgreSQL (decisão do PLANO_MONITOR). |
+| **PostgreSQL** | Única fonte de estado: dados do sistema, sessões, tokens de convite/recuperação, fila de jobs, Log e auditoria (e, no banco separado `seno_monitor`, o estado do Monitor). |
+| **Judge0** | Execução de código (Python, C, C++). Fala apenas com a API e o Monitor (callbacks por `callback_url`). |
 
 ## 2. Princípios
 
@@ -265,28 +269,22 @@ Cada stage de build roda sem dados de fora: código do repo + deps declaradas.
 
 ### 8.3 Compose e redes
 
-`deploy/compose.yaml`:
+`deploy/compose.yaml` (produção atual — Monitor + Judge0; api/web/caddy entram
+na Fase 9/§9 do PLANO_MONITOR):
 
 ```yaml
 services:
-  caddy:    # única porta exposta: 80/443 (edge)
-  web:      # porta interna (3000)
-  api:      # porta interna (8080); redes: app e judge0
-  postgres: # porta interna (5432), somente rede app
+  monitor:  # realização da prova; /healthz e modo -healthcheck para healthcheck
+  postgres: # servidor único; bancos separados seno e seno_monitor (§1)
+  backup:   # sidecar: pg_dump -Fc diário de seno_monitor → volume backups
+  judge0:   # include de deploy/judge0/compose.yaml (server, workers, db, redis)
 ```
 
-Redes:
-
-| Rede | Quem está |
-|---|---|
-| `edge` | caddy e web |
-| `app` | web, api e postgres (`internal: true`) |
-| `judge0` | api e stack do Judge0 (`internal: true`) |
-
-* **Nenhum serviço fala com a internet**, exceto a saída de SMTP da API (e o Caddy, apenas se adotar ACME no futuro).
-* Healthchecks em todos (`/healthz` na API e no web, `pg_isready` no banco) com `depends_on: condition: service_healthy`.
-* Volumes nomeados: `pgdata`, `wal_archive`, `backups`, `caddy_certs`.
+* `pg_isready` no postgres; o healthcheck do `monitor` roda `/seno-monitor -healthcheck`
+  (GET próprio `/healthz` — a imagem distroless não tem curl/wget).
+* Volumes nomeados: `pgdata` (seno e seno_monitor) e `backups` (dumps diários).
 * Segredos (DSN, token do Judge0, segredo de callback, SMTP, chave de assinatura de links) **só via `.env`** (fora do Git; `.env.example` documenta cada chave).
+* Retenção LGPD nos dados do Monitor (§9.2): job interno de limpeza.
 
 ### 8.4 Caddy e TLS
 
@@ -320,7 +318,7 @@ seno.ufpa.br {
 
 ### 9.2 LGPD e retenção
 
-* Retenção de submissões e logs por **2 anos**, com exclusões executadas por job diário da fila.
+* Retenção de submissões e logs por **2 anos**, com exclusões executadas por job diário da fila. No Monitor vale o mesmo: tabela `log` e `submissao` do banco `seno_monitor` sob `SENO_RETENCAO_DADOS_D` (job interno `LacaRetensao`, PLANO_MONITOR Fase 8).
 * Dados do aluno acessíveis apenas ao professor da turma e a admins (scoping §5.4).
 
 ### 9.3 Log e auditoria

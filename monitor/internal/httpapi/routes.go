@@ -29,6 +29,7 @@ type Dependencies struct {
 	Cfg        *platform.Config
 	Pool       PGXPool
 	DB         *pgxpool.Pool
+	Audit      *platform.Audit
 	AtividadeS *atividades.Service
 	SessaoS    *sessao.Service
 	TentativaS *tentativas.Service
@@ -41,6 +42,7 @@ type Dependencies struct {
 
 // RegisterRoutes registra as rotas correntes do Monitor.
 func RegisterRoutes(r *gin.Engine, d *Dependencies) {
+	r.Use(d.limiteCorpo)
 	r.GET("/healthz", d.Healthz)
 	r.POST("/interna/v1/atividades", d.ReceberAtividade)
 	r.GET("/entrar", d.Entrar)
@@ -58,6 +60,18 @@ func RegisterRoutes(r *gin.Engine, d *Dependencies) {
 
 	// callback do Judge0 (autenticado por ?key=, não HMAC)
 	r.PUT("/interna/callbacks/judge0", d.CallbackJudge0)
+}
+
+// limiteCorpo é o teto GLOBAL de corpo (Fase 8.3: endurecimento): nenhum
+// corpo passa do envelope de transferência (o maior corpo esperado). Handlers
+// com limites menores (autosave) continuam com o deles, e o readBody local
+// detecta o estouro como 413.
+func (d *Dependencies) limiteCorpo(c *gin.Context) {
+	if d.Cfg != nil && c.Request.Body != nil {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body,
+			int64(d.Cfg.MaxPayloadBytes))
+	}
+	c.Next()
 }
 
 // Healthz verifica integridade do processo e do banco (compose healthcheck).
