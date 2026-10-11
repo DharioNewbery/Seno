@@ -6,6 +6,7 @@ sqlc/*.go
 .env
 .env.*
 !.env.example
+deploy/judge0/judge0.conf
 
 # Certificados locais
 deploy/caddy/certs/

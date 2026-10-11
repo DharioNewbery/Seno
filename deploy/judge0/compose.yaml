@@ -1,0 +1,63 @@
+# Judge0 CE — execução de código do Monitor (e da API).
+# Compose baseado no oficial (github.com/judge0/judge0).
+#
+# IMAGEM: uso a fork da comunidade `mrkushalsm/judge0:cgv2` (judge0 #549)
+# porque o oficial `judge0/judge0:1.13.*` usa isolate 1.8.1 que exige
+# cgroups v1 — Docker Desktop/WSL2 (Windows) roda cgroups v2 e não permite
+# rebaixamento. A imagem cgv2 suporta v1 e v2 (com /sys/fs/cgroup rw).
+# shortcut: imagem terceira em produção — reavaliar no host Linux real da
+# UFPA (cgroups v1 oficial ou fork auditado), ver PLANO_MONITOR Fase 8.
+name: seno-judge0
+
+x-logging: &default-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: 100m
+
+services:
+  server:
+    image: mrkushalsm/judge0:cgv2
+    volumes:
+      - ./judge0.conf:/judge0.conf:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    ports:
+      - "2358:2358"
+    privileged: true # isolate precisa (sandbox interno)
+    <<: *default-logging
+    restart: always
+
+  workers:
+    image: mrkushalsm/judge0:cgv2
+    command: ["./scripts/workers"]
+    volumes:
+      - ./judge0.conf:/judge0.conf:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    privileged: true
+    <<: *default-logging
+    restart: always
+
+  db:
+    image: postgres:16.2
+    env_file: judge0.conf
+    volumes:
+      - postgres-data:/var/lib/postgresql/data/
+    <<: *default-logging
+    restart: always
+
+  redis:
+    image: redis:6.2
+    command: [
+      "bash", "-c",
+      'docker-entrypoint.sh --appendonly yes --requirepass "$$REDIS_PASSWORD"'
+    ]
+    env_file: judge0.conf
+    volumes:
+      - redis-data:/data
+    <<: *default-logging
+    restart: always
+
+volumes:
+  postgres-data:
+  redis-data:
+

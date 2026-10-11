@@ -1,0 +1,28 @@
+# Judge0 Configuration — copie para judge0.conf (NUNCA comitar judge0.conf!)
+# Baseado no judge0.conf oficial (v1.13.0); só as chaves obrigatórias e as
+# divergências do default estão preenchidas — ver fileation oficial comentada
+# no repo do judge0 (https://github.com/judge0/judge0/blob/v1.13.0/judge0.conf).
+
+# --- Acesso / rede (dev: host nativo; prod: rede interna) ---
+ALLOW_ORIGIN=
+
+# --- Autenticação da API (vazio = desligado em dev; PREENCHA EM PRODUÇÃO) ---
+AUTHN_HEADER=
+AUTHN_TOKEN=
+
+# --- Redis / PostgreSQL (obrigatórios) ---
+REDIS_HOST=redis
+REDIS_PASSWORD=troque-isto-dentro-do-judge0.conf-gitignored
+POSTGRES_HOST=db
+POSTGRES_DB=judge0
+POSTGRES_USER=judge0
+POSTGRES_PASSWORD=troque-isto-dentro-do-judge0.conf-gitignored
+
+# --- Sandbox: limites default do judge0 (ver docs oficiais) ---
+CPU_TIME_LIMIT=
+WALL_TIME_LIMIT=
+MEMORY_LIMIT=
+
+# --- Rails ---
+RAILS_ENV=production
+SECRET_KEY_BASE=
