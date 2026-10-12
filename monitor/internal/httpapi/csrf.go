@@ -44,9 +44,13 @@ func origem(u string) string {
 	return p.Scheme + "://" + p.Host
 }
 
+// urlDaRequisicao monta "scheme://host[:port]". O scheme vem do TLS da
+// conexão OU do X-Forwarded-Proto — atrás do Caddy/Nginx (TLS terminado no
+// proxy) a conexão interna é http e, sem o header, o Origin https://… do
+// navegador nunca casaria e toda mutação de aluno tomaria 403.
 func urlDaRequisicao(c *gin.Context) string {
 	scheme := "http"
-	if c.Request.TLS != nil {
+	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
 		scheme = "https"
 	}
 	if host := c.Request.Host; host != "" {
