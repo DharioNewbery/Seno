@@ -119,15 +119,23 @@ func TestCorrecoes(t *testing.T) {
 		t.Fatalf("teste 2: %v", err)
 	}
 
-	// Callbacks simulados do Judge0 (cfg de teste sem chave — sem guarda).
+	// Callback do Judge0 com chave errada: 403, e nada é aplicado.
+	w, _ = chama(t, r, "POST",
+		fmt.Sprintf("/v1/judge0/callback?par=%d:%d&key=errada", ctA, te1),
+		`{"status":3}`)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("callback com chave errada: %d", w.Code)
+	}
+
+	// Callbacks simulados do Judge0 (com a chave compartilhada de teste).
 	w, corpoCB := chama(t, r, "POST",
-		fmt.Sprintf("/v1/judge0/callback?par=%d:%d", ctA, te1),
+		fmt.Sprintf("/v1/judge0/callback?par=%d:%d&key=chave-callback-teste", ctA, te1),
 		`{"status":3,"stdout":"3"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("callback t1: %d corpo %v", w.Code, corpoCB)
 	}
 	w, corpoCB = chama(t, r, "POST",
-		fmt.Sprintf("/v1/judge0/callback?par=%d:%d", ctA, te2),
+		fmt.Sprintf("/v1/judge0/callback?par=%d:%d&key=chave-callback-teste", ctA, te2),
 		`{"status":5}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("callback t2: %d corpo %v", w.Code, corpoCB)
@@ -146,6 +154,81 @@ func TestCorrecoes(t *testing.T) {
 				t.Errorf("2 resultados na A: %v", te["resultados"])
 			}
 		}
+	}
+
+	// Nota final: trava em [0, valor_pts]; campo ausente não limpa; id de
+	// OUTRA submissão → 404 (a correção é sempre do escopo do PATCH).
+	w, corpoClamp := chama(t, r, "PATCH", "/v1/submissoes/"+intStr(idSub)+"/correcao",
+		`{"tarefas":[{"id":`+intStr(ctA)+`,"nota_final":99}]}`, autenticado(tokPaula))
+	if w.Code != http.StatusOK {
+		t.Fatalf("nota acima do valor: %d corpo %v", w.Code, corpoClamp)
+	}
+	for _, item := range corpoClamp["correcao"].(map[string]any)["tarefas"].([]any) {
+		te := item.(map[string]any)
+		if te["tarefa_id"].(float64) == float64(idTarefaA) {
+			if nf, _ := te["nota_final"].(float64); int(nf) != 7 {
+				t.Errorf("nota final travada em 7 (valor_pts): %v", te)
+			}
+		}
+	}
+	w, corpoPres := chama(t, r, "PATCH", "/v1/submissoes/"+intStr(idSub)+"/correcao",
+		`{"tarefas":[{"id":`+intStr(ctA)+`,"feedback":"sem nota no corpo"}]}`, autenticado(tokPaula))
+	if w.Code != http.StatusOK {
+		t.Fatalf("patch sem nota: %d", w.Code)
+	}
+	for _, item := range corpoPres["correcao"].(map[string]any)["tarefas"].([]any) {
+		te := item.(map[string]any)
+		if te["tarefa_id"].(float64) == float64(idTarefaA) {
+			if nf, _ := te["nota_final"].(float64); int(nf) != 7 {
+				t.Errorf("patch sem nota não deve zerar a nota anterior: %v", te)
+			}
+		}
+	}
+	w, _ = chama(t, r, "PATCH", "/v1/submissoes/"+intStr(idSub)+"/correcao",
+		`{"tarefas":[{"id":999999,"nota_final":1}]}`, autenticado(tokPaula))
+	if w.Code != http.StatusNotFound {
+		t.Errorf("correcao_tarefa fora do escopo: %d", w.Code)
+	}
+
+	// Watchdog (FecharPerdidas): nada antigo → ninguém é marcado.
+	perdidas, err := deps.CorrecaoS.FecharPerdidas(context.Background())
+	if err != nil {
+		t.Fatalf("watchdog: %v", err)
+	}
+	if len(perdidas) != 0 {
+		t.Fatalf("watchdog marcou correção nova: %v", perdidas)
+	}
+
+	// Correção 'executando' velha (callback perdido simulado) → 'falhou'.
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE correcoes SET status = 'executando',
+		    created_at = now() - interval '11 minutes'
+		 WHERE submissao_id = $1`, idSub); err != nil {
+		t.Fatalf("forçando estado perdida: %v", err)
+	}
+	perdidas, err = deps.CorrecaoS.FecharPerdidas(context.Background())
+	if err != nil {
+		t.Fatalf("watchdog: %v", err)
+	}
+	if len(perdidas) != 1 {
+		t.Fatalf("watchdog: quero 1 correção marcada, obtive %v", perdidas)
+	}
+	w, corpo5 := chama(t, r, "GET", "/v1/submissoes/"+intStr(idSub)+"/correcao",
+		"", autenticado(tokPaula))
+	if corpo5["correcao"].(map[string]any)["status"] != "falhou" {
+		t.Errorf("status após watchdog: %v", corpo5["correcao"].(map[string]any)["status"])
+	}
+	// Callback tardio que re-aplica um veredito cura o estado (self-heal).
+	w, corpoTardio := chama(t, r, "POST",
+		fmt.Sprintf("/v1/judge0/callback?par=%d:%d&key=chave-callback-teste", ctA, te1),
+		`{"status":3}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("callback tardio: %d corpo %v", w.Code, corpoTardio)
+	}
+	w, corpoCura := chama(t, r, "GET", "/v1/submissoes/"+intStr(idSub)+"/correcao",
+		"", autenticado(tokPaula))
+	if s := corpoCura["correcao"].(map[string]any)["status"]; s != "concluida" {
+		t.Errorf("callback tardio deve curar 'falhou' → 'concluida'; status=%v", s)
 	}
 
 	// Aluna antes de publicar: apenas estado.

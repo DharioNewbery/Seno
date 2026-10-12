@@ -31,9 +31,10 @@ type Config struct {
 
 	// Judge0 (§Execução do código): vazio = integração desligada
 	// (correções pendentes p/ grade manual).
-	Judge0URL    string
-	Judge0Token  string // X-Auth-Token (se exigido pela instância)
-	Judge0Secret string // chave compartilhada do callback (?key=)
+	Judge0URL         string
+	Judge0Token       string // X-Auth-Token (se exigido pela instância)
+	Judge0Secret      string // chave compartilhada do callback (?key=)
+	Judge0CallbackURL string // base da API VISTA PELO JUDGE0 (ex.: http://api:8080)
 
 	// Monitor (Fase 9 do PLANO_MONITOR): vazio = integração desligada.
 	MonitorURL       string        // base do Monitor vista pela API (ex.: http://monitor:8081)
@@ -58,9 +59,10 @@ func LoadConfig() (*Config, error) {
 		SMTPFrom:         env("SENO_SMTP_FROM", "seno@ufpa.br"),
 		WebOrigin:        os.Getenv("SENO_WEB_ORIGIN"),
 		ShutdownDeadline: envDuration("SENO_SHUTDOWN_DEADLINE", 10*time.Second),
-		Judge0URL:        os.Getenv("SENO_JUDGE0_URL"),
-		Judge0Token:      os.Getenv("SENO_JUDGE0_TOKEN"),
-		Judge0Secret:     os.Getenv("SENO_JUDGE0_CALLBACK_KEY"),
+		Judge0URL:         os.Getenv("SENO_JUDGE0_URL"),
+		Judge0Token:       os.Getenv("SENO_JUDGE0_TOKEN"),
+		Judge0Secret:      os.Getenv("SENO_JUDGE0_CALLBACK_KEY"),
+		Judge0CallbackURL: strings.TrimSuffix(strings.TrimSpace(os.Getenv("SENO_JUDGE0_CALLBACK_URL")), "/"),
 		MonitorURL:       strings.TrimSuffix(strings.TrimSpace(os.Getenv("SENO_MONITOR_URL")), "/"),
 		MonitorPublicURL: strings.TrimSuffix(strings.TrimSpace(os.Getenv("SENO_MONITOR_PUBLIC_URL")), "/"),
 		MonitorSecret:    os.Getenv("SENO_MONITOR_SECRET"),
@@ -82,6 +84,18 @@ func LoadConfig() (*Config, error) {
 	}
 	if (c.MonitorURL == "") != (c.MonitorPublicURL == "") {
 		return nil, fmt.Errorf("SENO_MONITOR_URL e SENO_MONITOR_PUBLIC_URL são configurados juntos (interno e navegador)")
+	}
+	if c.Judge0URL != "" {
+		// Sem chave, o callback do Judge0 aceita vereditos forjados de
+		// qualquer host da rede (nota cheia sem prova de execução).
+		if c.Judge0Secret == "" {
+			return nil, fmt.Errorf("Judge0 ligado exige SENO_JUDGE0_CALLBACK_KEY (valida o POST /v1/judge0/callback)")
+		}
+		// O callback_url é construído sobre esta base; a origem do navegador
+		// (SENO_WEB_ORIGIN) não é alcançável pelo Judge0 na rede interna.
+		if c.Judge0CallbackURL == "" {
+			return nil, fmt.Errorf("Judge0 ligado exige SENO_JUDGE0_CALLBACK_URL (base da API vista pelo Judge0, ex.: http://api:8080)")
+		}
 	}
 	return c, nil
 }

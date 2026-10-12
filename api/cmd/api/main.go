@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -69,12 +70,15 @@ func main() {
 	}
 
 	svcTarefas := tarefas.New(st, audit)
-	// Judge0 (§Execução do código): vazio = integração desligada.
+	// Judge0 (§Execução do código): vazio = integração desligada. A base
+	// do callback é a API como o Judge0 a alcança (interna) — nunca a
+	// origem do navegador, que aponta para o BFF.
 	judge0Cfg := judge0.CarregarConfigDasEnvLigada(
-		cfg.Judge0URL, cfg.Judge0Token, cfg.Judge0Secret, cfg.WebOrigin,
+		cfg.Judge0URL, cfg.Judge0Token, cfg.Judge0Secret, cfg.Judge0CallbackURL,
 	)
 	judge0Cli := judge0.NewClient(judge0Cfg)
 	monitorSvc := monitor.New(st, audit, cfg.MonitorURL, cfg.MonitorPublicURL, cfg.MonitorSecret)
+	svcCorrecao := correcoes.New(st, audit, judge0Cli, judge0Cfg)
 	deps := &httpapi.Dependencies{
 		Cfg:         cfg,
 		Pool:        pool,
@@ -89,7 +93,7 @@ func main() {
 		AtribuicaoS: atribuicoes.New(st, audit),
 		TentativaS:  tentativas.New(st, audit),
 		SubmissaoS:  submissoes.New(st, audit),
-		CorrecaoS:   correcoes.New(st, audit, judge0Cli, judge0Cfg),
+		CorrecaoS:   svcCorrecao,
 		TestarS:     testar.New(st, audit, judge0Cli, judge0Cfg),
 		Monitor:     monitorSvc,
 	}
@@ -106,6 +110,27 @@ func main() {
 		monitor.KindTransferir: monitorSvc.Handler(),
 	}, 4)
 	go monitorSvc.Ciclo(ctx, cfg.PollEstado)
+
+	// Watchdog de correção (correcoes.FecharPerdidas): callback do Judge0
+	// perdido → 'falhou' em vez de 'executando' eterno. Callback tardio
+	// ainda conclui a correção — só o estado muda.
+	go func() {
+		t := time.NewTicker(time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				ids, err := svcCorrecao.FecharPerdidas(ctx)
+				if err != nil {
+					slog.Warn("watchdog de correções", "err", err)
+				} else if len(ids) > 0 {
+					slog.Warn("correções marcadas 'falhou' sem callback do Judge0", "ids", ids)
+				}
+			}
+		}
+	}()
 
 	srv := &http.Server{Addr: cfg.Addr, Handler: r}
 	go func() {

@@ -11,22 +11,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const ajustarCorrecaoTarefa = `-- name: AjustarCorrecaoTarefa :exec
+const ajustarCorrecaoTarefa = `-- name: AjustarCorrecaoTarefa :execrows
+
 UPDATE correcao_tarefas
-SET nota_final = $2,
-    feedback   = $3
-WHERE id = $1
+SET nota_final = COALESCE($3, nota_final),
+    feedback   = COALESCE($4, feedback)
+WHERE correcao_id = $1
+  AND id = $2
 `
 
 type AjustarCorrecaoTarefaParams struct {
-	ID        int64       `json:"id"`
-	NotaFinal pgtype.Int4 `json:"nota_final"`
-	Feedback  *string     `json:"feedback"`
+	CorrecaoID int64       `json:"correcao_id"`
+	ID         int64       `json:"id"`
+	NotaFinal  pgtype.Int4 `json:"nota_final"`
+	Feedback   *string     `json:"feedback"`
 }
 
-func (q *Queries) AjustarCorrecaoTarefa(ctx context.Context, arg AjustarCorrecaoTarefaParams) error {
-	_, err := q.db.Exec(ctx, ajustarCorrecaoTarefa, arg.ID, arg.NotaFinal, arg.Feedback)
-	return err
+func (q *Queries) AjustarCorrecaoTarefa(ctx context.Context, arg AjustarCorrecaoTarefaParams) (int64, error) {
+	result, err := q.db.Exec(ctx, ajustarCorrecaoTarefa, arg.CorrecaoID, arg.ID, arg.NotaFinal, arg.Feedback)
+	return result.RowsAffected(), err
 }
 
 const aplicarResultado = `-- name: AplicarResultado :exec

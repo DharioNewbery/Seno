@@ -25,11 +25,12 @@ ORDER BY ct.id;
 INSERT INTO correcao_tarefas (correcao_id, tarefa_id, valor_pts)
 VALUES ($1, $2, $3);
 
--- name: AjustarCorrecaoTarefa :exec
+-- name: AjustarCorrecaoTarefa :execrows
 UPDATE correcao_tarefas
-SET nota_final = $2,
-    feedback   = $3
-WHERE id = $1;
+SET nota_final = COALESCE($3, nota_final),
+    feedback   = COALESCE($4, feedback)
+WHERE correcao_id = $1
+  AND id = $2;
 
 -- name: UpdateStatusCorrecao :exec
 UPDATE correcoes

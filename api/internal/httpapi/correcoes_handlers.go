@@ -98,10 +98,12 @@ func (d *Dependencies) minhaCorrecao(c *gin.Context) {
 }
 
 // callbackJudge0: POST /v1/judge0/callback?key&par=ct:te — Judge0 envia
-// o veredito (callback_url de cada submissão do lote). Validado pela
-// chave compartilhada; espera objeto ou array (lote).
+// o veredito (callback_url de cada submissão do lote). Valido SEMPRE pela
+// chave compartilhada (a config garante chave não-vazia quando o Judge0
+// está ligado; sem integração a rota também fica fechada). Espera objeto
+// ou array (lote).
 func (d *Dependencies) callbackJudge0(c *gin.Context) {
-	if d.Cfg.Judge0Secret != "" && c.Query("key") != d.Cfg.Judge0Secret {
+	if d.Cfg.Judge0Secret == "" || c.Query("key") != d.Cfg.Judge0Secret {
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 			"erro": gin.H{"codigo": "SEM_PERMISSAO", "mensagem": "Chave inválida."},
 		})

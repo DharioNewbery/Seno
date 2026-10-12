@@ -68,7 +68,10 @@ func montaAPI(t *testing.T, pool *pgxpool.Pool) (*Dependencies, *gin.Engine) {
 	gin.SetMode(gin.TestMode)
 	audit := platform.NewAudit(pool)
 	st := store.New(pool)
-	cfg := &platform.Config{WebOrigin: "http://localhost:5173"}
+	cfg := &platform.Config{
+		WebOrigin:    "http://localhost:5173",
+		Judge0Secret: "chave-callback-teste", // callback exige chave sempre
+	}
 	deps := &Dependencies{
 		Cfg:   cfg,
 		Pool:  pool,

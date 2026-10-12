@@ -495,11 +495,22 @@ func (s *Service) Editar(
 			return VisaoProfessor{}, err
 		}
 	}
+	valor := map[int64]int32{}
+	for _, t := range cor.Tarefas {
+		valor[t.ID] = t.ValorPts
+	}
 	for _, t := range cad.Tarefas {
-		if err := s.store.Q.AjustarCorrecaoTarefa(ctx, gen.AjustarCorrecaoTarefaParams{
-			ID: t.ID, NotaFinal: notaArgumento(t.NotaFinal), Feedback: textoL(t.Feedback),
-		}); err != nil {
+		linhas, err := s.store.Q.AjustarCorrecaoTarefa(ctx, gen.AjustarCorrecaoTarefaParams{
+			CorrecaoID: cor.ID, // guarda de escopo: o id do corpo só v vale DENTRO desta correção
+			ID:         t.ID,
+			NotaFinal:  notaTravada(t.NotaFinal, valor[t.ID]),
+			Feedback:   textoL(t.Feedback),
+		})
+		if err != nil {
 			return VisaoProfessor{}, err
+		}
+		if linhas == 0 {
+			return VisaoProfessor{}, jaNaoEncontrada()
 		}
 	}
 	s.audit.Record(ctx, platform.LogEntry{
@@ -603,9 +614,64 @@ func notaPtr(v pgtype.Int4) *int32 {
 	return &out
 }
 
-func notaArgumento(v *int32) pgtype.Int4 {
+// notaTravada trava a nota final em [0, valor_pts] (id 1–1 com a regra da
+// nota automática); campo ausente segue NOT NULL — não zera a nota.
+func notaTravada(v *int32, valorPts int32) pgtype.Int4 {
 	if v == nil {
 		return pgtype.Int4{}
 	}
-	return pgtype.Int4{Int32: *v, Valid: true}
+	n := *v
+	if n < 0 {
+		n = 0
+	}
+	if n > valorPts {
+		n = valorPts
+	}
+	return pgtype.Int4{Int32: n, Valid: true}
+}
+
+// ------------------------------------------------------------ watchdog
+
+// FecharPerdidas é o watchdog da correção (§7.2): callback do Judge0
+// perdido deixa a correção eternamente 'executando' (ContarResultados-
+// Faltando nunca zera), sem sinal ao professor. Marca 'falhou' a correção
+// 'executando' criada há mais de 10 min — todo item do Judge0 termina em
+// segundos (limite por execução), 10 min cobre filas. Callback que chega
+// tarde ainda conclui: AplicarResultado marca 'concluida' quando os
+// resultados fecham — o estado se cura sozinho.
+const janelaSemCallback = 10 * time.Minute
+
+const fecharPerdidas = `UPDATE correcoes
+SET status = 'falhou'
+WHERE status = 'executando'
+  AND created_at < now() - $1::interval
+RETURNING id`
+
+// FecharPerdidas executa o watchdog e devolve os ids afetados (0 na
+// maioria das voltas); o chamador agenda o ciclo.
+func (s *Service) FecharPerdidas(ctx context.Context) ([]int64, error) {
+	rows, err := s.store.Pool.Query(ctx, fecharPerdidas, janelaSemCallback)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		s.audit.Record(ctx, platform.LogEntry{
+			Actor:  "sistema",
+			Kind:   "correcao.perdida",
+			Detail: fmt.Sprintf("correcao=%d sem callback do Judge0", id),
+		})
+	}
+	return ids, nil
 }
