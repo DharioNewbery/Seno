@@ -1,10 +1,19 @@
-# compose.dev.yaml — ambiente de desenvolvimento do Seno.
-# Sobe apenas a infraestrutura de apoio (PostgreSQL + MailPit);
-# api e web rodam nátivamente com hot-reload:
-#   cd api && go run ./cmd/api
-#   cd web && npm run dev
-# Antes: cp .env.example .env  (e ajuste SENO_DATABASE_URL para localhost)
+# compose.dev.yaml — ambiente de desenvolvimento com a STACK INTEIRA em
+# containers (sem build nativo, sem hot reload): postgres + MailPit + Judge0
+# (include) + monitor + api + web. Deploy limpo:
+#   docker compose -f deploy/compose.dev.yaml down -v --remove-orphans
+#   docker compose -f deploy/compose.dev.yaml build
+#   docker compose -f deploy/compose.dev.yaml up -d
+# Entradas no navegador: web http://localhost:3000 · monitor
+# http://localhost:8081 · MailPit http://localhost:8025. Migrações e
+# bootstrap do super admin rodam no boot da API/monitor.
+#
+# Acesso da LAN (outra máquina) pede TLS + Caddy (Fase 9) — hoje cookies
+# Secure ficam válidos só em localhost.
 name: seno-dev
+
+include:
+  - ./judge0/compose.yaml # Judge0 (server, workers, db, redis) no mesmo projeto
 
 services:
   postgres:
@@ -26,8 +35,69 @@ services:
   mailpit:
     image: axllent/mailpit:v1.24
     ports:
-      - "1025:1025"  # SMTP
-      - "8025:8025"  # caixa web
+      - "1025:1025" # SMTP
+      - "8025:8025" # caixa web
+
+  api:
+    build:
+      context: ..
+      dockerfile: api/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SENO_DATABASE_URL: postgres://seno:seno@postgres:5432/seno?sslmode=disable
+      SENO_WEB_ORIGIN: http://localhost:3000 # origem do BFF para as rotas /v1
+      SENO_JUDGE0_URL: http://server:2358
+      SENO_JUDGE0_CALLBACK_URL: http://api:8080 # base da API vista pelo Judge0
+      SENO_SMTP_HOST: mailpit
+      SENO_POLL_ESTADO_S: "30"
+      # Monitor (Fase 9): interno pela rede do compose; navegador via localhost.
+      SENO_MONITOR_URL: http://monitor:8081
+      SENO_MONITOR_PUBLIC_URL: http://localhost:8081
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  monitor:
+    build:
+      context: ..
+      dockerfile: monitor/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    env_file: .env
+    environment:
+      # Banco próprio do Monitor (seno_monitor no mesmo servidor).
+      SENO_DATABASE_URL: postgres://seno:seno@postgres:5432/seno_monitor?sslmode=disable
+      SENO_COOKIE_SECURE: "false" # dev HTTP localhost
+      SENO_JUDGE0_URL: http://server:2358
+      # Base do Monitor como o Judge0 a alcança (callback dos ensaios).
+      SENO_MONITOR_CALLBACK_URL: http://monitor:8081
+      # Base do web vista pelo navegador (link "ver entregas" no bloqueio final).
+      SENO_WEB_URL: http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # BFF SvelteKit (adapter-node): páginas + proxy de chamadas à API; o
+  # navegador só fala com a web (:3000).
+  web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+      args:
+        # Gravada no build (SvelteKit 3, paths.origin): origem do self-URL
+        # para o próprio CSRF do Kit — dev containers em HTTP localhost:3000.
+        SENO_SITE_ORIGIN: http://localhost:3000
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      SENO_API_URL: http://api:8080
+      SENO_WEB_ORIGIN: http://localhost:3000
+      PORT: "3000"
+    depends_on:
+      - api
 
 volumes:
   pgdata_dev:
