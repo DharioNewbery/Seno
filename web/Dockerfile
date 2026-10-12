@@ -4,6 +4,8 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+# Origem do self-URL (CSRF/form actions) gravada no build; valida em compose.
+ARG SENO_SITE_ORIGIN
 RUN npm run build
 
 FROM node:22-alpine
