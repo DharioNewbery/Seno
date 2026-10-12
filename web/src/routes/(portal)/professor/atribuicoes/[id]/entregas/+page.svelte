@@ -26,17 +26,30 @@
   </div>
 
   <ul class="lista">
-    {#each data.entregas as e (e.id)}
+    {#each data.entregas as e, i (i)}
       <li>
         <div class="identidade">
           <strong>{e.aluno}</strong>
           <span class="meta">
-            {e.aluno_email} · com. {new Date(e.comecou_em).toLocaleString("pt-BR")} →
+            {e.aluno_email} ·
+            {#if e.comecou_em}
+              com. {new Date(e.comecou_em).toLocaleString("pt-BR")} →
+            {/if}
             ent. {new Date(e.entregue_em).toLocaleString("pt-BR")}
             {#if e.atrasada}· <span style:color="#c0392b">atrasada</span>{/if}
+            {#if e.do_monitor && e.nota_monitor != null}
+              · nota (auto) {e.nota_monitor}
+            {/if}
           </span>
         </div>
-        <a class="abrir" href={`/professor/submissoes/${e.id}`}>Corrigir →</a>
+        {#if e.do_monitor}
+          <span class="meta">
+            entrega no Monitor
+            {#if e.correcao_monitor}· correção {e.correcao_monitor}{/if}
+          </span>
+        {:else}
+          <a class="abrir" href={`/professor/submissoes/${e.id}`}>Corrigir →</a>
+        {/if}
       </li>
     {:else}
       <li class="vazio">Nenhuma entrega ainda.</li>

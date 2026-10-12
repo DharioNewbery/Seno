@@ -52,13 +52,22 @@ type Submissao struct {
 }
 
 // Entrega é a visão do professor (aluno + tempo + estado).
+//   - API: submissão própria, com comecou_em/submissão id.
+//   - Monitor: o aluno entregou na prova do Monitor — a API só tem o
+//     espelho do /estado (monitor_estado_aluno, job Fase 9.3): sem
+//     submissão na API, o detalhe/correção fica no Monitor (PLANO Fase 9:
+//     migração do fluxo é esforço separado).
 type Entrega struct {
-	ID         int64     `json:"id"`
-	Aluno      string    `json:"aluno"`
-	AlunoEmail string    `json:"aluno_email"`
-	ComecouEm  time.Time `json:"comecou_em"`
-	EntregueEm time.Time `json:"entregue_em"`
-	Atrasada   bool      `json:"atrasada"`
+	ID         int64      `json:"id"`
+	Aluno      string     `json:"aluno"`
+	AlunoEmail string     `json:"aluno_email"`
+	ComecouEm  *time.Time `json:"comecou_em,omitempty"`
+	EntregueEm time.Time  `json:"entregue_em"`
+	Atrasada   bool       `json:"atrasada"`
+	DoMonitor  bool       `json:"do_monitor,omitempty"`
+
+	NotaMonitor     *float64 `json:"nota_monitor,omitempty"`
+	CorrecaoMonitor string   `json:"correcao_monitor,omitempty"`
 }
 
 func indisponivel(msg string) error {
@@ -233,17 +242,85 @@ func (s *Service) Listar(
 		return nil, err
 	}
 	out := make([]Entrega, 0, len(rows))
+	feitos := map[int64]bool{}
 	for _, row := range rows {
+		feitos[row.AlunoID] = true
+		var comecou *time.Time
+		if row.ComecouEm.Valid {
+			t := row.ComecouEm.Time
+			comecou = &t
+		}
 		out = append(out, Entrega{
 			ID:         row.ID,
 			Aluno:      row.AlunoFirstName + " " + row.AlunoLastName,
 			AlunoEmail: row.AlunoEmail,
-			ComecouEm:  horaDe(row.ComecouEm),
+			ComecouEm:  comecou,
 			EntregueEm: horaDe(row.EntregueEm),
 			Atrasada:   row.Atrasada,
 		})
 	}
+	// Entregas feitas no Monitor: só existem no espelho do /estado
+	// (monitor_estado_aluno). Com atribuição transferida, entram na lista
+	// sem submissão na API — dedupe contra as da API (a API ganha).
+	if err := s.listarEntregasMonitor(ctx, atribuicaoID, feitos, &out); err != nil {
+		return nil, err
+	}
 	return out, nil
+}
+
+// listarEntregasMonitor lê o espelho (só atribuições com monitor_id) e
+// adiciona as entregas que a API não tem como submissão. Late feita
+// comparison server-side: entregue_em após o prazo efetivo do espelho.
+func (s *Service) listarEntregasMonitor(
+	ctx context.Context, atribuicaoID int64, feitos map[int64]bool, out *[]Entrega,
+) error {
+	rows, err := s.store.Pool.Query(ctx, `
+		SELECT ma.aluno_id, u.email,
+		       COALESCE(NULLIF(TRIM(p.first_name || ' ' || p.last_name), ''), u.email),
+		       ma.entregue_em,
+		       COALESCE(ma.entregue_em > ma.prazo_efetivo, false),
+		       ma.nota_auto::float8, ma.correcao_status
+		FROM monitor_estado_aluno ma
+		JOIN users u ON u.id = ma.aluno_id
+		LEFT JOIN persons p ON p.id = u.person_id
+		JOIN atribuicoes a ON a.id = ma.atribuicao_id AND a.monitor_id IS NOT NULL
+		WHERE ma.atribuicao_id = $1 AND ma.estado = 'entregue'
+		ORDER BY ma.entregue_em, ma.aluno_id`, atribuicaoID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			alunoID    int64
+			email      string
+			nome       string
+			entregueEm pgtype.Timestamptz
+			atrasada   bool
+			nota       pgtype.Float8
+			status     string
+		)
+		if err := rows.Scan(&alunoID, &email, &nome, &entregueEm,
+			&atrasada, &nota, &status); err != nil {
+			return err
+		}
+		if feitos[alunoID] {
+			continue
+		}
+		e := Entrega{
+			AlunoEmail:      email,
+			EntregueEm:      horaDe(entregueEm),
+			Atrasada:        atrasada,
+			DoMonitor:       true,
+			CorrecaoMonitor: status,
+		}
+		if nota.Valid {
+			v := nota.Float64
+			e.NotaMonitor = &v
+		}
+		*out = append(*out, e)
+	}
+	return rows.Err()
 }
 
 // helpers -----------------------------------------------------------

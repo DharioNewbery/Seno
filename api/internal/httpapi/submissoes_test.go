@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"testing"
 	"time"
@@ -159,6 +160,73 @@ func TestSubmissoes(t *testing.T) {
 		"", autenticado(tokBruno))
 	if w.Code != http.StatusNotFound {
 		t.Errorf("aluno lista entregas: %d corpo %v", w.Code, corpo)
+	}
+
+	// Entrega via Monitor (espelho do /estado, Fase 9.3): Dalva entregou
+	// lá — API não tem submissão; com atribuição transferida, aparece na
+	// lista do professor como do_monitor (atrasada: entregue após prazo),
+	// sem link de correção; a entrega da API (Carla) vence na dedupe.
+	criarAluno(idT1, "dalva.subm@seno.dev")
+	var idDalva int64
+	if err := pool.QueryRow(context.Background(),
+		"SELECT id FROM users WHERE email = $1", "dalva.subm@seno.dev").Scan(&idDalva); err != nil {
+		t.Fatalf("dalva: %v", err)
+	}
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE atribuicoes SET monitor_id = 'atv_teste_entregas' WHERE id = $1`, idAtr1); err != nil {
+		t.Fatalf("monitor_id: %v", err)
+	}
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO monitor_estado_aluno
+		   (atribuicao_id, aluno_id, estado, n_t, entregue_em, nota_auto, correcao_status, prazo_efetivo, atualizado_em)
+		 VALUES ($1, $2, 'entregue', 1, now() + interval '1 second', 4.5, 'concluida', now(), now())`,
+		idAtr1, idDalva); err != nil {
+		t.Fatalf("espelho do monitor: %v", err)
+	}
+	w, corpo = chama(t, r, "GET", "/v1/atribuicoes/"+intStr(idAtr1)+"/submissoes",
+		"", autenticado(tokPaula))
+	if w.Code != http.StatusOK {
+		t.Fatalf("entregas com espelho: %d corpo %v", w.Code, corpo)
+	}
+	if intOf(corpo["total"]) != 2 {
+		t.Fatalf("total com espelho: %v (%v)", corpo["total"], corpo["submissoes"])
+	}
+	var dalva, carlaRow map[string]any
+	for _, it := range corpo["submissoes"].([]any) {
+		e := it.(map[string]any)
+		if e["do_monitor"] == true {
+			dalva = e
+		} else {
+			carlaRow = e
+		}
+	}
+	if dalva == nil || carlaRow == nil {
+		t.Fatalf("esperava entrega da API e do monitor: %v", corpo["submissoes"])
+	}
+	if !boolOf(dalva["atrasada"]) {
+		t.Errorf("entrega do monitor atrasada: %v", dalva)
+	}
+	if nota, _ := dalva["nota_monitor"].(float64); nota != 4.5 {
+		t.Errorf("nota do monitor: %v", dalva["nota_monitor"])
+	}
+	if cm, ok := dalva["correcao_monitor"].(string); !ok || cm != "concluida" {
+		t.Errorf("correcao do monitor: %v", dalva["correcao_monitor"])
+	}
+	if _, ok := carlaRow["comecou_em"]; !ok {
+		t.Errorf("submissão da API sem comecou_em: %v", carlaRow)
+	}
+	// Carla também tem espelho: a submissão da API vence (não duplica).
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO monitor_estado_aluno
+		   (atribuicao_id, aluno_id, estado, n_t, entregue_em, correcao_status, prazo_efetivo, atualizado_em)
+		 VALUES ($1, (SELECT id FROM users WHERE email = 'carla.subm@seno.dev'),
+		         'entregue', 1, now(), 'pendente', now(), now())`, idAtr1); err != nil {
+		t.Fatalf("espelho da carla: %v", err)
+	}
+	w, corpo = chama(t, r, "GET", "/v1/atribuicoes/"+intStr(idAtr1)+"/submissoes",
+		"", autenticado(tokPaula))
+	if intOf(corpo["total"]) != 2 {
+		t.Errorf("dedupe total (esperado 2): %v", corpo["total"])
 	}
 
 	// /v1/me: entregue=true atrasada=true e sem tentativa.

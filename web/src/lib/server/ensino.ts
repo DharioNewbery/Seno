@@ -662,9 +662,13 @@ export interface Entrega {
   id: number;
   aluno: string;
   aluno_email: string;
-  comecou_em: string;
+  comecou_em?: string;
   entregue_em: string;
   atrasada: boolean;
+  /** Entrega feita no Monitor (espelho do /estado): sem submissão na API. */
+  do_monitor?: boolean;
+  nota_monitor?: number;
+  correcao_monitor?: string;
 }
 
 /** Entregas da atribuição (professor dono|staff). */
