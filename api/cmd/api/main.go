@@ -37,6 +37,10 @@ import (
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
+	// dev nativo: deploy/.env viram variáveis (containers injetam via compose;
+	// o arquivo não existe na imagem — no-op lá).
+	platform.LoadDotEnv()
+
 	cfg, err := platform.LoadConfig()
 	if err != nil {
 		slog.Error("configuração inválida", "err", err)

@@ -80,20 +80,16 @@ docker compose -f deploy/judge0/compose.yaml up -d   # porta 2358
 
 ### Método A2 — nativo manual (um terminal por serviço, sem `dev.ps1`)
 
-Tudo vem do `.env` — **nada de variável no terminal**. Nos dois primeiros
-passos use o *mesmo* terminal de preparo; depois um terminal por serviço.
-A lógica é idêntica à do `dev.ps1`, mas com logs ao vivo no terminal.
+Os serviços leem `deploy/.env` sozinhos no boot (nada de variável no
+terminal): Go via `platform.LoadDotEnv` na inicialização e o vite via
+`node --env-file`. A lógica: preenche só o que não existe no ambiente
+(o compose do método B injeta os valores dele — quem seta antes vence)
+e o arquivo ausente é silencioso (nas imagens de container ele não
+está presente). A lógica é idêntica à do `dev.ps1`, mas com logs ao
+vivo no terminal.
 
 ```powershell
-# 0) na raiz do monorepo: carrega o .env no processo deste terminal
-Set-Location C:\Users\dhario\UFPA\Seno
-Get-Content deploy\.env | ForEach-Object {
-  if ($_ -match '^\s*([A-Z_0-9]+)=(.*)$') {
-    [Environment]::SetEnvironmentVariable($matches[1], $matches[2].Trim(), 'Process')
-  }
-}
-
-# 1) infra (uma vez por sessão; repita este comando sempre que reiniciar o Docker)
+# 0) uma vez por sessão (repita sempre que reiniciar o Docker):
 docker compose -f deploy/compose.dev.yaml up -d postgres mailpit
 docker compose -f deploy/judge0/compose.yaml up -d
 ```
@@ -123,12 +119,11 @@ go run ./cmd/monitor
   MailPit `http://localhost:8025` · Judge0 `http://localhost:2358`
 - **Parar:** `Ctrl+C` em cada terminal (o `dev.ps1 -Modo stop` também mata
   esses processos, por porta).
-- Todos os valores (`SENO_DATABASE_URL` da API, `SENO_MONITOR_DSN`,
-  callbacks de Judge0, URLs entre serviços) já vêm do `.env` — contanto
-  que o `.env` esteja alinhado com o exemplo (chaves únicas, sem SENO_…
-  duplicadas).
-- Reiniciou o Docker? Repita só o passo 1 (`up -d` de postgres, mailpit e
-  judge0) neste mesmo terminal — os processos nativos continuam rodando.
+- Para o arquivo ser lido, rode os comandos **dentro do monorepo**
+  (`api/`, `web/`, `monitor/` — a busca sobe as pastas até achar
+  `deploy/.env`). Fora dele os serviços vão dar erro de configuração.
+- Reiniciou o Docker? Repita só o passo 0 — os processos nativos
+  continuam rodando.
 
 ### Método B — tudo em containers
 

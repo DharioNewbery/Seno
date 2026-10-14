@@ -35,6 +35,10 @@ import (
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
+	// dev nativo: deploy/.env via plataforma (containers injetam via compose;
+	// o arquivo não existe na imagem — no-op lá).
+	platform.LoadDotEnv()
+
 	// modo do healthcheck do compose (distroless não tem curl/wget): GET
 	// /healthz no próprio processo e sai com 0/1.
 	if len(os.Args) > 1 && os.Args[1] == "-healthcheck" {
