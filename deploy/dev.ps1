@@ -80,7 +80,7 @@ switch ($Modo) {
   "monitor" {
     Ler-Env
     # Banco próprio do Monitor (seno_monitor no mesmo servidor de dev).
-    [Environment]::SetEnvironmentVariable("SENO_DATABASE_URL",
+    [Environment]::SetEnvironmentVariable("SENO_MONITOR_DSN",
       "postgres://seno:seno@localhost:5432/seno_monitor?sslmode=disable", "Process")
     Matar-Porta 8081
     Iniciar (Join-Path $raiz "monitor") "go run ./cmd/monitor" "seno-monitor"
@@ -95,7 +95,7 @@ switch ($Modo) {
     [Environment]::SetEnvironmentVariable("SENO_WEB_ORIGIN", "http://localhost:5173", "Process")
     Iniciar (Join-Path $raiz "web") "npm run dev" "seno-web"
     # Monitor nativo (banco seno_monitor, :8081) — Fase 9.
-    [Environment]::SetEnvironmentVariable("SENO_DATABASE_URL",
+    [Environment]::SetEnvironmentVariable("SENO_MONITOR_DSN",
       "postgres://seno:seno@localhost:5432/seno_monitor?sslmode=disable", "Process")
     Matar-Porta 8081
     Iniciar (Join-Path $raiz "monitor") "go run ./cmd/monitor" "seno-monitor"

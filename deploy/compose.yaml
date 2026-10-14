@@ -40,7 +40,7 @@ services:
     env_file: .env
     environment:
       # Overrides de rede interna (valores de localhost do .env não valem aqui):
-      SENO_DATABASE_URL: postgres://${POSTGRES_USER:-seno}:${POSTGRES_PASSWORD:-seno}@postgres:5432/seno_monitor?sslmode=disable
+      SENO_MONITOR_DSN: postgres://${POSTGRES_USER:-seno}:${POSTGRES_PASSWORD:-seno}@postgres:5432/seno_monitor?sslmode=disable
       SENO_JUDGE0_URL: http://server:2358
       SENO_MONITOR_CALLBACK_URL: http://monitor:8081
       SENO_COOKIE_SECURE: "true" # HTTPS do Caddy (§8.4)

@@ -65,9 +65,15 @@ func LoadConfig() (*Config, error) {
 		WebURL:             strings.TrimSuffix(strings.TrimSpace(os.Getenv("SENO_WEB_URL")), "/"),
 	}
 
-	c.DatabaseURL = os.Getenv("SENO_DATABASE_URL")
+	c.DatabaseURL = os.Getenv("SENO_MONITOR_DSN")
 	if c.DatabaseURL == "" {
-		return nil, fmt.Errorf("SENO_DATABASE_URL é obrigatório")
+		// compat: .env/CI antigos com a chave compartilhada (API e Monitor
+		// tinham o MESMO nome no .env — a linha de trás vencía e apontava
+		// a API para o banco errado no dev nativo).
+		c.DatabaseURL = os.Getenv("SENO_DATABASE_URL")
+	}
+	if c.DatabaseURL == "" {
+		return nil, fmt.Errorf("SENO_MONITOR_DSN é obrigatório")
 	}
 	if len(c.Secret) < 32 {
 		return nil, fmt.Errorf("SENO_MONITOR_SECRET é obrigatório e precisa de pelo menos 32 bytes")
