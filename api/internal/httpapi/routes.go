@@ -200,5 +200,6 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	me := v1.Group("/me")
 	me.Use(deps.RequireAuth())
 	me.GET("/turmas", deps.MinhasTurmas)
+	me.GET("/turmas/:id", deps.MinhaTurma)
 	me.GET("/atribuicoes", deps.MinhasAtribuicoes)
 }

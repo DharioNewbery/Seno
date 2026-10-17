@@ -612,6 +612,19 @@ export interface AtribuicaoDoAluno {
   entregue: boolean;
   entregue_em?: string;
   atrasada: boolean;
+  publicada_em?: string;
+  nota_final?: number;
+}
+
+export interface ColegaTurma {
+  first_name: string;
+  last_name: string;
+}
+
+export interface DetalhesTurmaAluno {
+  turma: TurmaDoAluno;
+  colegas: ColegaTurma[];
+  atribuicoes: AtribuicaoDoAluno[];
 }
 
 export async function listarMinhasTurmas(
@@ -619,6 +632,14 @@ export async function listarMinhasTurmas(
   token: string,
 ): Promise<Resultado> {
   return chamar(request, token, "/v1/me/turmas", { method: "GET" });
+}
+
+export async function obterMinhaTurma(
+  request: Request,
+  token: string,
+  turmaID: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/me/turmas/${turmaID}`, { method: "GET" });
 }
 
 export async function listarMinhasAtribuicoes(

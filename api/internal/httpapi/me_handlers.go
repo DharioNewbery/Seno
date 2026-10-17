@@ -21,6 +21,21 @@ func (d *Dependencies) MinhasTurmas(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"turmas": turmas})
 }
 
+// MinhaTurma: GET /v1/me/turmas/:id.
+func (d *Dependencies) MinhaTurma(c *gin.Context) {
+	user, _ := currentUser(c)
+	turmaID, ok := idDaRota(c)
+	if !ok {
+		return
+	}
+	detalhes, err := d.Ensino.ObterTurmaAluno(c.Request.Context(), user, turmaID)
+	if err != nil {
+		platform.ErrorBody(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, detalhes)
+}
+
 // MinhasAtribuicoes: GET /v1/me/atribuicoes?turma_id.
 func (d *Dependencies) MinhasAtribuicoes(c *gin.Context) {
 	user, _ := currentUser(c)

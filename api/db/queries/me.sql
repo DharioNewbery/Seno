@@ -23,6 +23,38 @@ WHERE mt.aluno_id = $1
   AND mt.saida_em IS NULL
 ORDER BY t.encerrado_em IS NULL DESC, t.created_at DESC, t.id DESC;
 
+-- name: GetTurmaAluno :one
+SELECT t.id,
+       t.titulo,
+       t.encerrado_em,
+       t.created_at,
+       m.codigo    AS materia_codigo,
+       m.nome      AS materia_nome,
+       p.trimestre,
+       p.ano,
+       up.first_name AS prof_first_name,
+       up.last_name  AS prof_last_name,
+       uu.email      AS prof_email
+FROM matriculas mt
+JOIN turmas t ON t.id = mt.turma_id
+JOIN materias m ON m.id = t.materia_id
+JOIN periodos_letivos p ON p.id = t.periodo_id
+JOIN users uu ON uu.id = t.professor_id
+JOIN persons up ON up.id = uu.person_id
+WHERE mt.aluno_id = $1
+  AND mt.turma_id = $2
+  AND mt.saida_em IS NULL;
+
+-- name: ListColegasTurma :many
+SELECT p.first_name,
+       p.last_name
+FROM matriculas mt
+JOIN users u ON u.id = mt.aluno_id
+JOIN persons p ON p.id = u.person_id
+WHERE mt.turma_id = $1
+  AND mt.saida_em IS NULL
+ORDER BY p.first_name, p.last_name;
+
 -- Atribuições da escolha do aluno (turmas com matrícula ativa), com a
 -- tentativa própria quando existir (em andamento). Sem submissões não
 -- há separação entre pendentes/entregues — o rascunho sinaliza o estado.

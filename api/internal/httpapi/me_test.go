@@ -129,7 +129,109 @@ func TestMe(t *testing.T) {
 	}
 }
 
+// TestMeTurmaDetalhes valida GET /v1/me/turmas/:id (Fase 2):
+// - aluno com matrícula ativa recebe metadados, professor, atribuições e colegas (só nome);
+// - aluno de fora da turma ou com matrícula encerrada recebe 404;
+// - LGPD: colegas não expõem email.
+func TestMeTurmaDetalhes(t *testing.T) {
+	pool := testeDB(t)
+	deps, r := montaAPI(t, pool)
+
+	if err := bootstrapSuper(t, deps); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	tokSuper := logar(t, r, "super@seno.dev", "102938")
+
+	criarProfessor(t, r, tokSuper, "prof.f2@seno.dev", "Carlos", "Silva")
+	ativaNovoUsuario(t, r, pool, "prof.f2@seno.dev", "senha-prof-f2")
+	tokProf := logar(t, r, "prof.f2@seno.dev", "senha-prof-f2")
+
+	// Matéria + período + turma.
+	_, materia := chama(t, r, "POST", "/v1/materias",
+		`{"codigo":"F2T","nome":"Fase Dois"}`, autenticado(tokSuper))
+	idMateria := int64(materia["id"].(float64))
+	_, periodo := chama(t, r, "POST", "/v1/periodos",
+		`{"trimestre":1,"ano":2027}`, autenticado(tokSuper))
+	idPeriodo := int64(periodo["id"].(float64))
+	_, turma := chama(t, r, "POST", "/v1/turmas",
+		`{"materia_id":`+intStr(idMateria)+`,"periodo_id":`+intStr(idPeriodo)+`,"titulo":"Turma F2"}`,
+		autenticado(tokProf))
+	idTurma := int64(turma["id"].(float64))
+
+	// Aluno 1 (matriculado)
+	chama(t, r, "POST", "/v1/turmas/"+intStr(idTurma)+"/matriculas",
+		`{"email":"aluno1.f2@seno.dev","first_name":"Alice","last_name":"Santos"}`,
+		autenticado(tokProf))
+	tokConv1 := tokenDoLog(t, pool)
+	aceitarConvite(t, r, tokConv1, "senha-aluno-1")
+	tokAluno1 := logar(t, r, "aluno1.f2@seno.dev", "senha-aluno-1")
+
+	// Aluno 2 (matriculado na mesma turma - colega)
+	chama(t, r, "POST", "/v1/turmas/"+intStr(idTurma)+"/matriculas",
+		`{"email":"aluno2.f2@seno.dev","first_name":"Bob","last_name":"Ferreira"}`,
+		autenticado(tokProf))
+	tokConv2 := tokenDoLog(t, pool)
+	aceitarConvite(t, r, tokConv2, "senha-aluno-2")
+	tokAluno2 := logar(t, r, "aluno2.f2@seno.dev", "senha-aluno-2")
+
+	// Aluno 3 (matriculado em outra turma qualquer, não na idTurma)
+	_, turmaOutra := chama(t, r, "POST", "/v1/turmas",
+		`{"materia_id":`+intStr(idMateria)+`,"periodo_id":`+intStr(idPeriodo)+`,"titulo":"Outra"}`,
+		autenticado(tokProf))
+	idOutra := int64(turmaOutra["id"].(float64))
+	chama(t, r, "POST", "/v1/turmas/"+intStr(idOutra)+"/matriculas",
+		`{"email":"aluno3.f2@seno.dev","first_name":"Carol","last_name":"Gomes"}`,
+		autenticado(tokProf))
+	tokConv3 := tokenDoLog(t, pool)
+	aceitarConvite(t, r, tokConv3, "senha-aluno-3")
+	tokAluno3 := logar(t, r, "aluno3.f2@seno.dev", "senha-aluno-3")
+
+	// Professor não pode acessar portal do aluno -> 403
+	w, _ := chama(t, r, "GET", "/v1/me/turmas/"+intStr(idTurma), "", autenticado(tokProf))
+	if w.Code != http.StatusForbidden {
+		t.Errorf("esperava 403 para professor, obteve %d", w.Code)
+	}
+
+	// Aluno 3 (fora da turma) -> 404
+	w, _ = chama(t, r, "GET", "/v1/me/turmas/"+intStr(idTurma), "", autenticado(tokAluno3))
+	if w.Code != http.StatusNotFound {
+		t.Errorf("esperava 404 para aluno fora da turma, obteve %d", w.Code)
+	}
+
+	// Aluno 1 (matriculado) -> 200 OK
+	w, corpo := chama(t, r, "GET", "/v1/me/turmas/"+intStr(idTurma), "", autenticado(tokAluno1))
+	if w.Code != http.StatusOK {
+		t.Fatalf("esperava 200 para aluno matriculado, obteve %d: %v", w.Code, corpo)
+	}
+
+	// Verifica turma
+	turmaMap, ok := corpo["turma"].(map[string]any)
+	if !ok || int64(turmaMap["id"].(float64)) != idTurma {
+		t.Errorf("metadados da turma incorretos: %v", corpo["turma"])
+	}
+
+	// Verifica colegas (deve ter Alice e Bob, e NÃO deve conter emails de colegas)
+	colegas, ok := corpo["colegas"].([]any)
+	if !ok || len(colegas) != 2 {
+		t.Fatalf("esperava 2 colegas, obteve %v", corpo["colegas"])
+	}
+	for _, c := range colegas {
+		colMap, ok := c.(map[string]any)
+		if !ok {
+			t.Fatalf("colega inválido: %v", c)
+		}
+		if _, hasEmail := colMap["email"]; hasEmail {
+			t.Errorf("LGPD: colega expõe email: %v", colMap)
+		}
+		if colMap["first_name"] == "" || colMap["last_name"] == "" {
+			t.Errorf("colega sem nome: %v", colMap)
+		}
+	}
+	_ = tokAluno2
+}
+
 func lenOf(body map[string]any, chave string) int {
 	lista, _ := body[chave].([]any)
 	return len(lista)
 }
+

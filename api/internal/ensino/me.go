@@ -5,10 +5,12 @@ package ensino
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/seno-project/seno/api/db/gen"
@@ -54,6 +56,20 @@ type TurmaDoAluno struct {
 	ProfessorMail string    `json:"professor_email"`
 	Ativa         bool      `json:"ativa"`
 	CreatedAt     time.Time `json:"created_at"`
+}
+
+// ColegaTurma representa outro aluno matriculado na mesma turma (apenas nome, conforme LGPD).
+type ColegaTurma struct {
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+}
+
+// DetalhesTurmaAluno é a visão completa de uma turma pelo aluno:
+// metadados da turma, professor, colegas e suas atribuições com status.
+type DetalhesTurmaAluno struct {
+	Turma       TurmaDoAluno        `json:"turma"`
+	Colegas     []ColegaTurma       `json:"colegas"`
+	Atribuicoes []AtribuicaoDoAluno `json:"atribuicoes"`
 }
 
 // exigirStudent: cargo student; professores/admins não usam o portal.
@@ -135,6 +151,64 @@ func (s *Service) MinhasTurmas(
 	}
 	return out, nil
 }
+
+// ObterTurmaAluno: detalhes de uma turma para o aluno autenticado (turma, colegas, atribuições).
+func (s *Service) ObterTurmaAluno(
+	ctx context.Context, actor domain.User, turmaID int64,
+) (*DetalhesTurmaAluno, error) {
+	if err := exigirStudent(actor); err != nil {
+		return nil, err
+	}
+	row, err := s.store.Q.GetTurmaAluno(ctx, gen.GetTurmaAlunoParams{
+		AlunoID: actor.ID,
+		TurmaID: turmaID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, platform.NewAPIError(
+				http.StatusNotFound, platform.CodeNotFound,
+				"Turma não encontrada ou você não possui matrícula ativa nesta turma.")
+		}
+		return nil, err
+	}
+
+	turma := TurmaDoAluno{
+		ID:            row.ID,
+		Titulo:        tituloDe(row.Titulo),
+		MateriaCodigo: row.MateriaCodigo,
+		MateriaNome:   row.MateriaNome,
+		Trimestre:     row.Trimestre,
+		Ano:           row.Ano,
+		Professor:     row.ProfFirstName + " " + row.ProfLastName,
+		ProfessorMail: row.ProfEmail,
+		Ativa:         !row.EncerradoEm.Valid,
+		CreatedAt:     row.CreatedAt.Time,
+	}
+
+	colegasRows, err := s.store.Q.ListColegasTurma(ctx, turmaID)
+	if err != nil {
+		return nil, err
+	}
+	colegas := make([]ColegaTurma, 0, len(colegasRows))
+	for _, c := range colegasRows {
+		colegas = append(colegas, ColegaTurma{
+			FirstName: c.FirstName,
+			LastName:  c.LastName,
+		})
+	}
+
+	atribuicoes, err := s.MinhasAtribuicoes(ctx, actor, &turmaID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &DetalhesTurmaAluno{
+		Turma:       turma,
+		Colegas:     colegas,
+		Atribuicoes: atribuicoes,
+	}, nil
+}
+
 
 // MinhasAtribuicoes: atribuições das turmas com matrícula ativa
 // (filtro opcional por turma), com o estado do rascunho.

@@ -21,7 +21,9 @@
     {#each turmas as t (t.id)}
       <li>
         <div class="identidade">
-          <strong>{t.materia_codigo} — {t.materia_nome}</strong>
+          <a class="titulo-link" href={`/aluno/turmas/${t.id}`}>
+            <strong>{t.materia_codigo} — {t.materia_nome}</strong>
+          </a>
           <span class="meta">
             {t.titulo || "Sem título"} · {t.trimestre}T/{t.ano} ·
             {t.professor}
@@ -33,6 +35,9 @@
           {:else}
             <span class="estado encerrada">Encerrada</span>
           {/if}
+          <a class="abrir secundario" href={`/aluno/turmas/${t.id}`}>
+            Ver turma
+          </a>
           <a class="abrir" href={`/aluno/atividades?turma_id=${t.id}`}>
             Atividades →
           </a>
@@ -122,6 +127,14 @@
     background: var(--seno-gray-100);
     color: var(--seno-gray-700);
   }
+  .titulo-link {
+    text-decoration: none;
+    color: inherit;
+  }
+  .titulo-link:hover strong {
+    text-decoration: underline;
+    color: var(--seno-blue-700);
+  }
   .abrir {
     background: var(--seno-blue-600);
     color: var(--seno-white);
@@ -132,6 +145,14 @@
   }
   .abrir:hover {
     background: var(--seno-blue-700);
+  }
+  .abrir.secundario {
+    background: var(--seno-gray-100);
+    color: var(--seno-gray-700);
+    border: 1px solid var(--seno-gray-300);
+  }
+  .abrir.secundario:hover {
+    background: var(--seno-gray-200);
   }
   .vazio {
     color: var(--seno-gray-500);
