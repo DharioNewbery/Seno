@@ -1,6 +1,9 @@
 package platform
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 // TestLoadConfigJudge0ExigeChaveECallback — a integração Judge0 ligada
 // sem chave aceita vereditos forjados no callback, e sem base própria
@@ -47,5 +50,36 @@ func TestLoadConfigJudge0ExigeChaveECallback(t *testing.T) {
 	}
 	if cfg.Judge0CallbackURL != "http://api:8080" {
 		t.Errorf("callback URL: %q", cfg.Judge0CallbackURL)
+	}
+}
+
+func TestLoadConfigRetencaoDados(t *testing.T) {
+	t.Setenv("SENO_ADDR", "")
+	t.Setenv("SENO_DATABASE_URL", "postgres://x")
+	t.Setenv("SENO_SUPER_EMAIL", "super@seno.dev")
+	t.Setenv("SENO_SUPER_PASSWORD", "x")
+	t.Setenv("SENO_WEB_ORIGIN", "http://localhost:5173")
+	t.Setenv("SENO_JUDGE0_URL", "")
+	t.Setenv("SENO_JUDGE0_CALLBACK_KEY", "")
+	t.Setenv("SENO_JUDGE0_CALLBACK_URL", "")
+
+	// Padrão: 730 dias (2 anos)
+	t.Setenv("SENO_RETENCAO_DADOS_D", "")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.DadosRetencao != 730*24*time.Hour {
+		t.Errorf("esperava 730 dias, obteve %v", cfg.DadosRetencao)
+	}
+
+	// Customizado
+	t.Setenv("SENO_RETENCAO_DADOS_D", "365")
+	cfg, err = LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig custom: %v", err)
+	}
+	if cfg.DadosRetencao != 365*24*time.Hour {
+		t.Errorf("esperava 365 dias, obteve %v", cfg.DadosRetencao)
 	}
 }

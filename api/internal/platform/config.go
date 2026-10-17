@@ -41,6 +41,9 @@ type Config struct {
 	MonitorPublicURL string        // base do Monitor vista pelo NAVEGADOR (redirect do BFF)
 	MonitorSecret    string        // HMAC compartilhado (rotas internas + token st)
 	PollEstado       time.Duration // intervalo do job que consome GET /interna/.../estado
+
+	// Retenção LGPD (ARQUITETURA §9.2): submissões, monitor_estado_aluno e log_entries
+	DadosRetencao time.Duration // SENO_RETENCAO_DADOS_D (default 730 dias)
 }
 
 // LoadConfig lê o ambiente e devolve a configuração validada.
@@ -67,6 +70,7 @@ func LoadConfig() (*Config, error) {
 		MonitorPublicURL: strings.TrimSuffix(strings.TrimSpace(os.Getenv("SENO_MONITOR_PUBLIC_URL")), "/"),
 		MonitorSecret:    os.Getenv("SENO_MONITOR_SECRET"),
 		PollEstado:       envDuration("SENO_POLL_ESTADO_S", 30*time.Second),
+		DadosRetencao:    envDurationDays("SENO_RETENCAO_DADOS_D", 730),
 	}
 
 	c.DatabaseURL = os.Getenv("SENO_DATABASE_URL")
@@ -130,4 +134,14 @@ func envDuration(key string, def time.Duration) time.Duration {
 		}
 	}
 	return def
+}
+
+// envDurationDays lê dias inteiros (chaves em _D) e devolve a duração.
+func envDurationDays(key string, defDays int) time.Duration {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return time.Duration(n) * 24 * time.Hour
+		}
+	}
+	return time.Duration(defDays) * 24 * time.Hour
 }

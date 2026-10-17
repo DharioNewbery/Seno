@@ -17,6 +17,15 @@ export default ts.config(
   ...ts.configs.recommended,
   ...svelte.configs["flat/recommended"],
   {
+    files: ["scripts/**/*.js"],
+    languageOptions: {
+      globals: {
+        console: "readonly",
+        process: "readonly",
+      },
+    },
+  },
+  {
     files: ["**/*.svelte"],
     languageOptions: {
       parserOptions: {
@@ -34,6 +43,7 @@ export default ts.config(
         File: "readonly",
         FormData: "readonly",
         Headers: "readonly",
+        HTMLDivElement: "readonly",
         HTMLElement: "readonly",
         HTMLInputElement: "readonly",
         KeyboardEvent: "readonly",
@@ -58,6 +68,10 @@ export default ts.config(
         structuredClone: "readonly",
         window: "readonly",
       },
+    },
+    rules: {
+      "svelte/prefer-writable-derived": "warn",
+      "svelte/prefer-svelte-reactivity": "warn",
     },
   },
   {

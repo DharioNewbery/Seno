@@ -138,6 +138,10 @@ func main() {
 		}
 	}()
 
+	// Retenção LGPD (ARQUITETURA §9.2): submissões, monitor_estado_aluno e log
+	// por 2 anos (default); ciclo diário.
+	platform.LacaRetencao(ctx, pool, cfg.DadosRetencao, 24*time.Hour)
+
 	srv := &http.Server{Addr: cfg.Addr, Handler: r}
 	go func() {
 		slog.Info("api escutando", "addr", cfg.Addr)

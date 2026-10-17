@@ -53,7 +53,7 @@ export const actions: Actions = {
     const form = await evento.request.formData();
     const nome = String(form.get("nome") ?? "").trim();
     if (!nome) return fail(422, { erro: "Informe o nome da atividade." });
-    let atributos: Atributo[] = [];
+    let atributos: Atributo[];
     try {
       atributos = JSON.parse(String(form.get("tarefas") ?? "[]"));
     } catch {

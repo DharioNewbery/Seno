@@ -1,16 +1,13 @@
-# compose.yaml — produção do Seno (Fase 8 do PLANO_MONITOR_FLUXO_ALUNO).
-# Hoje cobre o que existe e está testado: Monitor (realização da prova) +
-# Judge0 + PostgreSQL do Monitor + sidecar de backup diário (ARQUITETURA §9.1).
-# api/web/caddy entram aqui na Fase 9 (integração com a API); o postgres deste
-# arquivo continuará sendo o servidor único com bancos separados (seno e
-# seno_monitor — decisão do PLANO_MONITOR).
+# compose.yaml — produção do Seno (ARQUITETURA §8.3).
+# Cobre toda a stack de produção: Caddy (TLS da UFPA) + Web (BFF SvelteKit) +
+# API (Go) + Monitor (realização da prova) + Judge0 + PostgreSQL + sidecar de backup diário.
 #
 # Antes: cp .env.example .env (e troque TODOS os segredos).
 # Subir: docker compose -f deploy/compose.yaml --env-file deploy/.env up -d
 #
 # Imagem: em produção prefira GHCR (release.yml) em vez de build no host —
-# neste momento não há release do Monitor, então o build local com contexto
-# na raiz do monorepo (contract/ compartilhado) é o caminho.
+# o build local com contexto na raiz do monorepo (contract/ compartilhado) é o caminho
+# quando compilando a partir do repositório.
 
 name: seno
 
@@ -20,8 +17,9 @@ include:
 services:
   postgres:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: seno # banco da API (fase 9); o Monitor usa seno_monitor
+      POSTGRES_DB: seno # banco principal da API; o Monitor usa seno_monitor
       POSTGRES_USER: ${POSTGRES_USER:-seno}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-seno}
     volumes:
@@ -32,6 +30,23 @@ services:
       timeout: 5s
       retries: 10
 
+  api:
+    build:
+      context: ..
+      dockerfile: api/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SENO_DATABASE_URL: postgres://${POSTGRES_USER:-seno}:${POSTGRES_PASSWORD:-seno}@postgres:5432/seno?sslmode=disable
+      SENO_WEB_ORIGIN: ${SENO_WEB_ORIGIN:-https://seno.ufpa.br}
+      SENO_JUDGE0_URL: http://server:2358
+      SENO_JUDGE0_CALLBACK_URL: http://api:8080
+      SENO_MONITOR_URL: http://monitor:8081
+      SENO_MONITOR_PUBLIC_URL: ${SENO_MONITOR_PUBLIC_URL:-https://seno.ufpa.br/monitor}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   monitor:
     build:
       context: ..
@@ -39,11 +54,12 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      # Overrides de rede interna (valores de localhost do .env não valem aqui):
+      # Overrides de rede interna:
       SENO_MONITOR_DSN: postgres://${POSTGRES_USER:-seno}:${POSTGRES_PASSWORD:-seno}@postgres:5432/seno_monitor?sslmode=disable
       SENO_JUDGE0_URL: http://server:2358
       SENO_MONITOR_CALLBACK_URL: http://monitor:8081
       SENO_COOKIE_SECURE: "true" # HTTPS do Caddy (§8.4)
+      SENO_WEB_URL: ${SENO_WEB_ORIGIN:-https://seno.ufpa.br}
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,8 +70,39 @@ services:
       retries: 5
       start_period: 15s
 
-  # Backup diário dos bancos (§9.1: pg_dump por database; o WAL por
-  # archive_command entra na fase 9 junto do postgres da API). Retenção 120 d.
+  web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+      args:
+        SENO_SITE_ORIGIN: ${SENO_WEB_ORIGIN:-https://seno.ufpa.br}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SENO_API_URL: http://api:8080
+      SENO_WEB_ORIGIN: ${SENO_WEB_ORIGIN:-https://seno.ufpa.br}
+      PORT: "3000"
+    depends_on:
+      - api
+
+  caddy:
+    image: caddy:2.9-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SENO_DOMAIN: ${SENO_DOMAIN:-seno.ufpa.br}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/certs:/etc/caddy/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - monitor
+
+  # Backup diário dos bancos (§9.1: pg_dump por database). Retenção 120 d.
   backup:
     image: postgres:17-alpine
     restart: unless-stopped
@@ -65,9 +112,10 @@ services:
     entrypoint: >-
       sh -c 'while :; do
         ts=$$(date +%Y%m%d);
-        pg_dump "-hpostgres" "-U$${POSTGRES_USER:-seno}" -d seno_monitor -Fc
-          -f /backups/seno_monitor-$${ts}.dump;
+        pg_dump "-hpostgres" "-U$${POSTGRES_USER:-seno}" -d seno_monitor -Fc -f /backups/seno_monitor-$${ts}.dump;
+        pg_dump "-hpostgres" "-U$${POSTGRES_USER:-seno}" -d seno -Fc -f /backups/seno-$${ts}.dump;
         find /backups -name "seno_monitor-*.dump" -mtime +120 -delete;
+        find /backups -name "seno-*.dump" -mtime +120 -delete;
         sleep 86400;
       done'
     volumes:
@@ -79,3 +127,5 @@ services:
 volumes:
   pgdata: # dados do postgres (bancos seno e seno_monitor)
   backups:
+  caddy_data:
+  caddy_config:

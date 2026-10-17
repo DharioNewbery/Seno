@@ -3,7 +3,7 @@ import {
   mensagemDaApi,
   type AdminMetricas,
 } from "#lib/server/ensino";
-import { error, redirect } from "@sveltejs/kit";
+import { redirect } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 import { tokenDaSessao } from "#lib/server/sessao";
 

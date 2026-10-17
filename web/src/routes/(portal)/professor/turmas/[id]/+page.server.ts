@@ -8,7 +8,6 @@ import {
   listarAtividades,
   mensagemDaApi,
   renomearTurma,
-  verAtribuicao,
   verTurma,
   type Atribuicao,
   type Turma as TurmaApi,

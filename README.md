@@ -175,10 +175,54 @@ Docker Desktop/WSL2; no host Linux real da UFPA reavalie (nota no
 
 ```powershell
 go vet ./... ; go test ./...          # em api/, monitor/ e contract/ (testes usam Postgres de dev)
-cd web ; npm run check ; npm test     # svelte-check + vitest
+cd web ; npm run check ; npm test ; npm run lint  # svelte-check + vitest + eslint
 sqlc generate                          # em api/ quando queries/*.sql mudar
 ```
 
-Rotas de produção (`deploy/compose.yaml`: monitor + judge0 + backup,
-com segredos do `.env`) entram aqui na Fase 9 do PLANO_MONITOR; o Caddy
-com TLS real da UFPA fecha o acesso público.
+## Produção e Operação
+
+### Subindo em produção
+
+```bash
+# 1) Configurar variáveis e certificados
+cp deploy/.env.example deploy/.env
+# Edite deploy/.env com os segredos reais (SENO_SUPER_PASSWORD, SENO_MONITOR_SECRET, etc.)
+# Copie os certificados TLS da UFPA para deploy/caddy/certs/ (fullchain.pem e privkey.pem)
+
+# 2) Subir a stack completa (Caddy, Web, API, Monitor, Postgres, Judge0, Backup)
+docker compose -f deploy/compose.yaml --env-file deploy/.env up -d
+```
+
+- **Ponto de entrada:** HTTPS na porta 443 via Caddy (`seno.ufpa.br`), encaminhando internamente para o Web/BFF (`:3000`) e Monitor (`:8081`).
+- **Segurança:** Cookies com atributo `Secure=true`, HSTS ativado via Caddy, banco e Judge0 isolados da rede pública.
+
+### Rotina de Backup e Restauração
+
+O container `backup` no `deploy/compose.yaml` gera dumps diários no formato custom do Postgres (`-Fc`) com retenção de 120 dias no volume `backups`:
+- `/backups/seno_monitor-YYYYMMDD.dump`
+- `/backups/seno-YYYYMMDD.dump`
+
+#### Para restaurar um backup:
+
+1. **Localizar o dump desejado:**
+   ```bash
+   docker compose -f deploy/compose.yaml exec backup ls -la /backups
+   ```
+
+2. **Restaurar o banco da API (`seno`):**
+   ```bash
+   docker compose -f deploy/compose.yaml exec -T postgres pg_restore \
+     -U seno -d seno --clean --if-exists /backups/seno-YYYYMMDD.dump
+   ```
+
+3. **Restaurar o banco do Monitor (`seno_monitor`):**
+   ```bash
+   docker compose -f deploy/compose.yaml exec -T postgres pg_restore \
+     -U seno -d seno_monitor --clean --if-exists /backups/seno_monitor-YYYYMMDD.dump
+   ```
+
+### Política de Retenção LGPD
+
+A API e o Monitor executam jobs diários de limpeza com base na variável `SENO_RETENCAO_DADOS_D` (padrão 730 dias / 2 anos):
+- Na API: remove `submissoes` (cascateando correções e resultados de testes), `monitor_estado_aluno` e `log_entries` mais antigos que 2 anos, registrando as contagens nos logs.
+- No Monitor: remove `submissao`, `pre_avaliacao` e `log` mais antigos que 2 anos.

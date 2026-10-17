@@ -1,0 +1,29 @@
+# Caddyfile — proxy reverso e terminação TLS para o Seno (ARQUITETURA §8.4).
+# Certificado real da UFPA montado em /etc/caddy/certs/fullchain.pem e privkey.pem.
+
+{
+	email seno@ufpa.br
+}
+
+{$SENO_DOMAIN:seno.ufpa.br} {
+	tls /etc/caddy/certs/fullchain.pem /etc/caddy/certs/privkey.pem
+	encode zstd gzip
+
+	# Realização e prova no Monitor:
+	handle_path /monitor* {
+		reverse_proxy monitor:8081
+	}
+
+	handle /a/* {
+		reverse_proxy monitor:8081
+	}
+
+	handle /entrar* {
+		reverse_proxy monitor:8081
+	}
+
+	# Portal e BFF do Seno (SvelteKit):
+	handle {
+		reverse_proxy web:3000
+	}
+}

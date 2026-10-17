@@ -178,7 +178,7 @@
       <button>Executar teste</button>
       {#if typeof form?.testado !== "undefined" && form?.testado}
         <ul class="resultados-banco">
-          {#each ((form?.resultados as { resultados?: any[] })?.resultados ?? []) as res (res.teste_id)}
+          {#each ((form?.resultados as { resultados?: Array<{ teste_id: number; status?: string; publico?: boolean; tempo?: string; memoria?: string }> })?.resultados ?? []) as res (res.teste_id)}
             <li class:ok={res.status === "accepted"}>
               <span class="veredito">{res.status ?? "—"}</span>
               <span class="mono">teste #{res.teste_id} {res.publico ? "(público)" : "(privado)"}</span>

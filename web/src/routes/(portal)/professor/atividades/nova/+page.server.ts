@@ -1,6 +1,5 @@
-﻿import {
+import {
   criarAtividade,
-  editarAtividade,
   listarTarefas,
   mensagemDaApi,
   montarConteudo,
