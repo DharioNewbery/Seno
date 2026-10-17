@@ -11,10 +11,6 @@
 <section class="hero">
   <h1>{portal.titulo}</h1>
   <p>{portal.descricao}</p>
-  <p class="aviso">
-    Painel em construção — estatísticas e resumos entram com os módulos de
-    domínio.
-  </p>
 </section>
 
 <section class="atalhos" aria-label="Atalhos do portal">
@@ -41,13 +37,6 @@
   .hero p {
     margin: 0;
     color: var(--seno-gray-700);
-  }
-
-  .aviso {
-    margin-top: 0.75rem !important;
-    color: var(--seno-blue-600) !important;
-    font-weight: 600;
-    font-size: 0.9rem;
   }
 
   .atalhos {

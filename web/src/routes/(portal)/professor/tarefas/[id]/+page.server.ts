@@ -9,6 +9,8 @@ import {
   mensagemDaApi,
   verTarefaBruta,
   testarTarefaProfessor,
+  obterAnalyticsTarefa,
+  type TarefaAnalytics,
 } from "#lib/server/ensino";
 import { tokenDaSessao } from "#lib/server/sessao";
 
@@ -24,7 +26,10 @@ export const load: PageServerLoad = async ({ locals, cookies, request, params })
   const id = Number(params.id);
   if (!Number.isInteger(id) || id < 1) redirect(303, "/professor/tarefas");
   try {
-    const r = await verTarefaBruta(request, token, id);
+    const [r, rAnalytics] = await Promise.all([
+      verTarefaBruta(request, token, id),
+      obterAnalyticsTarefa(request, token, id),
+    ]);
     if (r.status === 401) redirect(303, "/");
     if (r.status === 404) redirect(303, "/professor/tarefas");
     const detalhes = detalhesDoVerTarefa(r);
@@ -32,6 +37,7 @@ export const load: PageServerLoad = async ({ locals, cookies, request, params })
       id,
       tarefa: detalhes.tarefa,
       testes: detalhes.testes,
+      analytics: rAnalytics.ok ? (rAnalytics.body as TarefaAnalytics) : null,
       erro: r.ok ? null : mensagemDaApi(r.body),
     };
   } catch {

@@ -50,9 +50,9 @@
         <strong>Atividades ({data.atribuicoes.length})</strong>
         <span>Atribuições da turma e suas configurações</span>
       </a>
-      <a class="opcao desativada" href={`/professor/turmas/${turma.id}`} aria-disabled="true">
+      <a class="opcao" href={`/professor/turmas/${turma.id}/analytics`}>
         <strong>Analytics</strong>
-        <span>Métricas por tarefa/aluno (em construção)</span>
+        <span>Métricas da turma, por atividade e aluno</span>
       </a>
     </nav>
 
@@ -223,9 +223,6 @@
   }
   .opcao:hover {
     border-color: var(--seno-blue-500);
-  }
-  .opcao.desativada {
-    opacity: 0.55;
   }
   .gestao {
     display: flex;

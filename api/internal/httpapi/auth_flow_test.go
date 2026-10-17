@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/seno-project/seno/api/db"
+	"github.com/seno-project/seno/api/internal/analytics"
 	"github.com/seno-project/seno/api/internal/atividades"
 	"github.com/seno-project/seno/api/internal/atribuicoes"
 	"github.com/seno-project/seno/api/internal/auth"
@@ -87,6 +88,7 @@ func montaAPI(t *testing.T, pool *pgxpool.Pool) (*Dependencies, *gin.Engine) {
 	deps.AtribuicaoS = atribuicoes.New(st, audit)
 	deps.TentativaS = tentativas.New(st, audit)
 	deps.SubmissaoS = submissoes.New(st, audit)
+	deps.Analytics = analytics.NewService(st)
 	judge0Cfg := judge0.CarregarConfigDasEnvLigada("", "", "", "http://localhost:5173")
 	deps.CorrecaoS = correcoes.New(st, audit, judge0.NewClient(judge0Cfg), judge0Cfg)
 	r := gin.New()

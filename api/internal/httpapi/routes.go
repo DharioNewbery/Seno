@@ -79,6 +79,8 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	turmas.DELETE("/:id", deps.ExcluirTurma)
 	turmas.GET("/:id/matriculas", deps.ListarMatriculasTurma)
 	turmas.POST("/:id/matriculas", deps.MatricularTurma)
+	turmas.GET("/:id/analytics", deps.TurmaAnalytics)
+	turmas.GET("/:id/alunos/:aluno_id/analytics", deps.AlunoTurmaAnalytics)
 
 	matriculas := v1.Group("/matriculas")
 	matriculas.Use(
@@ -107,6 +109,7 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	tarefas.PATCH("/:id", deps.EditarTarefa)
 	tarefas.POST("/:id/duplicar", deps.DuplicarTarefa)
 	tarefas.DELETE("/:id", deps.ExcluirTarefa)
+	tarefas.GET("/:id/analytics", deps.TarefaAnalytics)
 
 	// Banco de atividades (PROJETO §Atividades).
 	atividades := v1.Group("/atividades")
@@ -132,6 +135,7 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	atribuicoes.GET("/:id", deps.VerAtribuicao)
 	atribuicoes.PATCH("/:id", deps.EditarAtribuicao)
 	atribuicoes.DELETE("/:id", deps.ExcluirAtribuicao)
+	atribuicoes.GET("/:id/analytics", deps.AtribuicaoAnalytics)
 
 	// Tentativa: rascunho do aluno por atribuição (PROJETO §Tentativa);
 	// aqui vai só RequireAuth — o serviço exige cargo student e matrícula
@@ -202,4 +206,12 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	me.GET("/turmas", deps.MinhasTurmas)
 	me.GET("/turmas/:id", deps.MinhaTurma)
 	me.GET("/atribuicoes", deps.MinhasAtribuicoes)
+
+	// Administração: métricas globais da plataforma (staff: admin ou super).
+	admin := v1.Group("/admin")
+	admin.Use(
+		deps.RequireAuth(),
+		deps.RequireCargo(domain.RoleAdmin, domain.RoleSuper),
+	)
+	admin.GET("/metricas", deps.AdminMetricas)
 }

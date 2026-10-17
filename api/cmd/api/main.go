@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/seno-project/seno/api/db"
+	"github.com/seno-project/seno/api/internal/analytics"
 	"github.com/seno-project/seno/api/internal/atividades"
 	"github.com/seno-project/seno/api/internal/atribuicoes"
 	"github.com/seno-project/seno/api/internal/auth"
@@ -100,6 +101,7 @@ func main() {
 		CorrecaoS:   svcCorrecao,
 		TestarS:     testar.New(st, audit, judge0Cli, judge0Cfg),
 		Monitor:     monitorSvc,
+		Analytics:   analytics.NewService(st),
 	}
 
 	if os.Getenv("SENO_MODE") != "debug" {

@@ -80,6 +80,33 @@
         {/if}
       </div>
     </div>
+    {#if data.analytics}
+      <section class="metricas-tarefa-cartao">
+        <h3>Métricas de Uso e Desempenho</h3>
+        <div class="grade-metricas-tarefa">
+          <div class="item-m">
+            <span class="rotulo">Atividades que usam</span>
+            <strong>{data.analytics.total_atividades}</strong>
+          </div>
+          <div class="item-m">
+            <span class="rotulo">Atribuições em turmas</span>
+            <strong>{data.analytics.total_atribuicoes}</strong>
+          </div>
+          <div class="item-m">
+            <span class="rotulo">Submissões avaliadas</span>
+            <strong>{data.analytics.total_submissoes_avaliadas}</strong>
+          </div>
+          <div class="item-m">
+            <span class="rotulo">Taxa de Acerto Pleno</span>
+            <strong class="destaque-verde">{Math.round(data.analytics.taxa_acerto_geral)}%</strong>
+          </div>
+          <div class="item-m">
+            <span class="rotulo">Nota Média Geral</span>
+            <strong>{data.analytics.nota_media_geral !== undefined && data.analytics.nota_media_geral !== null ? data.analytics.nota_media_geral.toFixed(1) : "—"}</strong>
+          </div>
+        </div>
+      </section>
+    {/if}
 
     <form method="POST" action="?/salvar" class="cartao">
       <label>
@@ -363,5 +390,39 @@
   .mono {
     font-family: monospace;
     font-size: 0.78rem;
+  }
+  .metricas-tarefa-cartao {
+    background: var(--seno-white);
+    border: 1px solid var(--seno-gray-300);
+    border-radius: 10px;
+    padding: 1.1rem 1.3rem;
+  }
+  .metricas-tarefa-cartao h3 {
+    margin: 0 0 0.8rem;
+    font-size: 1rem;
+    color: var(--seno-gray-700);
+  }
+  .grade-metricas-tarefa {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.9rem;
+  }
+  .item-m {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .item-m .rotulo {
+    font-size: 0.75rem;
+    color: var(--seno-gray-500);
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .item-m strong {
+    font-size: 1.25rem;
+    color: var(--seno-blue-900);
+  }
+  .destaque-verde {
+    color: var(--seno-green) !important;
   }
 </style>

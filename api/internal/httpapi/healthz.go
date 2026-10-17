@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/seno-project/seno/api/internal/analytics"
 	"github.com/seno-project/seno/api/internal/atividades"
 	"github.com/seno-project/seno/api/internal/atribuicoes"
 	"github.com/seno-project/seno/api/internal/auth"
@@ -45,6 +46,7 @@ type Dependencies struct {
 	CorrecaoS   *correcoes.Service
 	TestarS     *testar.Service
 	Monitor     *monitor.Service // integração Fase 9; nil = desligada
+	Analytics   *analytics.Service
 }
 
 // Healthz verifica integridade do processo e do banco (compose healthcheck).

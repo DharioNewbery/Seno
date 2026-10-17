@@ -172,7 +172,7 @@ export async function listarMatriculas(
   request: Request,
   token: string,
   turmaID: number,
-  incluirEncerradas: boolean,
+  incluirEncerradas = false,
 ): Promise<Resultado> {
   return chamar(
     request,
@@ -1028,5 +1028,107 @@ async function chamar(
   return { ok: res.ok, status: res.status, body };
 }
 
+// ------------------------------ Analytics ------------------------------
+
+export interface AtribuicaoAnalyticsItem {
+  atribuicao_id: number;
+  atividade_nome: string;
+  prazo?: string;
+  total_entregas: number;
+  taxa_entrega: number;
+  total_atrasos: number;
+  taxa_atraso: number;
+  nota_media?: number;
+  nota_mediana?: number;
+  tempo_medio_seg?: number;
+}
+
+export interface TurmaAnalytics {
+  turma_id: number;
+  total_matriculados: number;
+  atribuicoes: AtribuicaoAnalyticsItem[];
+}
+
+export interface VereditoCount {
+  status: string;
+  contagem: number;
+}
+
+export interface TarefaAtribuicaoAnalytics {
+  tarefa_id: number;
+  tarefa_nome: string;
+  ordem: number;
+  valor_pts: number;
+  total_avaliadas: number;
+  taxa_acerto: number;
+  nota_media?: number;
+  vereditos_comuns: VereditoCount[];
+}
+
+export interface AtribuicaoAnalytics {
+  atribuicao_id: number;
+  atividade_nome: string;
+  tarefas: TarefaAtribuicaoAnalytics[];
+}
+
+export interface AlunoAtribuicaoLinhaTempo {
+  atribuicao_id: number;
+  atividade_nome: string;
+  prazo?: string;
+  estado: string;
+  entregue_em?: string;
+  atrasada: boolean;
+  tempo_gasto_seg?: number;
+  nota_publicada?: number;
+}
+
+export interface AlunoTurmaAnalytics {
+  aluno_id: number;
+  nome_completo: string;
+  email: string;
+  atribuicoes: AlunoAtribuicaoLinhaTempo[];
+}
+
+export interface TarefaAnalytics {
+  tarefa_id: number;
+  nome: string;
+  linguagem: string;
+  total_atividades: number;
+  total_atribuicoes: number;
+  total_submissoes_avaliadas: number;
+  taxa_acerto_geral: number;
+  nota_media_geral?: number;
+}
+
+export interface AdminMetricas {
+  usuarios_por_cargo: Record<string, number>;
+  usuarios_por_status: Record<string, number>;
+  total_turmas_ativas: number;
+  submissoes_por_status: Record<string, number>;
+  fila_judge0: Record<string, number>;
+  falhas_ultimos_7_dias: number;
+}
+
+export async function obterAnalyticsTurma(request: Request, token: string, turmaID: number): Promise<Resultado> {
+  return chamar(request, token, `/v1/turmas/${turmaID}/analytics`, { method: "GET" });
+}
+
+export async function obterAnalyticsAtribuicao(request: Request, token: string, atribuicaoID: number): Promise<Resultado> {
+  return chamar(request, token, `/v1/atribuicoes/${atribuicaoID}/analytics`, { method: "GET" });
+}
+
+export async function obterAnalyticsAlunoTurma(request: Request, token: string, turmaID: number, alunoID: number): Promise<Resultado> {
+  return chamar(request, token, `/v1/turmas/${turmaID}/alunos/${alunoID}/analytics`, { method: "GET" });
+}
+
+export async function obterAnalyticsTarefa(request: Request, token: string, tarefaID: number): Promise<Resultado> {
+  return chamar(request, token, `/v1/tarefas/${tarefaID}/analytics`, { method: "GET" });
+}
+
+export async function obterAdminMetricas(request: Request, token: string): Promise<Resultado> {
+  return chamar(request, token, `/v1/admin/metricas`, { method: "GET" });
+}
+
 /** Guarda de tipos reexportada para o portal professor. */
 export type { Usuario };
+
