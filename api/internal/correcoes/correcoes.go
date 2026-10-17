@@ -43,9 +43,10 @@ func New(st *store.Store, audit *platform.Audit, cli *judge0.Client, cfg judge0.
 const (
 	LogKindCorrecaoCreate  = "correcao.create"
 	LogKindCorrecaoUpdate  = "correcao.update"
-	LogKindCorrecaoConfirm = "correcao.confirmar"
-	LogKindCorrecaoPublish = "correcao.publicar"
-	LogKindCallback        = "correcao.callback"
+	LogKindCorrecaoConfirm   = "correcao.confirmar"
+	LogKindCorrecaoPublish   = "correcao.publicar"
+	LogKindCorrecaoReexecutar = "correcao.reexecutar"
+	LogKindCallback          = "correcao.callback"
 )
 
 // Status da correção (PROJETO §Correção).
@@ -266,15 +267,24 @@ func (s *Service) Iniciar(
 		Detail: fmt.Sprintf("submissao=%d correcao=%d", submissaoID, row.ID),
 	})
 
+	if err := s.despachar(ctx, row.ID, sub, createdBy); err != nil {
+		return nil, err
+	}
+	return s.montar(ctx, submissaoID)
+}
+
+func (s *Service) despachar(
+	ctx context.Context, correcaoID int64, sub gen.GetSubmissaoCorrecaoRow, createdBy int64,
+) error {
 	// Correção de tarefa: por tarefa da atividade (ordem/valor).
 	tarefasDaAtividade, err := s.store.Q.TarefasDaAtribuicao(ctx, sub.AtribuicaoID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var snap snapshotTasks
 	if len(sub.Snapshot) > 0 {
 		if err := json.Unmarshal(sub.Snapshot, &snap); err != nil {
-			return nil, fmt.Errorf("snapshot: %w", err)
+			return fmt.Errorf("snapshot: %w", err)
 		}
 	}
 	fontes := map[int64]string{}
@@ -287,9 +297,9 @@ func (s *Service) Iniciar(
 	for _, at := range tarefasDaAtividade {
 		// Correção de tarefa nasce sempre (grade manual funciona mesmo
 		// sem Judge0; com Judge0, recebe os resultados por callback).
-		ctID, err := s.criarCT(ctx, row.ID, at.TarefaID, at.ValorPts)
+		ctID, err := s.criarCT(ctx, correcaoID, at.TarefaID, at.ValorPts)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !s.cfg.Ligada() {
 			continue
@@ -300,7 +310,7 @@ func (s *Service) Iniciar(
 		}
 		testes, err := s.store.Q.ListTestesTarefa(ctx, at.TarefaID)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for _, te := range testes {
 			itens = append(itens, judge0.SubmissaoJudge0{
@@ -318,20 +328,78 @@ func (s *Service) Iniciar(
 			s.audit.Record(ctx, platform.LogEntry{
 				ActorID: &createdBy, Actor: "sistema",
 				Kind:   "correcao.judge0_falhou",
-				Detail: fmt.Sprintf("correcao=%d err=%v", row.ID, err),
+				Detail: fmt.Sprintf("correcao=%d err=%v", correcaoID, err),
 			})
 			statusEnvio = StatusFalhou
 		}
 	}
 	if statusEnvio != StatusPendente {
 		if err := s.store.Q.UpdateStatusCorrecao(ctx, gen.UpdateStatusCorrecaoParams{
-			ID: row.ID, Status: statusEnvio,
+			ID: correcaoID, Status: statusEnvio,
 		}); err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return s.montar(ctx, submissaoID)
+	return nil
 }
+
+// Reexecutar reinicia a avaliação automática da correção (dono|staff).
+// Permitido para status 'falhou' ou 'concluida' ainda NÃO confirmada.
+func (s *Service) Reexecutar(
+	ctx context.Context, actor domain.User, submissaoID int64,
+) (VisaoProfessor, error) {
+	esc, err := s.escopoProfessor(ctx, actor, submissaoID)
+	if err != nil {
+		return VisaoProfessor{}, err
+	}
+	sub, err := s.store.Q.GetSubmissaoCorrecao(ctx, submissaoID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return VisaoProfessor{}, jaNaoEncontrada()
+		}
+		return VisaoProfessor{}, err
+	}
+	corRow, err := s.store.Q.GetCorrecaoPorSubmissao(ctx, submissaoID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return VisaoProfessor{}, jaNaoEncontrada()
+		}
+		return VisaoProfessor{}, err
+	}
+	if corRow.Status == StatusExecutando {
+		return VisaoProfessor{}, conflito("Correção já está em execução.")
+	}
+	if corRow.ConfirmadaEm.Valid {
+		return VisaoProfessor{}, conflito("Correção já confirmada não pode ser reexecutada.")
+	}
+
+	if err := s.store.InTx(ctx, func(_ pgx.Tx, q *gen.Queries) error {
+		if err := q.ResetResultadosCorrecao(ctx, corRow.ID); err != nil {
+			return err
+		}
+		if err := q.ResetNotasCorrecaoTarefas(ctx, corRow.ID); err != nil {
+			return err
+		}
+		return q.ResetStatusCorrecao(ctx, gen.ResetStatusCorrecaoParams{
+			ID: corRow.ID, Status: StatusPendente,
+		})
+	}); err != nil {
+		return VisaoProfessor{}, err
+	}
+
+	if err := s.despachar(ctx, corRow.ID, sub, actor.ID); err != nil {
+		return VisaoProfessor{}, err
+	}
+
+	s.audit.Record(ctx, platform.LogEntry{
+		ActorID: &actor.ID, Actor: actor.Email,
+		Kind:   LogKindCorrecaoReexecutar,
+		Detail: fmt.Sprintf("submissao=%d correcao=%d aluno=%d", submissaoID, corRow.ID, esc.AlunoID),
+	})
+
+	return s.VerProfessor(ctx, actor, submissaoID)
+}
+
 
 // criarCT numa transaçãozinha própria (idempotente).
 func (s *Service) criarCT(

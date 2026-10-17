@@ -1,11 +1,15 @@
 import {
+  coletarRascunho,
   entregasDe,
+  excluirMonitor,
+  excluirSubmissao,
   listarEntregas,
   mensagemDaApi,
+  reexecutarMonitor,
   verAtribuicao,
   type Atribuicao,
 } from "#lib/server/ensino";
-import { redirect } from "@sveltejs/kit";
+import { fail, redirect, type Actions } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 import { tokenDaSessao } from "#lib/server/sessao";
 
@@ -33,3 +37,53 @@ export const load: PageServerLoad = async ({ locals, cookies, request, params })
     };
   }
 };
+
+export const actions: Actions = {
+  coletar: async (evento) => {
+    const token = tokenDaSessao(evento.cookies);
+    if (!token) return fail(401, { erro: "Sessão encerrada." });
+    const atribuicaoID = Number(evento.params.id);
+    const form = await evento.request.formData();
+    const alunoID = Number(form.get("aluno_id"));
+    if (!alunoID) return fail(422, { erro: "Aluno inválido." });
+    const r = await coletarRascunho(evento.request, token, atribuicaoID, alunoID);
+    if (r.status === 401) redirect(303, "/");
+    if (!r.ok) return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
+    return { ok: "Rascunho coletado com sucesso." };
+  },
+  excluir: async (evento) => {
+    const token = tokenDaSessao(evento.cookies);
+    if (!token) return fail(401, { erro: "Sessão encerrada." });
+    const atribuicaoID = Number(evento.params.id);
+    const form = await evento.request.formData();
+    const submissaoID = Number(form.get("submissao_id"));
+    const alunoID = Number(form.get("aluno_id"));
+    const doMonitor = form.get("do_monitor") === "true";
+
+    let r;
+    if (doMonitor && alunoID) {
+      r = await excluirMonitor(evento.request, token, atribuicaoID, alunoID);
+    } else if (submissaoID) {
+      r = await excluirSubmissao(evento.request, token, submissaoID);
+    } else {
+      return fail(422, { erro: "Submissão inválida para exclusão." });
+    }
+
+    if (r.status === 401) redirect(303, "/");
+    if (!r.ok) return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
+    return { ok: "Submissão excluída. Uma nova tentativa pré-preenchida foi liberada ao aluno." };
+  },
+  reexecutar_monitor: async (evento) => {
+    const token = tokenDaSessao(evento.cookies);
+    if (!token) return fail(401, { erro: "Sessão encerrada." });
+    const atribuicaoID = Number(evento.params.id);
+    const form = await evento.request.formData();
+    const alunoID = Number(form.get("aluno_id"));
+    if (!alunoID) return fail(422, { erro: "Aluno inválido." });
+    const r = await reexecutarMonitor(evento.request, token, atribuicaoID, alunoID);
+    if (r.status === 401) redirect(303, "/");
+    if (!r.ok) return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
+    return { ok: "Correção reenviada para execução no Monitor." };
+  },
+};
+

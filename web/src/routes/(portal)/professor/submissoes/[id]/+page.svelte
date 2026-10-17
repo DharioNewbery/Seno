@@ -98,6 +98,11 @@
 
       {#if !publicada}
         <div class="trava">
+          {#if !cor?.confirmada_em || cor?.status === "falhou"}
+            <form method="POST" action="?/reexecutar">
+              <button class="acao cinza">Reexecutar testes</button>
+            </form>
+          {/if}
           <form method="POST" action="?/confirmar">
             <button class="acao">Confirmar</button>
           </form>
@@ -107,6 +112,7 @@
           <span class="meta">Publicar exige confirmação; depois disso congela.</span>
         </div>
       {/if}
+
     {/if}
 
     <a class="voltar" href={`/professor/atribuicoes/${data.submissaoID}/entregas`}>
@@ -286,6 +292,13 @@
   .acao.verde:hover {
     background: #276749;
   }
+  .acao.cinza {
+    background: var(--seno-gray-600);
+  }
+  .acao.cinza:hover {
+    background: var(--seno-gray-700);
+  }
+
   .aviso.erro {
     background: #fdecea;
     color: var(--seno-red);

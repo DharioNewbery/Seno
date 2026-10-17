@@ -175,3 +175,95 @@ func (q *Queries) MatriculaAtiva(ctx context.Context, arg MatriculaAtivaParams) 
 	err := row.Scan(&matriculado)
 	return matriculado, err
 }
+
+const restaurarTentativa = `-- name: RestaurarTentativa :exec
+INSERT INTO tentativas (atribuicao_id, aluno_id, comecou_em, revisao, gravado_em, snapshot, created_by)
+VALUES ($1, $2, $3, 1, now(), $4, $5)
+ON CONFLICT (atribuicao_id, aluno_id) DO UPDATE
+SET comecou_em = EXCLUDED.comecou_em,
+    revisao = 1,
+    gravado_em = now(),
+    snapshot = EXCLUDED.snapshot,
+    created_by = EXCLUDED.created_by
+`
+
+type RestaurarTentativaParams struct {
+	AtribuicaoID int64              `json:"atribuicao_id"`
+	AlunoID      int64              `json:"aluno_id"`
+	ComecouEm    pgtype.Timestamptz `json:"comecou_em"`
+	Snapshot     []byte             `json:"snapshot"`
+	CreatedBy    pgtype.Int8        `json:"created_by"`
+}
+
+func (q *Queries) RestaurarTentativa(ctx context.Context, arg RestaurarTentativaParams) error {
+	_, err := q.db.Exec(ctx, restaurarTentativa,
+		arg.AtribuicaoID,
+		arg.AlunoID,
+		arg.ComecouEm,
+		arg.Snapshot,
+		arg.CreatedBy,
+	)
+	return err
+}
+
+const listTentativasSemSubmissao = `-- name: ListTentativasSemSubmissao :many
+SELECT t.id,
+       t.atribuicao_id,
+       t.aluno_id,
+       t.comecou_em,
+       t.revisao,
+       t.gravado_em,
+       p.first_name AS aluno_first_name,
+       p.last_name  AS aluno_last_name,
+       u.email       AS aluno_email
+FROM tentativas t
+JOIN users u ON u.id = t.aluno_id
+JOIN persons p ON p.id = u.person_id
+LEFT JOIN submissoes s ON s.atribuicao_id = t.atribuicao_id AND s.aluno_id = t.aluno_id
+WHERE t.atribuicao_id = $1
+  AND s.id IS NULL
+ORDER BY t.comecou_em, t.id
+`
+
+type ListTentativasSemSubmissaoRow struct {
+	ID             int64              `json:"id"`
+	AtribuicaoID   int64              `json:"atribuicao_id"`
+	AlunoID        int64              `json:"aluno_id"`
+	ComecouEm      pgtype.Timestamptz `json:"comecou_em"`
+	Revisao        int32              `json:"revisao"`
+	GravadoEm      pgtype.Timestamptz `json:"gravado_em"`
+	AlunoFirstName string             `json:"aluno_first_name"`
+	AlunoLastName  string             `json:"aluno_last_name"`
+	AlunoEmail     string             `json:"aluno_email"`
+}
+
+func (q *Queries) ListTentativasSemSubmissao(ctx context.Context, atribuicaoID int64) ([]ListTentativasSemSubmissaoRow, error) {
+	rows, err := q.db.Query(ctx, listTentativasSemSubmissao, atribuicaoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTentativasSemSubmissaoRow{}
+	for rows.Next() {
+		var i ListTentativasSemSubmissaoRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AtribuicaoID,
+			&i.AlunoID,
+			&i.ComecouEm,
+			&i.Revisao,
+			&i.GravadoEm,
+			&i.AlunoFirstName,
+			&i.AlunoLastName,
+			&i.AlunoEmail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+

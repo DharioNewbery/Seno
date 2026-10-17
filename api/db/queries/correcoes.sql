@@ -139,3 +139,25 @@ ORDER BY at.ordem, at.tarefa_id;
 SELECT id, correcao_id, tarefa_id, valor_pts
 FROM correcao_tarefas
 WHERE id = $1;
+
+-- name: ResetResultadosCorrecao :exec
+DELETE FROM resultados
+WHERE correcao_tarefa_id IN (
+    SELECT id FROM correcao_tarefas WHERE correcao_id = $1
+);
+
+-- name: ResetNotasCorrecaoTarefas :exec
+UPDATE correcao_tarefas
+SET nota_auto = NULL,
+    nota_final = NULL,
+    feedback = NULL
+WHERE correcao_id = $1;
+
+-- name: ResetStatusCorrecao :exec
+UPDATE correcoes
+SET status = $2,
+    confirmada_por = NULL,
+    confirmada_em = NULL,
+    publicada_em = NULL
+WHERE id = $1;
+

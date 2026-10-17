@@ -78,4 +78,13 @@ export const actions: Actions = {
     if (!r.ok) return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
     return { ok: "Correção publicada — o aluno já vê a nota." };
   },
+  reexecutar: async (evento) => {
+    const token = tokenDaSessao(evento.cookies);
+    if (!token) return fail(401, { erro: "Sessão encerrada." });
+    const r = await acaoCorrecao(evento.request, token, Number(evento.params.id), "reexecutar");
+    if (r.status === 401) redirect(303, "/");
+    if (!r.ok) return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
+    return { ok: "Correção reenviada para execução automática." };
+  },
 };
+

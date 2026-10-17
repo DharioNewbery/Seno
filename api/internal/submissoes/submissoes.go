@@ -37,7 +37,9 @@ func New(st *store.Store, audit *platform.Audit) *Service {
 
 // Tipos de evento do Log (PROJETO §Log).
 const (
-	LogKindSubmissao = "submissao.create"
+	LogKindSubmissao        = "submissao.create"
+	LogKindSubmissaoDelete  = "submissao.delete"
+	LogKindSubmissaoColetar = "submissao.coletar"
 )
 
 // Submissao é a visão completa de uma entrega.
@@ -52,23 +54,24 @@ type Submissao struct {
 }
 
 // Entrega é a visão do professor (aluno + tempo + estado).
-//   - API: submissão própria, com comecou_em/submissão id.
-//   - Monitor: o aluno entregou na prova do Monitor — a API só tem o
-//     espelho do /estado (monitor_estado_aluno, job Fase 9.3): sem
-//     submissão na API, o detalhe/correção fica no Monitor (PLANO Fase 9:
-//     migração do fluxo é esforço separado).
+//   - API: submissão própria ou rascunho pendente de coleta.
+//   - Monitor: o aluno entregou ou tem rascunho na prova do Monitor.
 type Entrega struct {
 	ID         int64      `json:"id"`
+	AlunoID    int64      `json:"aluno_id"`
 	Aluno      string     `json:"aluno"`
 	AlunoEmail string     `json:"aluno_email"`
 	ComecouEm  *time.Time `json:"comecou_em,omitempty"`
 	EntregueEm time.Time  `json:"entregue_em"`
 	Atrasada   bool       `json:"atrasada"`
+	Estado     string     `json:"estado"` // "entregue" | "rascunho"
+	PodeColetar bool      `json:"pode_coletar,omitempty"`
 	DoMonitor  bool       `json:"do_monitor,omitempty"`
 
 	NotaMonitor     *float64 `json:"nota_monitor,omitempty"`
 	CorrecaoMonitor string   `json:"correcao_monitor,omitempty"`
 }
+
 
 func indisponivel(msg string) error {
 	return platform.NewAPIError(
@@ -252,67 +255,117 @@ func (s *Service) Listar(
 		}
 		out = append(out, Entrega{
 			ID:         row.ID,
+			AlunoID:    row.AlunoID,
 			Aluno:      row.AlunoFirstName + " " + row.AlunoLastName,
 			AlunoEmail: row.AlunoEmail,
 			ComecouEm:  comecou,
 			EntregueEm: horaDe(row.EntregueEm),
 			Atrasada:   row.Atrasada,
+			Estado:     "entregue",
 		})
 	}
+
+	// Alunos que iniciaram a atividade (têm rascunho/tentativa) mas não entregaram:
+	tents, err := s.store.Q.ListTentativasSemSubmissao(ctx, atribuicaoID)
+	if err != nil {
+		return nil, err
+	}
+	agora := time.Now()
+	for _, t := range tents {
+		feitos[t.AlunoID] = true
+		comecou := t.ComecouEm.Time
+		prazo := prazoEfetivo(comecou, atr.DuracaoSeg, atr.Prazo)
+		expirado := prazo.Valid && agora.After(prazo.Time)
+		podeColetar := expirado && !atr.PodeAtrasado
+
+		out = append(out, Entrega{
+			AlunoID:     t.AlunoID,
+			Aluno:       t.AlunoFirstName + " " + t.AlunoLastName,
+			AlunoEmail:  t.AlunoEmail,
+			ComecouEm:   &comecou,
+			Estado:      "rascunho",
+			PodeColetar: podeColetar,
+		})
+	}
+
 	// Entregas feitas no Monitor: só existem no espelho do /estado
 	// (monitor_estado_aluno). Com atribuição transferida, entram na lista
 	// sem submissão na API — dedupe contra as da API (a API ganha).
-	if err := s.listarEntregasMonitor(ctx, atribuicaoID, feitos, &out); err != nil {
+	if err := s.listarEntregasMonitor(ctx, atribuicaoID, atr.PodeAtrasado, feitos, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
 // listarEntregasMonitor lê o espelho (só atribuições com monitor_id) e
-// adiciona as entregas que a API não tem como submissão. Late feita
-// comparison server-side: entregue_em após o prazo efetivo do espelho.
+// adiciona as entregas e rascunhos que a API não tem como submissão.
 func (s *Service) listarEntregasMonitor(
-	ctx context.Context, atribuicaoID int64, feitos map[int64]bool, out *[]Entrega,
+	ctx context.Context, atribuicaoID int64, podeAtrasado bool, feitos map[int64]bool, out *[]Entrega,
 ) error {
 	rows, err := s.store.Pool.Query(ctx, `
 		SELECT ma.aluno_id, u.email,
 		       COALESCE(NULLIF(TRIM(p.first_name || ' ' || p.last_name), ''), u.email),
 		       ma.entregue_em,
 		       COALESCE(ma.entregue_em > ma.prazo_efetivo, false),
-		       ma.nota_auto::float8, ma.correcao_status
+		       ma.nota_auto::float8, ma.correcao_status,
+		       ma.estado, ma.prazo_efetivo, ma.aberta_em
 		FROM monitor_estado_aluno ma
 		JOIN users u ON u.id = ma.aluno_id
 		LEFT JOIN persons p ON p.id = u.person_id
 		JOIN atribuicoes a ON a.id = ma.atribuicao_id AND a.monitor_id IS NOT NULL
-		WHERE ma.atribuicao_id = $1 AND ma.estado = 'entregue'
-		ORDER BY ma.entregue_em, ma.aluno_id`, atribuicaoID)
+		WHERE ma.atribuicao_id = $1 AND ma.estado IN ('entregue', 'aberta')
+		ORDER BY ma.entregue_em NULLS LAST, ma.aluno_id`, atribuicaoID)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
+	agora := time.Now()
 	for rows.Next() {
 		var (
-			alunoID    int64
-			email      string
-			nome       string
-			entregueEm pgtype.Timestamptz
-			atrasada   bool
-			nota       pgtype.Float8
-			status     string
+			alunoID      int64
+			email        string
+			nome         string
+			entregueEm   pgtype.Timestamptz
+			atrasada     bool
+			nota         pgtype.Float8
+			status       string
+			estado       string
+			prazoEfetivo pgtype.Timestamptz
+			abertaEm     pgtype.Timestamptz
 		)
 		if err := rows.Scan(&alunoID, &email, &nome, &entregueEm,
-			&atrasada, &nota, &status); err != nil {
+			&atrasada, &nota, &status, &estado, &prazoEfetivo, &abertaEm); err != nil {
 			return err
 		}
 		if feitos[alunoID] {
 			continue
 		}
+		var comecou *time.Time
+		if abertaEm.Valid {
+			t := abertaEm.Time
+			comecou = &t
+		}
+
+		podeColetar := false
+		if estado == "aberta" {
+			expirado := prazoEfetivo.Valid && agora.After(prazoEfetivo.Time)
+			podeColetar = expirado && !podeAtrasado
+			estado = "rascunho"
+		}
+
 		e := Entrega{
+			AlunoID:         alunoID,
+			Aluno:           nome,
 			AlunoEmail:      email,
-			EntregueEm:      horaDe(entregueEm),
+			ComecouEm:       comecou,
 			Atrasada:        atrasada,
+			Estado:          estado,
+			PodeColetar:     podeColetar,
 			DoMonitor:       true,
 			CorrecaoMonitor: status,
+		}
+		if entregueEm.Valid {
+			e.EntregueEm = horaDe(entregueEm)
 		}
 		if nota.Valid {
 			v := nota.Float64
@@ -322,6 +375,131 @@ func (s *Service) listarEntregasMonitor(
 	}
 	return rows.Err()
 }
+
+// Excluir apaga definitivamente a submissão e sua correção associada (ON DELETE CASCADE),
+// restaurando uma nova Tentativa pré-preenchida para o aluno com o snapshot e comecou_em originais.
+// PROJETO §Submissão. Decisão: permitido mesmo com correção publicada.
+func (s *Service) Excluir(ctx context.Context, actor domain.User, submissaoID int64) error {
+	row, err := s.store.Q.GetSubmissaoPorID(ctx, submissaoID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return platform.NewAPIError(http.StatusNotFound, platform.CodeNotFound, "Submissão não encontrada.")
+		}
+		return err
+	}
+	if !actor.IsStaff() && actor.ID != row.TurmaProfessorID {
+		return platform.NewAPIError(http.StatusNotFound, platform.CodeNotFound, "Submissão não encontrada.")
+	}
+
+	err = s.store.InTx(ctx, func(_ pgx.Tx, q *gen.Queries) error {
+		if err := q.RestaurarTentativa(ctx, gen.RestaurarTentativaParams{
+			AtribuicaoID: row.AtribuicaoID,
+			AlunoID:      row.AlunoID,
+			ComecouEm:    row.ComecouEm,
+			Snapshot:     row.Snapshot,
+			CreatedBy:    int8Ptr(actor.ID),
+		}); err != nil {
+			return err
+		}
+		affected, err := q.DeleteSubmissao(ctx, submissaoID)
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return platform.NewAPIError(http.StatusNotFound, platform.CodeNotFound, "Submissão não encontrada.")
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	s.audit.Record(ctx, platform.LogEntry{
+		ActorID: &actor.ID, Actor: actor.Email,
+		Kind:   LogKindSubmissaoDelete,
+		Detail: fmt.Sprintf("submissao=%d atribuicao=%d aluno=%d", submissaoID, row.AtribuicaoID, row.AlunoID),
+	})
+	return nil
+}
+
+// Coletar coleta o rascunho de um aluno cujo prazo encerrou sem entrega (quando atraso não é permitido).
+// Gera uma Submissão marcada como atrasada e apaga a Tentativa. PROJETO §Atribuição.
+func (s *Service) Coletar(ctx context.Context, actor domain.User, atribuicaoID int64, alunoID int64) (Submissao, error) {
+	atr, err := s.store.Q.GetAtribuicao(ctx, atribuicaoID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Submissao{}, platform.NewAPIError(http.StatusNotFound, platform.CodeNotFound, "Atribuição não encontrada.")
+		}
+		return Submissao{}, err
+	}
+	if !actor.IsStaff() && actor.ID != atr.TurmaProfessorID {
+		return Submissao{}, platform.NewAPIError(http.StatusNotFound, platform.CodeNotFound, "Atribuição não encontrada.")
+	}
+	if atr.PodeAtrasado {
+		return Submissao{}, indisponivel("A coleta de rascunho só é aplicável quando entrega atrasada não é permitida.")
+	}
+
+	tent, err := s.store.Q.GetTentativa(ctx, gen.GetTentativaParams{
+		AtribuicaoID: atribuicaoID, AlunoID: alunoID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Submissao{}, indisponivel("Aluno não possui rascunho aberto para coleta.")
+		}
+		return Submissao{}, err
+	}
+
+	agora := time.Now()
+	prazo := prazoEfetivo(tent.ComecouEm.Time, atr.DuracaoSeg, atr.Prazo)
+	if prazo.Valid && agora.Before(prazo.Time) {
+		return Submissao{}, indisponivel("O prazo da atividade ainda não expirou para este aluno.")
+	}
+
+	var nova Submissao
+	err = s.store.InTx(ctx, func(_ pgx.Tx, q *gen.Queries) error {
+		row, err := q.InsertSubmissao(ctx, gen.InsertSubmissaoParams{
+			AtribuicaoID: atribuicaoID,
+			AlunoID:      alunoID,
+			ComecouEm:    tent.ComecouEm,
+			Atrasada:     true,
+			Observacao:   textoPtr("Coletada pelo professor."),
+			Snapshot:     tent.Snapshot,
+			CreatedBy:    int8Ptr(actor.ID),
+		})
+		if err != nil {
+			return err
+		}
+		if _, err := q.ApagarTentativa(ctx, gen.ApagarTentativaParams{
+			AtribuicaoID: atribuicaoID, AlunoID: alunoID,
+		}); err != nil {
+			return err
+		}
+		nova = Submissao{
+			ID:           row.ID,
+			AtribuicaoID: row.AtribuicaoID,
+			AlunoID:      row.AlunoID,
+			ComecouEm:    row.ComecouEm.Time,
+			EntregueEm:   row.EntregueEm.Time,
+			Atrasada:     row.Atrasada,
+			Snapshot:     row.Snapshot,
+		}
+		return nil
+	})
+	if err != nil {
+		if eDuplicado(err) {
+			return Submissao{}, platform.NewAPIError(http.StatusConflict, platform.CodeConflict, "Esta atividade já foi entregue.")
+		}
+		return Submissao{}, err
+	}
+
+	s.audit.Record(ctx, platform.LogEntry{
+		ActorID: &actor.ID, Actor: actor.Email,
+		Kind:   LogKindSubmissaoColetar,
+		Detail: fmt.Sprintf("submissao=%d atribuicao=%d aluno=%d coletor=%d", nova.ID, atribuicaoID, alunoID, actor.ID),
+	})
+	return nova, nil
+}
+
 
 // helpers -----------------------------------------------------------
 

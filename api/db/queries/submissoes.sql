@@ -35,3 +35,23 @@ WHERE atribuicao_id = $1
 DELETE FROM tentativas
 WHERE atribuicao_id = $1
   AND aluno_id = $2;
+
+-- name: GetSubmissaoPorID :one
+SELECT s.id,
+       s.atribuicao_id,
+       s.aluno_id,
+       s.comecou_em,
+       s.entregue_em,
+       s.atrasada,
+       s.observacao,
+       s.snapshot,
+       t.professor_id AS turma_professor_id
+FROM submissoes s
+JOIN atribuicoes a ON a.id = s.atribuicao_id
+JOIN turmas t ON t.id = a.turma_id
+WHERE s.id = $1;
+
+-- name: DeleteSubmissao :execrows
+DELETE FROM submissoes
+WHERE id = $1;
+

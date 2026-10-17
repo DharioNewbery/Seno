@@ -660,11 +660,14 @@ export async function entregarAtividade(
 
 export interface Entrega {
   id: number;
+  aluno_id?: number;
   aluno: string;
   aluno_email: string;
   comecou_em?: string;
   entregue_em: string;
   atrasada: boolean;
+  estado?: "entregue" | "rascunho";
+  pode_coletar?: boolean;
   /** Entrega feita no Monitor (espelho do /estado): sem submissão na API. */
   do_monitor?: boolean;
   nota_monitor?: number;
@@ -684,6 +687,63 @@ export async function listarEntregas(
 
 export function entregasDe(r: Resultado): Entrega[] {
   return (r.body as { submissoes?: Entrega[] } | null)?.submissoes ?? [];
+}
+
+/** Excluir submissão (professor dono|staff). */
+export async function excluirSubmissao(
+  request: Request,
+  token: string,
+  submissaoID: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/submissoes/${submissaoID}`, {
+    method: "DELETE",
+    body: "{}",
+  });
+}
+
+/** Coletar rascunho de aluno atrasado (professor dono|staff). */
+export async function coletarRascunho(
+  request: Request,
+  token: string,
+  atribuicaoID: number,
+  alunoID: number,
+): Promise<Resultado> {
+  return chamar(
+    request,
+    token,
+    `/v1/atribuicoes/${atribuicaoID}/coletar/${alunoID}`,
+    { method: "POST", body: "{}" },
+  );
+}
+
+/** Reexecutar correção no Monitor (professor dono|staff). */
+export async function reexecutarMonitor(
+  request: Request,
+  token: string,
+  atribuicaoID: number,
+  alunoID: number,
+): Promise<Resultado> {
+  return chamar(
+    request,
+    token,
+    `/v1/atribuicoes/${atribuicaoID}/monitor/alunos/${alunoID}/reexecutar`,
+    { method: "POST", body: "{}" },
+  );
+}
+
+/** Excluir submissão no Monitor (professor dono|staff). */
+export async function excluirMonitor(
+  request: Request,
+  token: string,
+  atribuicaoID: number,
+  alunoID: number,
+): Promise<Resultado> {
+  return chamar(
+    request,
+    token,
+    `/v1/atribuicoes/${atribuicaoID}/monitor/alunos/${alunoID}/submissao`,
+    { method: "DELETE", body: "{}", },
+  );
 }
 
 // ------------------------- correção ------------------------------------
@@ -758,12 +818,12 @@ export async function editarCorrecao(
   });
 }
 
-/** Ações: confirmar | publicar. */
+/** Ações: confirmar | publicar | reexecutar. */
 export async function acaoCorrecao(
   request: Request,
   token: string,
   submissaoID: number,
-  acao: "confirmar" | "publicar",
+  acao: "confirmar" | "publicar" | "reexecutar",
 ): Promise<Resultado> {
   return chamar(
     request,
@@ -772,6 +832,7 @@ export async function acaoCorrecao(
     { method: "POST", body: "{}" },
   );
 }
+
 
 // ------------------ Execução de teste (§ modalidade) -------------------
 

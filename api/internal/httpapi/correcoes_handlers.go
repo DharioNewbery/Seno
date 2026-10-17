@@ -81,6 +81,22 @@ func (d *Dependencies) publicarCorrecao(c *gin.Context) {
 	c.JSON(http.StatusOK, visao)
 }
 
+// reexecutarCorrecao: POST /v1/submissoes/:id/correcao/reexecutar.
+func (d *Dependencies) reexecutarCorrecao(c *gin.Context) {
+	user, _ := currentUser(c)
+	id, ok := idDaRota(c)
+	if !ok {
+		return
+	}
+	visao, err := d.CorrecaoS.Reexecutar(c.Request.Context(), user, id)
+	if err != nil {
+		platform.ErrorBody(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, visao)
+}
+
+
 // minhaCorrecao: GET /v1/submissoes/:id/minha — aluno vê a correção
 // publicada (§Visibilidade); antes disso, apenas estado.
 func (d *Dependencies) minhaCorrecao(c *gin.Context) {

@@ -350,3 +350,164 @@ func memoriaInt(m judge0.NumStr) int {
 	}
 	return 0
 }
+
+// Reexecutar reinicia a avaliação automática da submissão do aluno no Monitor.
+func (s *Service) Reexecutar(ctx context.Context, mid string, aluno int64) error {
+	var subID int64
+	var status string
+	err := s.pool.QueryRow(ctx, `
+		SELECT s.id, c.status
+		FROM submissao s
+		JOIN correcao c ON c.submissao_id = s.id
+		WHERE s.monitor_id = $1 AND s.aluno_api_id = $2
+		ORDER BY s.id DESC LIMIT 1`, mid, aluno).Scan(&subID, &status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errors.New("submissão não encontrada")
+	}
+	if err != nil {
+		return fmt.Errorf("submissoes: buscar correcao: %w", err)
+	}
+	if status == "executando" {
+		return errors.New("correção já está em execução")
+	}
+
+	if _, err := s.pool.Exec(ctx, `
+		UPDATE correcao
+		SET status = 'pendente', nota_auto = NULL, resultados = NULL, concluida_em = NULL
+		WHERE submissao_id = $1`, subID); err != nil {
+		return fmt.Errorf("submissoes: resetar correcao: %w", err)
+	}
+
+	if _, err := fila.Agenda(ctx, s.pool, KindCorrecao, map[string]any{
+		"submissao_id": subID,
+	}, 5); err != nil {
+		return fmt.Errorf("submissoes: reenfileirar correcao: %w", err)
+	}
+	return nil
+}
+
+// Excluir apaga a submissão no Monitor e restaura a tentativa pré-preenchida.
+func (s *Service) Excluir(ctx context.Context, mid string, aluno int64) error {
+	var subID int64
+	var dados []byte
+	var entregueEm time.Time
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, dados, entregue_em
+		FROM submissao
+		WHERE monitor_id = $1 AND aluno_api_id = $2
+		ORDER BY id DESC LIMIT 1`, mid, aluno).Scan(&subID, &dados, &entregueEm)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errors.New("submissão não encontrada")
+	}
+	if err != nil {
+		return fmt.Errorf("submissoes: buscar submissao: %w", err)
+	}
+
+	// Calcula datas para restaurar a tentativa
+	var duracaoSeg int64
+	var fimPrevisto *time.Time
+	_ = s.pool.QueryRow(ctx, `
+		SELECT (carga->'regras'->>'duracao_s')::bigint,
+		       (carga->'regras'->>'fim')::timestamptz
+		FROM atividade WHERE monitor_id = $1`, mid).Scan(&duracaoSeg, &fimPrevisto)
+
+	fimReal := fimPrevisto
+	if duracaoSeg > 0 {
+		t := entregueEm.Add(time.Duration(duracaoSeg) * time.Second)
+		if fimReal == nil || t.Before(*fimReal) {
+			fimReal = &t
+		}
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("submissoes: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Restaura a tentativa com os dados da submissão excluída
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO tentativa (monitor_id, aluno_api_id, revisao, dados, aberta_em, fim_real)
+		VALUES ($1, $2, 1, $3::jsonb, $4, $5)
+		ON CONFLICT (monitor_id, aluno_api_id) DO UPDATE
+		SET dados = EXCLUDED.dados, revisao = 1`,
+		mid, aluno, string(dados), entregueEm, fimReal); err != nil {
+		return fmt.Errorf("submissoes: restaurar tentativa: %w", err)
+	}
+
+	// Deleta a submissão (correção cai em cascata)
+	if _, err := tx.Exec(ctx, `DELETE FROM submissao WHERE id = $1`, subID); err != nil {
+		return fmt.Errorf("submissoes: delete submissao: %w", err)
+	}
+
+	// Limpa pré-avaliação
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM pre_avaliacao WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno); err != nil {
+		return fmt.Errorf("submissoes: delete pre_avaliacao: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
+// Coletar encerra manualmente a tentativa do aluno atrasado sem entrega.
+func (s *Service) Coletar(ctx context.Context, mid string, aluno int64, agora time.Time) (*Entrega, error) {
+	var revisao int
+	var dados []byte
+	var abertaEm time.Time
+	var fimReal *time.Time
+	err := s.pool.QueryRow(ctx, `
+		SELECT revisao, dados, aberta_em, fim_real FROM tentativa
+		WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno).Scan(&revisao, &dados, &abertaEm, &fimReal)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrSemTentativa
+	}
+	if err != nil {
+		return nil, fmt.Errorf("submissoes: buscar tentativa: %w", err)
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("submissoes: tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var count int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM submissao
+	    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno).Scan(&count); err != nil {
+		return nil, fmt.Errorf("submissoes: contador: %w", err)
+	}
+	nT := count + 1
+
+	var subID int64
+	if err := tx.QueryRow(ctx, `INSERT INTO submissao
+	    (monitor_id, aluno_api_id, n_t, dados, entregue_em, atrasada)
+	    VALUES ($1, $2, $3, $4::jsonb, $5, true) RETURNING id`,
+		mid, aluno, nT, string(dados), agora).Scan(&subID); err != nil {
+		return nil, fmt.Errorf("submissoes: gravando submissão: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM rascunho_ponto
+	    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno); err != nil {
+		return nil, fmt.Errorf("submissoes: rascunhos: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM tentativa
+	    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno); err != nil {
+		return nil, fmt.Errorf("submissoes: apagando tentativa: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO correcao
+	    (submissao_id, monitor_id, aluno_api_id, status) VALUES ($1, $2, $3, 'pendente')`,
+		subID, mid, aluno); err != nil {
+		return nil, fmt.Errorf("submissoes: correcao: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("submissoes: commit: %w", err)
+	}
+
+	if _, err := fila.Agenda(ctx, s.pool, KindCorrecao, map[string]any{
+		"submissao_id": subID,
+	}, 5); err != nil {
+		slog.Error("submissoes: enfileirando correção", "err", err)
+	}
+	return &Entrega{Status: "entregue", NT: nT, Atrasada: true, SegundosAtraso: 0}, nil
+}
+

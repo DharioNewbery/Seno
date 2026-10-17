@@ -248,3 +248,109 @@ func TestSubmissoes(t *testing.T) {
 	_ = idSub
 	_ = pool
 }
+
+func TestAcoesProfessorEntregas(t *testing.T) {
+	pool := testeDB(t)
+	deps, r := montaAPI(t, pool)
+
+	if err := bootstrapSuper(t, deps); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	tokSuper := logar(t, r, "super@seno.dev", "102938")
+
+	criarProfessor(t, r, tokSuper, "prof.acoes@seno.dev", "Carlos", "Acoes")
+	ativaNovoUsuario(t, r, pool, "prof.acoes@seno.dev", "senha-prof-acoes")
+	tokProf := logar(t, r, "prof.acoes@seno.dev", "senha-prof-acoes")
+
+	// Matéria, período e turma
+	_, materia := chama(t, r, "POST", "/v1/materias", `{"codigo":"ACAO","nome":"Acoes"}`, autenticado(tokSuper))
+	idMateria := int64(materia["id"].(float64))
+	_, periodo := chama(t, r, "POST", "/v1/periodos", `{"trimestre":1,"ano":2029}`, autenticado(tokSuper))
+	idPeriodo := int64(periodo["id"].(float64))
+	_, turma := chama(t, r, "POST", "/v1/turmas", `{"materia_id":`+intStr(idMateria)+`,"periodo_id":`+intStr(idPeriodo)+`,"titulo":"T-Acoes"}`, autenticado(tokProf))
+	idTurma := int64(turma["id"].(float64))
+
+	// Aluno
+	w, mat := chama(t, r, "POST", "/v1/turmas/"+intStr(idTurma)+"/matriculas",
+		`{"email":"aluno.acoes@seno.dev","first_name":"Bia","last_name":"Acoes"}`,
+		autenticado(tokProf))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("matrícula aluno: %d %v", w.Code, mat)
+	}
+	tokConvite := tokenDoLog(t, pool)
+	aceitarConvite(t, r, tokConvite, "senha-aluno-acoes")
+	tokAluno := logar(t, r, "aluno.acoes@seno.dev", "senha-aluno-acoes")
+
+
+	// Tarefa + Atividade
+	_, tarefa := chama(t, r, "POST", "/v1/tarefas", `{"nome":"Tarefa1","enunciado":"enunciado"}`, autenticado(tokProf))
+	idTarefa := int64(tarefa["id"].(float64))
+	conteudo := `{"schema_version":1,"components":[{"type":"task_default","id":` + intStr(idTarefa) + `,"value_pts":10,"language":"python"}]}`
+	_, atv := chama(t, r, "POST", "/v1/atividades", `{"nome":"Ativ Acoes","conteudo":`+conteudo+`,"tarefas":[{"tarefa_id":`+intStr(idTarefa)+`,"ordem":1,"valor_pts":10,"linguagem":"python"}]}`, autenticado(tokProf))
+	idAtv := int64(atv["id"].(float64))
+
+	// Atribuição com prazo no passado e SEM atraso permitido
+	_, atr := chama(t, r, "POST", "/v1/atribuicoes", `{
+		"turma_id":`+intStr(idTurma)+`,
+		"atividade_id":`+intStr(idAtv)+`,
+		"prazo":"`+time.Now().Add(-10*time.Minute).UTC().Format(time.RFC3339Nano)+`",
+		"pode_atrasado":false}`, autenticado(tokProf))
+	idAtr := int64(atr["id"].(float64))
+
+	// Aluno abre tentativa antes do prazo (simulando via banco com comecou_em no passado)
+	var alunoID int64
+	if err := pool.QueryRow(context.Background(), `SELECT id FROM users WHERE email = 'aluno.acoes@seno.dev'`).Scan(&alunoID); err != nil {
+		t.Fatalf("aluno id: %v", err)
+	}
+	comecouPassado := time.Now().Add(-30 * time.Minute)
+	if _, err := pool.Exec(context.Background(), `
+		INSERT INTO tentativas (atribuicao_id, aluno_id, comecou_em, revisao, gravado_em, snapshot)
+		VALUES ($1, $2, $3, 1, $3, '{"tasks":[{"id":`+intStr(idTarefa)+`,"text":"print(1)"}]}'::jsonb)`,
+		idAtr, alunoID, comecouPassado); err != nil {
+		t.Fatalf("inserir tentativa: %v", err)
+	}
+
+	// 1. Professor lista entregas: deve ver o aluno em rascunho com pode_coletar=true
+	w, lista := chama(t, r, "GET", "/v1/atribuicoes/"+intStr(idAtr)+"/submissoes", "", autenticado(tokProf))
+	if w.Code != http.StatusOK {
+		t.Fatalf("listar: %d", w.Code)
+	}
+	subs := lista["submissoes"].([]any)
+	if len(subs) != 1 {
+		t.Fatalf("esperava 1 entrega/rascunho: %v", subs)
+	}
+	item := subs[0].(map[string]any)
+	if item["estado"] != "rascunho" || item["pode_coletar"] != true {
+		t.Errorf("esperava rascunho coletável: %v", item)
+	}
+
+	// 2. Professor coleta o rascunho
+	w, col := chama(t, r, "POST", "/v1/atribuicoes/"+intStr(idAtr)+"/coletar/"+intStr(alunoID), "{}", autenticado(tokProf))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("coletar falhou: %d %v", w.Code, col)
+	}
+	subID := int64(col["id"].(float64))
+	if !col["atrasada"].(bool) {
+		t.Errorf("coleta deve marcar atrasada=true")
+	}
+
+	// 3. Reexecutar correção (permitido pois não confirmada)
+	w, reex := chama(t, r, "POST", "/v1/submissoes/"+intStr(subID)+"/correcao/reexecutar", "{}", autenticado(tokProf))
+	if w.Code != http.StatusOK {
+		t.Fatalf("reexecutar falhou: %d %v", w.Code, reex)
+	}
+
+	// 4. Professor exclui a submissão
+	w, del := chama(t, r, "DELETE", "/v1/submissoes/"+intStr(subID), "", autenticado(tokProf))
+	if w.Code != http.StatusOK {
+		t.Fatalf("excluir falhou: %d %v", w.Code, del)
+	}
+
+	// 5. Após exclusão, aluno tem tentativa restaurada
+	w, tent := chama(t, r, "GET", "/v1/atribuicoes/"+intStr(idAtr)+"/tentativa", "", autenticado(tokAluno))
+	if w.Code != http.StatusOK {
+		t.Fatalf("tentativa restaurada não encontrada: %d %v", w.Code, tent)
+	}
+	_ = pool
+}
+

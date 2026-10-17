@@ -560,3 +560,79 @@ func (s *Service) Entrar(ctx context.Context, aluno domain.User, atribuicaoID in
 	}
 	return strings.TrimSuffix(s.publicURL, "/") + "/entrar?st=" + st, nil
 }
+
+// Reexecutar aciona a reexecução de correção de um aluno no Monitor via rota interna HMAC.
+func (s *Service) Reexecutar(ctx context.Context, mid string, alunoID int64) error {
+	if !s.Ligado() {
+		return errors.New("integração com Monitor desligada")
+	}
+	mac, tempo := contract.AssinarMAC(s.secret, time.Now(), nil)
+	url := fmt.Sprintf("%s/interna/v1/atividades/%s/alunos/%d/reexecutar", s.url, mid, alunoID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set(contract.HeaderMAC, mac)
+	req.Header.Set(contract.HeaderTime, tempo)
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		corpo, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("monitor reexecutar %s/%d: %d (%s)", mid, alunoID, resp.StatusCode, string(corpo))
+	}
+	return nil
+}
+
+// ExcluirSubmissao aciona a exclusão de submissão no Monitor via rota interna HMAC.
+func (s *Service) ExcluirSubmissao(ctx context.Context, mid string, alunoID int64) error {
+	if !s.Ligado() {
+		return errors.New("integração com Monitor desligada")
+	}
+	mac, tempo := contract.AssinarMAC(s.secret, time.Now(), nil)
+	url := fmt.Sprintf("%s/interna/v1/atividades/%s/alunos/%d/submissao", s.url, mid, alunoID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set(contract.HeaderMAC, mac)
+	req.Header.Set(contract.HeaderTime, tempo)
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		corpo, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("monitor excluir %s/%d: %d (%s)", mid, alunoID, resp.StatusCode, string(corpo))
+	}
+	return nil
+}
+
+// ColetarTentativa aciona a coleta de tentativa no Monitor via rota interna HMAC.
+func (s *Service) ColetarTentativa(ctx context.Context, mid string, alunoID int64) error {
+	if !s.Ligado() {
+		return errors.New("integração com Monitor desligada")
+	}
+	mac, tempo := contract.AssinarMAC(s.secret, time.Now(), nil)
+	url := fmt.Sprintf("%s/interna/v1/atividades/%s/alunos/%d/coletar", s.url, mid, alunoID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set(contract.HeaderMAC, mac)
+	req.Header.Set(contract.HeaderTime, tempo)
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		corpo, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("monitor coletar %s/%d: %d (%s)", mid, alunoID, resp.StatusCode, string(corpo))
+	}
+	return nil
+}
+
