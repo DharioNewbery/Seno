@@ -24,6 +24,9 @@ services:
     ports:
       - "2358:2358"
     privileged: true # isolate precisa (sandbox interno)
+    depends_on:
+      - db
+      - redis
     <<: *default-logging
     restart: always
 
@@ -34,6 +37,9 @@ services:
       - ./judge0.conf:/judge0.conf:ro
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     privileged: true
+    depends_on:
+      - db
+      - redis
     <<: *default-logging
     restart: always
 

@@ -1,0 +1,5 @@
+# Ensure bash scripts and judge0 configuration always preserve LF line endings
+*.sh text eol=lf
+*.conf text eol=lf
+*.sql text eol=lf
+deploy/judge0/* text eol=lf
