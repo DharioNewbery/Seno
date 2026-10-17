@@ -58,6 +58,7 @@ type EstadoJanela struct {
 // sanitiza) + estado corrente da tentativa.
 type Aberta struct {
 	Carga     contract.Carga
+	Regras    contract.Regras
 	FimReal   time.Time
 	Restantes int64
 	Atrasada  bool
@@ -144,6 +145,7 @@ func (s *Service) Abrir(ctx context.Context, mid string, aluno int64, agora time
 	}
 	return &Aberta{
 		Carga:     c.carga,
+		Regras:    c.regras,
 		FimReal:   fimRealRow,
 		Restantes: int64(restantes / time.Second),
 		Atrasada:  est.Atrasada,

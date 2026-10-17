@@ -28,6 +28,7 @@ body { margin: 0; font: 16px/1.45 system-ui, sans-serif; background: var(--fundo
 .campo { width: 100%; min-height: 180px; resize: vertical; margin-top: 10px;
   font: 14px/1.4 ui-monospace, Consolas, monospace; tab-size: 4;
   border: 1px solid var(--borda); border-radius: 6px; padding: 10px; background: #fcfcfb; }
+.editor-wrap { margin-top: 10px; border: 1px solid var(--borda); border-radius: 6px; overflow: hidden; min-height: 180px; background: #fff; }
 
 .aces { display: flex; gap: 10px; margin-top: 12px; }
 button { font: inherit; padding: 8px 16px; border-radius: 6px; border: 1px solid var(--borda); background: #fff; cursor: pointer; }

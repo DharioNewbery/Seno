@@ -11,8 +11,8 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "lint": "eslint .",
-    "test": "vitest run"
-
+    "test": "vitest run",
+    "build:monitor-editor": "node scripts/build-monitor-editor.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -20,9 +20,11 @@
     "@sveltejs/kit": "^3.0.0",
     "@sveltejs/vite-plugin-svelte": "^7.2.0",
     "@types/node": "^26.6.4",
+    "esbuild": "^0.28.2",
     "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-svelte": "^3.23.0",
+    "fake-indexeddb": "^6.2.6",
     "prettier": "^3.9.9",
     "svelte": "^5.57.1",
     "svelte-check": "^4.6.0",
@@ -34,5 +36,10 @@
   "imports": {
     "#lib": "./src/lib/index.js",
     "#lib/*": "./src/lib/*"
+  },
+  "dependencies": {
+    "@codemirror/lang-cpp": "^6.0.3",
+    "@codemirror/lang-python": "^6.2.1",
+    "codemirror": "^6.0.2"
   }
 }

@@ -49,6 +49,9 @@ func (d *Dependencies) AbrirAtividade(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"atividade": atividades.Sanitizada(aberta.Carga),
+		"regras": gin.H{
+			"autocomplete": aberta.Regras.Autocomplete,
+		},
 		"tentativa": gin.H{
 			"fim_real":           aberta.FimReal,
 			"segundos_restantes": aberta.Restantes,

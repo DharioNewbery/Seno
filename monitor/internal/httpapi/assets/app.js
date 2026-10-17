@@ -13,6 +13,7 @@ const modal = $('modal');
 
 const estado = {
   carga: null,      // AtividadePublica sanitizada
+  regras: null,     // regras com autocomplete
   revisao: 0,
   restantes: null,  // segundos
   respostas: {},    // ordem → código
@@ -20,6 +21,60 @@ const estado = {
   suja: false,
   bloqueda: null,   // detail {correcao_url} do bloqueio final
 };
+
+// -------------------------------------------------------- local autosave ----
+
+const DB_NAME = 'seno_monitor_autosave';
+const DB_VERSION = 1;
+const STORE_NAME = 'rascunhos';
+
+function abrirIDB() {
+  return new Promise((resolve, reject) => {
+    if (!('indexedDB' in window)) return reject(new Error('IndexedDB indisponível'));
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'mid' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function salvarLocal(pendente) {
+  if (!MID) return;
+  try {
+    const db = await abrirIDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put({
+      mid: MID,
+      revisao: estado.revisao,
+      respostas: estado.respostas,
+      gravado_em: new Date().toISOString(),
+      pendente: Boolean(pendente),
+    });
+  } catch {
+    // silenciosamente ignora indisponibilidade de idb
+  }
+}
+
+async function obterLocal() {
+  if (!MID) return null;
+  try {
+    const db = await abrirIDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).get(MID);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
 
 // ---------------------------------------------------------------- api ----
 
@@ -86,8 +141,14 @@ async function abrir() {
     case 200: {
       const atv = r.json.atividade, tent = r.json.tentativa;
       estado.carga = atv;
+      estado.regras = r.json.regras || {};
       estado.revisao = tent.revisao;
       estado.respostas = tent.respostas || {};
+      const local = await obterLocal();
+      if (local && local.pendente && local.revisao >= estado.revisao) {
+        estado.respostas = Object.assign({}, estado.respostas, local.respostas);
+        estado.revisao = local.revisao;
+      }
       cronometroOn(tent.segundos_restantes);
       renderProva(atv);
       agendarAutosave();
@@ -159,7 +220,6 @@ function cronometroOff() { clearInterval(cronoTimer); $('crono').hidden = true; 
 function renderProva(atv) {
   $('titulo').textContent = atv.nome || 'Seno';
   const cards = atv.tarefas.map((t) => {
-    const lin = estado.respostas[String(t.ordem)] ?? '';
     return `
       <section class="card" data-ordem="${t.ordem}">
         <header>
@@ -168,9 +228,7 @@ function renderProva(atv) {
           <span class="ling">${esc(t.linguagem)}</span>
         </header>
         ${t.enunciado ? `<p class="enun">${esc(t.enunciado)}</p>` : ''}
-        <textarea class="campo" data-ordem="${t.ordem}"
-          autocomplete="off" spellcheck="false"
-          placeholder="Escreva seu código ${esc(t.linguagem)} aqui…">${esc(lin)}</textarea>
+        <div class="editor-wrap" data-ordem="${t.ordem}"></div>
         <div class="aces">
           <button class="prim" data-testar="${t.ordem}" ${t.testes && t.testes.length ? '' : 'hidden'}>
             Testar (${t.testes.length} teste${t.testes.length > 1 ? 's' : ''} público${t.testes.length > 1 ? 's' : ''})
@@ -191,23 +249,39 @@ function renderProva(atv) {
       </div>
     </div>`;
 
-  conteudo.querySelectorAll('textarea').forEach((ta) => {
-    ta.addEventListener('input', () => {
-      estado.respostas[ta.dataset.ordem] = ta.value;
-      estado.suja = true;
-    });
-    // Tab = 4 espaços (editor de prova não deve perder foco por engano)
-    ta.addEventListener('keydown', (e) => {
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        const p = ta.selectionStart;
-        ta.value = ta.value.slice(0, p) + '    ' + ta.value.slice(ta.selectionEnd);
-        ta.selectionStart = ta.selectionEnd = p + 4;
-        estado.respostas[ta.dataset.ordem] = ta.value;
+  conteudo.querySelectorAll('.editor-wrap').forEach((wrap) => {
+    const ordem = wrap.dataset.ordem;
+    const tarefa = atv.tarefas.find((x) => String(x.ordem) === ordem);
+    const lin = estado.respostas[ordem] ?? '';
+    const autocomplete = Boolean(estado.regras && estado.regras.autocomplete);
+
+    if (window.SenoEditor && window.SenoEditor.criar) {
+      window.SenoEditor.criar(wrap, {
+        valor: lin,
+        linguagem: tarefa ? tarefa.linguagem : '',
+        autocomplete,
+        onchange: (novoValor) => {
+          estado.respostas[ordem] = novoValor;
+          estado.suja = true;
+          salvarLocal(true);
+        },
+      });
+    } else {
+      const ta = document.createElement('textarea');
+      ta.className = 'campo';
+      ta.value = lin;
+      ta.autocomplete = 'off';
+      ta.spellcheck = false;
+      ta.placeholder = `Escreva seu código ${tarefa ? tarefa.linguagem : ''} aqui…`;
+      ta.addEventListener('input', () => {
+        estado.respostas[ordem] = ta.value;
         estado.suja = true;
-      }
-    });
+        salvarLocal(true);
+      });
+      wrap.appendChild(ta);
+    }
   });
+
   conteudo.querySelectorAll('[data-testar]').forEach((b) => {
     b.addEventListener('click', () => testar(Number(b.dataset.testar)));
   });
@@ -221,16 +295,24 @@ function agendarAutosave() {
   clearInterval(autosaver);
   autosaver = setInterval(salvar, 20000);
   window.addEventListener('beforeunload', salvar);
+  window.addEventListener('online', salvar);
 }
 
 async function salvar() {
   if (!estado.suja) return;
-  estado.suja = false;
+  salvarLocal(true);
   const r = await api('PUT', '/tentativa',
     { revisao: estado.revisao, respostas: estado.respostas });
   if (r.status === 200) {
+    estado.suja = false;
     estado.revisao = r.json.revisao;
+    salvarLocal(false);
     $('salvo').textContent = 'salvo ' + new Date().toLocaleTimeString('pt-BR');
+    return;
+  }
+  if (r.status === 0) {
+    // Offline
+    $('salvo').textContent = 'salvo localmente (offline)';
     return;
   }
   if (r.status === 409 && detalhe(r).revisao_atual !== undefined) {
@@ -239,11 +321,13 @@ async function salvar() {
     const r2 = await api('PUT', '/tentativa',
       { revisao: atual, respostas: estado.respostas });
     if (r2.status === 200) {
+      estado.suja = false;
       estado.revisao = r2.json.revisao;
+      salvarLocal(false);
       $('salvo').textContent = 'salvo (outra aba detectada)';
     } else {
       estado.suja = true;
-      $('salvo').textContent = 'falhou o salvamento';
+      $('salvo').textContent = 'conflito: outra aba salvou';
     }
     return;
   }

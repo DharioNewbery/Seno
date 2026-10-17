@@ -20,12 +20,14 @@ export const load: PageServerLoad = async ({ locals, cookies, request, params })
     if (r.status === 401) redirect(303, "/");
     if (r.status === 404) redirect(303, "/aluno");
     return {
+      alunoId: locals.usuario.id,
       visao: r.ok
         ? (r.body as {
             atribuicao: {
               id: number;
               prazo?: string | null;
               pode_atrasado: boolean;
+              autocomplete?: boolean;
             };
             atividade: {
               id: number;

@@ -1,19 +1,25 @@
 <script lang="ts">
-  // Fazer atividade (aluno): enunciados da atividade + textarea por
-  // tarefa, com autosave (15 s + ao digitar parar) na tentativa.
-  // 409 (outro aba gravou) recarrega a página para o rascunho atual.
-  import { invalidate } from "$app/navigation";
-  import { page } from "$app/state";
+  // Fazer atividade (aluno): enunciados da atividade + Editor de código
+  // com autosave local (IndexedDB) e remoto (15 s ou ao parar de digitar).
+  import EditorCodigo from "#lib/components/EditorCodigo.svelte";
+  import {
+    gravarRascunhoLocal,
+    obterRascunhoLocal,
+    sincronizarRascunho,
+    type Snapshot,
+  } from "#lib/autosave";
   import type { PageProps } from "./$types";
 
   let { data, form }: PageProps = $props();
 
   const visao = $derived(data.visao);
   const tarefas = $derived(visao?.atividade.tarefas.filter((t) => !t.excluida) ?? []);
+  const alunoId = $derived(data.alunoId ?? 0);
 
   let textos = $state<Record<number, string>>({});
   let revisao = $state(1);
-  let estadoSave = $state<"nada" | "salvando" | "salvo" | "erro">("nada");
+  let estadoSave = $state<"nada" | "salvando" | "salvo" | "erro" | "offline">("nada");
+  let conflitoAviso = $state(false);
   let carro = $state(false);
   let carregado = $state(false);
   let formulandoEntrega = $state(false);
@@ -28,48 +34,140 @@
     } else {
       revisao = 1;
     }
+
+    // Verifica se há rascunho local mais recente pendente no IndexedDB
+    if (alunoId && visao.atribuicao.id) {
+      obterRascunhoLocal(visao.atribuicao.id, alunoId).then((local) => {
+        if (local && local.pendente && local.revisao_base >= revisao) {
+          for (const item of local.snapshot.tasks ?? []) {
+            textos[item.id] = item.text;
+          }
+          revisao = local.revisao_base;
+        }
+      });
+    }
+
     carregado = true;
   });
+
+  async function enviarSnapshotParaServidor(
+    rev: number,
+    snapshot: Snapshot,
+  ): Promise<{ ok: boolean; status: number; revisao?: number }> {
+    if (!visao) return { ok: false, status: 500 };
+    const params = new URLSearchParams();
+    params.set("revisao", String(rev));
+    params.set("snapshot", JSON.stringify(snapshot));
+    const res = await fetch(`/aluno/atividade/${visao.atribuicao.id}?/gravar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+    const saida = (await res.json().catch(() => ({}))) as { revisao?: number };
+    return {
+      ok: res.ok,
+      status: res.status,
+      revisao: saida.revisao,
+    };
+  }
+
+  async function tentarSincronizar() {
+    if (!visao || !alunoId) return;
+    const res = await sincronizarRascunho(
+      visao.atribuicao.id,
+      alunoId,
+      enviarSnapshotParaServidor,
+    );
+    if (res.conflito) {
+      conflitoAviso = true;
+    } else if (res.sincronizado && res.novaRevisao) {
+      revisao = res.novaRevisao;
+      estadoSave = "salvo";
+    }
+  }
 
   async function salvar() {
     if (!visao || carro) return;
     carro = true;
     estadoSave = "salvando";
-    try {
-      const quadro = {
+    const snapshotAtual: Snapshot = {
+      tasks: tarefas.map((t) => ({ id: t.id, text: textos[t.id] ?? "" })),
+    };
+
+    // 1. Sempre salva localmente primeiro (IndexedDB)
+    if (alunoId) {
+      await gravarRascunhoLocal(
+        visao.atribuicao.id,
+        alunoId,
+        snapshotAtual,
         revisao,
-        snapshot: {
-          tasks: tarefas.map((t) => ({ id: t.id, text: textos[t.id] ?? "" })),
-        },
-      };
-      const form = new URLSearchParams();
-      form.set("revisao", String(quadro.revisao));
-      form.set("snapshot", JSON.stringify(quadro.snapshot));
-      const res = await fetch(`/aluno/atividade/${visao.atribuicao.id}?/gravar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: form.toString(),
-      });
-      const saida = (await res.json()) as { revisao?: number };
-      if (res.ok && typeof saida.revisao === "number") {
-        revisao = saida.revisao;
+        true,
+      );
+    }
+
+    // 2. Envia para o servidor
+    try {
+      const res = await enviarSnapshotParaServidor(revisao, snapshotAtual);
+      if (res.status === 409) {
+        conflitoAviso = true;
+        estadoSave = "erro";
+      } else if (res.ok && typeof res.revisao === "number") {
+        revisao = res.revisao;
         estadoSave = "salvo";
+        conflitoAviso = false;
+        if (alunoId) {
+          await gravarRascunhoLocal(
+            visao.atribuicao.id,
+            alunoId,
+            snapshotAtual,
+            revisao,
+            false,
+          );
+        }
       } else {
         estadoSave = "erro";
       }
     } catch {
-      estadoSave = "erro";
+      // Offline: mantém salvo no IndexedDB como pendente
+      estadoSave = "offline";
     } finally {
       carro = false;
     }
   }
+
   $effect(() => {
-    const pulso = setInterval(salvar, 15000);
-    return () => clearInterval(pulso);
+    const pulso = globalThis.setInterval(salvar, 15000);
+    const onOnline = () => {
+      tentarSincronizar();
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", onOnline);
+    }
+    return () => {
+      globalThis.clearInterval(pulso);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", onOnline);
+      }
+    };
   });
 
   function aoDigitar(id: number, valor: string) {
     textos[id] = valor;
+    if (alunoId && visao) {
+      const snapshotAtual: Snapshot = {
+        tasks: tarefas.map((t) => ({
+          id: t.id,
+          text: t.id === id ? valor : (textos[t.id] ?? ""),
+        })),
+      };
+      gravarRascunhoLocal(
+        visao.atribuicao.id,
+        alunoId,
+        snapshotAtual,
+        revisao,
+        true,
+      );
+    }
   }
 </script>
 
@@ -77,6 +175,13 @@
   {#if data.erro}
     <p class="aviso erro" role="alert">{data.erro}</p>
   {:else if visao}
+    {#if conflitoAviso}
+      <p class="aviso erro" role="alert">
+        Atenção: outra aba ou dispositivo gravou uma versão mais recente deste rascunho (conflito 409).
+        Seu código local foi preservado. Recarregue a página se desejar puxar a versão do servidor.
+      </p>
+    {/if}
+
     <div class="cabeca">
       <div>
         <h2>{visao.atividade.nome}</h2>
@@ -89,7 +194,8 @@
       </div>
       <span class="estado-save" data-estado={estadoSave}>
         {#if estadoSave === "salvando"}Salvando…{:else if estadoSave === "salvo"}
-          Rascunho salvo (revisão {revisao}){:else if estadoSave === "erro"}Falhou — tente de novo{:else}Rascunho abre no primeiro save{/if}
+          Rascunho salvo (revisão {revisao}){:else if estadoSave === "offline"}
+          Salvo localmente (offline){:else if estadoSave === "erro"}Falhou — tente de novo{:else}Rascunho abre no primeiro save{/if}
       </span>
     </div>
 
@@ -102,14 +208,14 @@
           <span class="ling">{t.linguagem}</span>
         </header>
         <p class="enunciado">{t.enunciado}</p>
-        <textarea
-          rows="10"
-          spellcheck="false"
-          placeholder="Escreva sua resposta"
-          value={textos[t.id] ?? ""}
-          oninput={(e) => aoDigitar(t.id, e.currentTarget.value)}
-          onchange={salvar}
-        ></textarea>
+
+        <EditorCodigo
+          linguagem={t.linguagem}
+          valor={textos[t.id] ?? ""}
+          autocomplete={visao.atribuicao.autocomplete ?? false}
+          onchange={(val) => aoDigitar(t.id, val)}
+        />
+
 
         {#if t.teste_publico && !formulandoEntrega}
           <form method="POST" action="?/testar" class="testar">
@@ -244,15 +350,6 @@
     margin: 0;
     color: var(--seno-gray-700);
     white-space: pre-wrap;
-  }
-  textarea {
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 8px;
-    padding: 0.6rem 0.7rem;
-    font-family: monospace;
-    font-size: 0.88rem;
-    background: #fbfcfe;
-    resize: vertical;
   }
   .testar {
     display: flex;
