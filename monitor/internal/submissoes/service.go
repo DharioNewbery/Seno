@@ -549,9 +549,8 @@ type TarefaDetalhe struct {
 
 // ObterDetalhes busca a submissão, correção e metadados das tarefas da atividade.
 func (s *Service) ObterDetalhes(ctx context.Context, mid string, aluno int64) (*DetalhesSubmissao, error) {
-	var nomeAtv string
 	var cargaJSON []byte
-	if err := s.pool.QueryRow(ctx, `SELECT nome, carga FROM atividade WHERE monitor_id = $1`, mid).Scan(&nomeAtv, &cargaJSON); err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT carga FROM atividade WHERE monitor_id = $1`, mid).Scan(&cargaJSON); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.New("atividade não encontrada no Monitor")
 		}
@@ -565,7 +564,7 @@ func (s *Service) ObterDetalhes(ctx context.Context, mid string, aluno int64) (*
 
 	det := &DetalhesSubmissao{
 		Atividade: AtividadeDetalhe{
-			Nome:    nomeAtv,
+			Nome:    envelope.Carga.Atividade.Nome,
 			Tarefas: make([]TarefaDetalhe, 0, len(envelope.Carga.Tarefas)),
 		},
 	}

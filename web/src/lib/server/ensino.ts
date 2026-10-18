@@ -786,8 +786,9 @@ export interface DetalhesSubmissaoMonitor {
         testes: {
           ordem: number;
           status: string;
-          tempo_ms?: number;
-          memoria_kb?: number;
+          tempo?: number;
+          memoria?: number;
+          privado?: boolean;
           stdout?: string;
           stderr?: string;
           compile_output?: string;

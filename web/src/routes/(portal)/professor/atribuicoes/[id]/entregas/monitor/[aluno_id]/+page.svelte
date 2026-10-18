@@ -125,11 +125,16 @@
                         {teste.status}
                       </span>
                       <span class="teste-nome">Teste #{teste.ordem}</span>
-                      {#if teste.tempo_ms !== undefined}
-                        <span class="teste-detalhe">{teste.tempo_ms}ms</span>
+                      {#if teste.privado}
+                        <span class="teste-detalhe">(privado)</span>
+                      {:else}
+                        <span class="teste-detalhe">(público)</span>
                       {/if}
-                      {#if teste.memoria_kb !== undefined}
-                        <span class="teste-detalhe">{teste.memoria_kb}KB</span>
+                      {#if teste.tempo !== undefined}
+                        <span class="teste-detalhe">{teste.tempo}s</span>
+                      {/if}
+                      {#if teste.memoria !== undefined}
+                        <span class="teste-detalhe">{teste.memoria}KB</span>
                       {/if}
                     </div>
                     {#if teste.stderr}
