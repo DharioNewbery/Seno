@@ -2,6 +2,7 @@
   // Correção da entrega (professor): resultados automáticos por teste,
   // ajuste de nota/feedback por tarefa, confirmação e publicação.
   import type { PageProps } from "./$types";
+  import EditorCodigo from "#lib/components/EditorCodigo.svelte";
 
   let { data, form }: PageProps = $props();
 
@@ -53,6 +54,18 @@
             <legend>
               {t.tarefa_nome} ({t.valor_pts} pts)
             </legend>
+            {#if t.enunciado}
+              <div class="bloco-enunciado">
+                <span class="subrotulo">Enunciado:</span>
+                <p class="texto-enunciado">{t.enunciado}</p>
+              </div>
+            {/if}
+            {#if t.codigo}
+              <div class="bloco-codigo">
+                <span class="subrotulo">Código submetido pelo aluno:</span>
+                <EditorCodigo valor={t.codigo} somenteLeitura={true} />
+              </div>
+            {/if}
             <input type="hidden" name="ct_ids" value={t.id} />
             <div class="linha">
               <label class="mini">
@@ -319,5 +332,29 @@
     color: var(--seno-blue-600);
     text-decoration: none;
     font-size: 0.9rem;
+  }
+  .bloco-enunciado {
+    background: var(--seno-gray-100, #f8f9fa);
+    border: 1px solid var(--seno-gray-200, #e9ecef);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+  }
+  .subrotulo {
+    display: block;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--seno-gray-700, #495057);
+    margin-bottom: 0.35rem;
+  }
+  .texto-enunciado {
+    margin: 0;
+    white-space: pre-wrap;
+    font-size: 0.9rem;
+    color: var(--seno-gray-800, #212529);
+    line-height: 1.5;
+  }
+  .bloco-codigo {
+    margin-bottom: 0.75rem;
   }
 </style>

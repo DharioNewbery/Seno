@@ -636,3 +636,68 @@ func (s *Service) ColetarTentativa(ctx context.Context, mid string, alunoID int6
 	return nil
 }
 
+// DetalhesSubmissao reúne todos os dados de uma entrega do aluno no Monitor para o professor.
+type DetalhesSubmissao struct {
+	Submissao *SubmissaoDetalhe `json:"submissao,omitempty"`
+	Correcao  *CorrecaoDetalhe  `json:"correcao,omitempty"`
+	Atividade AtividadeDetalhe  `json:"atividade"`
+}
+
+type SubmissaoDetalhe struct {
+	ID         int64             `json:"id"`
+	AlunoID    int64             `json:"aluno_id"`
+	NT         int               `json:"n_t"`
+	EntregueEm time.Time         `json:"entregue_em"`
+	Atrasada   bool              `json:"atrasada"`
+	Respostas  map[string]string `json:"respostas"`
+}
+
+type CorrecaoDetalhe struct {
+	Status      string          `json:"status"`
+	NotaAuto    *float64        `json:"nota_auto,omitempty"`
+	ConcluidaEm *time.Time      `json:"concluida_em,omitempty"`
+	Resultados  json.RawMessage `json:"resultados,omitempty"`
+}
+
+type AtividadeDetalhe struct {
+	Nome    string          `json:"nome"`
+	Tarefas []TarefaDetalhe `json:"tarefas"`
+}
+
+type TarefaDetalhe struct {
+	Ordem     int     `json:"ordem"`
+	Nome      string  `json:"nome"`
+	Enunciado string  `json:"enunciado"`
+	Linguagem string  `json:"linguagem"`
+	ValorPts  float64 `json:"valor_pts"`
+}
+
+// ObterSubmissao busca os detalhes da submissão no Monitor via rota interna HMAC.
+func (s *Service) ObterSubmissao(ctx context.Context, mid string, alunoID int64) (*DetalhesSubmissao, error) {
+	if !s.Ligado() {
+		return nil, errors.New("integração com Monitor desligada")
+	}
+	mac, tempo := contract.AssinarMAC(s.secret, time.Now(), nil)
+	url := fmt.Sprintf("%s/interna/v1/atividades/%s/alunos/%d/submissao", s.url, mid, alunoID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set(contract.HeaderMAC, mac)
+	req.Header.Set(contract.HeaderTime, tempo)
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		corpo, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, fmt.Errorf("monitor obter submissao %s/%d: %d (%s)", mid, alunoID, resp.StatusCode, string(corpo))
+	}
+	var det DetalhesSubmissao
+	if err := json.NewDecoder(resp.Body).Decode(&det); err != nil {
+		return nil, err
+	}
+	return &det, nil
+}
+

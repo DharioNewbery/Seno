@@ -23,6 +23,7 @@ export interface OpcoesEditor {
   valor?: string;
   linguagem?: string;
   autocomplete?: boolean;
+  somenteLeitura?: boolean;
   onchange?: (valor: string) => void;
 }
 
@@ -69,6 +70,10 @@ export function criarEditor(
 
   if (opts.autocomplete) {
     extensions.push(autocompletion(), keymap.of(completionKeymap));
+  }
+
+  if (opts.somenteLeitura) {
+    extensions.push(EditorView.editable.of(false));
   }
 
   const lang = (opts.linguagem || "").trim().toLowerCase();

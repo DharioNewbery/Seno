@@ -85,3 +85,23 @@ func (d *Dependencies) ColetarTentativa(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, entrega)
 }
+
+// ObterSubmissao — GET /interna/v1/atividades/:monitor_id/alunos/:aluno_id/submissao
+func (d *Dependencies) ObterSubmissao(c *gin.Context) {
+	if !d.autenticarInternoHMAC(c) {
+		return
+	}
+	mid := c.Param("monitor_id")
+	alunoID, err := strconv.ParseInt(c.Param("aluno_id"), 10, 64)
+	if err != nil || alunoID < 1 {
+		respondErro(c, http.StatusBadRequest, contract.CodeValidacao, "aluno_id inválido.", nil)
+		return
+	}
+	detalhes, err := d.SubmissaoS.ObterDetalhes(c.Request.Context(), mid, alunoID)
+	if err != nil {
+		slog.Error("monitor: obter submissao", "err", err)
+		respondErro(c, http.StatusNotFound, contract.CodeNaoEncontrado, err.Error(), nil)
+		return
+	}
+	c.JSON(http.StatusOK, detalhes)
+}

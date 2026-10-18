@@ -295,7 +295,8 @@ func (q *Queries) InsertCorrecaoTarefa(ctx context.Context, arg InsertCorrecaoTa
 const listCorrecaoTarefas = `-- name: ListCorrecaoTarefas :many
 SELECT ct.id, ct.correcao_id, ct.tarefa_id, ct.valor_pts,
        ct.nota_auto, ct.nota_final, ct.feedback,
-       t.nome AS tarefa_nome
+       t.nome AS tarefa_nome,
+       t.enunciado AS tarefa_enunciado
 FROM correcao_tarefas ct
 JOIN tarefas t ON t.id = ct.tarefa_id
 WHERE ct.correcao_id = $1
@@ -303,14 +304,15 @@ ORDER BY ct.id
 `
 
 type ListCorrecaoTarefasRow struct {
-	ID         int64       `json:"id"`
-	CorrecaoID int64       `json:"correcao_id"`
-	TarefaID   int64       `json:"tarefa_id"`
-	ValorPts   int32       `json:"valor_pts"`
-	NotaAuto   pgtype.Int4 `json:"nota_auto"`
-	NotaFinal  pgtype.Int4 `json:"nota_final"`
-	Feedback   *string     `json:"feedback"`
-	TarefaNome string      `json:"tarefa_nome"`
+	ID              int64       `json:"id"`
+	CorrecaoID      int64       `json:"correcao_id"`
+	TarefaID        int64       `json:"tarefa_id"`
+	ValorPts        int32       `json:"valor_pts"`
+	NotaAuto        pgtype.Int4 `json:"nota_auto"`
+	NotaFinal       pgtype.Int4 `json:"nota_final"`
+	Feedback        *string     `json:"feedback"`
+	TarefaNome      string      `json:"tarefa_nome"`
+	TarefaEnunciado string      `json:"tarefa_enunciado"`
 }
 
 func (q *Queries) ListCorrecaoTarefas(ctx context.Context, correcaoID int64) ([]ListCorrecaoTarefasRow, error) {
@@ -331,6 +333,7 @@ func (q *Queries) ListCorrecaoTarefas(ctx context.Context, correcaoID int64) ([]
 			&i.NotaFinal,
 			&i.Feedback,
 			&i.TarefaNome,
+			&i.TarefaEnunciado,
 		); err != nil {
 			return nil, err
 		}

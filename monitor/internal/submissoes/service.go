@@ -511,3 +511,153 @@ func (s *Service) Coletar(ctx context.Context, mid string, aluno int64, agora ti
 	return &Entrega{Status: "entregue", NT: nT, Atrasada: true, SegundosAtraso: 0}, nil
 }
 
+// DetalhesSubmissao reúne todos os dados de uma entrega do aluno no Monitor para o professor.
+type DetalhesSubmissao struct {
+	Submissao *SubmissaoDetalhe `json:"submissao,omitempty"`
+	Correcao  *CorrecaoDetalhe  `json:"correcao,omitempty"`
+	Atividade AtividadeDetalhe  `json:"atividade"`
+}
+
+type SubmissaoDetalhe struct {
+	ID         int64             `json:"id"`
+	AlunoID    int64             `json:"aluno_id"`
+	NT         int               `json:"n_t"`
+	EntregueEm time.Time         `json:"entregue_em"`
+	Atrasada   bool              `json:"atrasada"`
+	Respostas  map[string]string `json:"respostas"`
+}
+
+type CorrecaoDetalhe struct {
+	Status      string          `json:"status"`
+	NotaAuto    *float64        `json:"nota_auto,omitempty"`
+	ConcluidaEm *time.Time      `json:"concluida_em,omitempty"`
+	Resultados  json.RawMessage `json:"resultados,omitempty"`
+}
+
+type AtividadeDetalhe struct {
+	Nome    string          `json:"nome"`
+	Tarefas []TarefaDetalhe `json:"tarefas"`
+}
+
+type TarefaDetalhe struct {
+	Ordem     int     `json:"ordem"`
+	Nome      string  `json:"nome"`
+	Enunciado string  `json:"enunciado"`
+	Linguagem string  `json:"linguagem"`
+	ValorPts  float64 `json:"valor_pts"`
+}
+
+// ObterDetalhes busca a submissão, correção e metadados das tarefas da atividade.
+func (s *Service) ObterDetalhes(ctx context.Context, mid string, aluno int64) (*DetalhesSubmissao, error) {
+	var nomeAtv string
+	var cargaJSON []byte
+	if err := s.pool.QueryRow(ctx, `SELECT nome, carga FROM atividade WHERE monitor_id = $1`, mid).Scan(&nomeAtv, &cargaJSON); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errors.New("atividade não encontrada no Monitor")
+		}
+		return nil, err
+	}
+
+	var envelope struct {
+		Carga contract.Carga `json:"carga"`
+	}
+	_ = json.Unmarshal(cargaJSON, &envelope)
+
+	det := &DetalhesSubmissao{
+		Atividade: AtividadeDetalhe{
+			Nome:    nomeAtv,
+			Tarefas: make([]TarefaDetalhe, 0, len(envelope.Carga.Tarefas)),
+		},
+	}
+	for _, t := range envelope.Carga.Tarefas {
+		det.Atividade.Tarefas = append(det.Atividade.Tarefas, TarefaDetalhe{
+			Ordem:     t.Ordem,
+			Nome:      t.Nome,
+			Enunciado: t.Enunciado,
+			Linguagem: t.Linguagem,
+			ValorPts:  t.ValorPts,
+		})
+	}
+
+	var (
+		subID      int64
+		nT         int
+		dados      []byte
+		entregueEm time.Time
+		atrasada   bool
+	)
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, n_t, dados, entregue_em, atrasada
+		FROM submissao
+		WHERE monitor_id = $1 AND aluno_api_id = $2
+		ORDER BY n_t DESC LIMIT 1`, mid, aluno).Scan(&subID, &nT, &dados, &entregueEm, &atrasada)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("obter submissao: %w", err)
+	}
+
+	if err == nil {
+		respostas := map[string]string{}
+		var rawMap map[string]any
+		if json.Unmarshal(dados, &rawMap) == nil {
+			for k, v := range rawMap {
+				if str, ok := v.(string); ok {
+					respostas[k] = str
+				} else if b, err := json.Marshal(v); err == nil {
+					respostas[k] = string(b)
+				}
+			}
+		}
+
+		det.Submissao = &SubmissaoDetalhe{
+			ID:         subID,
+			AlunoID:    aluno,
+			NT:         nT,
+			EntregueEm: entregueEm,
+			Atrasada:   atrasada,
+			Respostas:  respostas,
+		}
+
+		var (
+			corStatus   string
+			notaAuto    *float64
+			concluidaEm *time.Time
+			resultados  []byte
+		)
+		errCor := s.pool.QueryRow(ctx, `
+			SELECT status, nota_auto, concluida_em, resultados
+			FROM correcao
+			WHERE submissao_id = $1`, subID).Scan(&corStatus, &notaAuto, &concluidaEm, &resultados)
+		if errCor == nil {
+			det.Correcao = &CorrecaoDetalhe{
+				Status:      corStatus,
+				NotaAuto:    notaAuto,
+				ConcluidaEm: concluidaEm,
+				Resultados:  resultados,
+			}
+		}
+	} else {
+		// Verificar se há tentativa aberta (rascunho)
+		var (
+			revisao int
+			dadosT  []byte
+		)
+		if errT := s.pool.QueryRow(ctx, `SELECT revisao, dados FROM tentativa WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno).Scan(&revisao, &dadosT); errT == nil {
+			respostas := map[string]string{}
+			var rawMap map[string]any
+			if json.Unmarshal(dadosT, &rawMap) == nil {
+				for k, v := range rawMap {
+					if str, ok := v.(string); ok {
+						respostas[k] = str
+					}
+				}
+			}
+			det.Submissao = &SubmissaoDetalhe{
+				AlunoID:   aluno,
+				Respostas: respostas,
+			}
+		}
+	}
+
+	return det, nil
+}
+

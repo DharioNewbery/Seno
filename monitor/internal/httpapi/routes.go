@@ -50,6 +50,7 @@ func RegisterRoutes(r *gin.Engine, d *Dependencies) {
 	r.GET("/interna/v1/atividades/:monitor_id/estado", d.EstadoAtividade)
 	r.POST("/interna/v1/atividades/:monitor_id/alunos/:aluno_id/reexecutar", d.ReexecutarCorrecao)
 	r.DELETE("/interna/v1/atividades/:monitor_id/alunos/:aluno_id/submissao", d.ExcluirSubmissao)
+	r.GET("/interna/v1/atividades/:monitor_id/alunos/:aluno_id/submissao", d.ObterSubmissao)
 	r.POST("/interna/v1/atividades/:monitor_id/alunos/:aluno_id/coletar", d.ColetarTentativa)
 
 

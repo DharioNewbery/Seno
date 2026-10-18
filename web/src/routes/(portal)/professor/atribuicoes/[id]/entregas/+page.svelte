@@ -70,6 +70,7 @@
               Monitor
               {#if e.correcao_monitor}· {e.correcao_monitor}{/if}
             </span>
+            <a class="abrir" href={`/professor/atribuicoes/${atribuicao?.id}/entregas/monitor/${e.aluno_id}`}>Ver entrega →</a>
             <form method="POST" action="?/reexecutar_monitor">
               <input type="hidden" name="aluno_id" value={e.aluno_id} />
               <button class="botao neutro" title="Reexecutar correção">Reexecutar</button>

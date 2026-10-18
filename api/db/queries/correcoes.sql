@@ -15,7 +15,8 @@ WHERE c.submissao_id = $1;
 -- name: ListCorrecaoTarefas :many
 SELECT ct.id, ct.correcao_id, ct.tarefa_id, ct.valor_pts,
        ct.nota_auto, ct.nota_final, ct.feedback,
-       t.nome AS tarefa_nome
+       t.nome AS tarefa_nome,
+       t.enunciado AS tarefa_enunciado
 FROM correcao_tarefas ct
 JOIN tarefas t ON t.id = ct.tarefa_id
 WHERE ct.correcao_id = $1

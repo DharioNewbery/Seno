@@ -6,11 +6,13 @@
     linguagem = "python",
     valor = "",
     autocomplete = false,
+    somenteLeitura = false,
     onchange,
   }: {
     linguagem?: string;
     valor?: string;
     autocomplete?: boolean;
+    somenteLeitura?: boolean;
     onchange?: (valor: string) => void;
   } = $props();
 
@@ -23,6 +25,7 @@
       valor,
       linguagem,
       autocomplete,
+      somenteLeitura,
       onchange: (v) => {
         onchange?.(v);
       },

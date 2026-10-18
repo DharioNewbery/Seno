@@ -767,6 +767,61 @@ export async function excluirMonitor(
   );
 }
 
+export interface DetalhesSubmissaoMonitor {
+  submissao: {
+    aluno_id: number;
+    entregue_em: string;
+    atrasada: boolean;
+    respostas: Record<string, string>;
+  };
+  correcao?: {
+    status: string;
+    nota_auto?: number;
+    concluida_em?: string;
+    resultados?: {
+      tarefas?: {
+        ordem: number;
+        veredito: string;
+        nota_auto: number;
+        testes: {
+          ordem: number;
+          status: string;
+          tempo_ms?: number;
+          memoria_kb?: number;
+          stdout?: string;
+          stderr?: string;
+          compile_output?: string;
+        }[];
+      }[];
+    };
+  };
+  atividade: {
+    nome: string;
+    tarefas: {
+      ordem: number;
+      nome: string;
+      enunciado: string;
+      linguagem: string;
+      valor_pts: number;
+    }[];
+  };
+}
+
+/** Obter detalhes da submissão no Monitor (professor dono|staff). */
+export async function obterSubmissaoMonitor(
+  request: Request,
+  token: string,
+  atribuicaoID: number,
+  alunoID: number,
+): Promise<Resultado> {
+  return chamar(
+    request,
+    token,
+    `/v1/atribuicoes/${atribuicaoID}/monitor/alunos/${alunoID}/submissao`,
+    { method: "GET" },
+  );
+}
+
 // ------------------------- correção ------------------------------------
 
 export interface ResultadoTeste {
@@ -785,6 +840,8 @@ export interface CorrecaoTarefa {
   id: number;
   tarefa_id: number;
   tarefa_nome: string;
+  enunciado?: string;
+  codigo?: string;
   valor_pts: number;
   nota_auto?: number;
   nota_final?: number;

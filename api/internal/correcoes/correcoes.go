@@ -74,6 +74,8 @@ type Tarefa struct {
 	ID         int64       `json:"id"`
 	TarefaID   int64       `json:"tarefa_id"`
 	TarefaNome string      `json:"tarefa_nome"`
+	Enunciado  string      `json:"enunciado,omitempty"`
+	Codigo     string      `json:"codigo,omitempty"`
 	ValorPts   int32       `json:"valor_pts"`
 	NotaAuto   *int32      `json:"nota_auto,omitempty"`
 	NotaFinal  *int32      `json:"nota_final,omitempty"`
@@ -217,12 +219,23 @@ func (s *Service) montarDeRow(
 			CPU: textoPtr(r.Cpu), Publico: r.Publico,
 		})
 	}
+	codigosPorTarefa := map[int64]string{}
+	if sub, err := s.store.Q.GetSubmissaoCorrecao(ctx, row.SubmissaoID); err == nil && len(sub.Snapshot) > 0 {
+		var st snapshotTasks
+		if err := json.Unmarshal(sub.Snapshot, &st); err == nil {
+			for _, t := range st.Tasks {
+				codigosPorTarefa[t.ID] = t.Text
+			}
+		}
+	}
 	tarefas := make([]Tarefa, 0, len(cts))
 	for _, ct := range cts {
 		tarefas = append(tarefas, Tarefa{
 			ID: ct.ID, TarefaID: ct.TarefaID, TarefaNome: ct.TarefaNome,
-			ValorPts: ct.ValorPts,
-			NotaAuto: notaPtr(ct.NotaAuto), NotaFinal: notaPtr(ct.NotaFinal),
+			Enunciado:  ct.TarefaEnunciado,
+			Codigo:     codigosPorTarefa[ct.TarefaID],
+			ValorPts:   ct.ValorPts,
+			NotaAuto:   notaPtr(ct.NotaAuto), NotaFinal: notaPtr(ct.NotaFinal),
 			Feedback:   textoPtr(ct.Feedback),
 			Resultados: porCT[ct.ID],
 		})

@@ -192,5 +192,28 @@ func (d *Dependencies) MonitorExcluir(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// MonitorObterSubmissao: GET /v1/atribuicoes/:id/monitor/alunos/:aluno_id/submissao
+func (d *Dependencies) MonitorObterSubmissao(c *gin.Context) {
+	atribuicaoID, ok := idDaRota(c)
+	if !ok {
+		return
+	}
+	alunoID, err := strconv.ParseInt(c.Param("aluno_id"), 10, 64)
+	if err != nil || alunoID < 1 {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"erro": gin.H{"codigo": "VALIDACAO", "mensagem": "aluno_id inválido."}})
+		return
+	}
+	mid, ok := d.obterMonitorAtribuicao(c, atribuicaoID)
+	if !ok {
+		return
+	}
+	det, err := d.Monitor.ObterSubmissao(c.Request.Context(), mid, alunoID)
+	if err != nil {
+		platform.ErrorBody(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, det)
+}
+
 
 
