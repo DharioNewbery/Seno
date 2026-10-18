@@ -308,7 +308,7 @@ func (s *Service) listarEntregasMonitor(
 		       ma.entregue_em,
 		       COALESCE(ma.entregue_em > ma.prazo_efetivo, false),
 		       ma.nota_auto::float8, ma.correcao_status,
-		       ma.estado, ma.prazo_efetivo, ma.aberta_em
+		       ma.estado, ma.prazo_efetivo
 		FROM monitor_estado_aluno ma
 		JOIN users u ON u.id = ma.aluno_id
 		LEFT JOIN persons p ON p.id = u.person_id
@@ -331,19 +331,13 @@ func (s *Service) listarEntregasMonitor(
 			status       string
 			estado       string
 			prazoEfetivo pgtype.Timestamptz
-			abertaEm     pgtype.Timestamptz
 		)
 		if err := rows.Scan(&alunoID, &email, &nome, &entregueEm,
-			&atrasada, &nota, &status, &estado, &prazoEfetivo, &abertaEm); err != nil {
+			&atrasada, &nota, &status, &estado, &prazoEfetivo); err != nil {
 			return err
 		}
 		if feitos[alunoID] {
 			continue
-		}
-		var comecou *time.Time
-		if abertaEm.Valid {
-			t := abertaEm.Time
-			comecou = &t
 		}
 
 		podeColetar := false
@@ -357,7 +351,6 @@ func (s *Service) listarEntregasMonitor(
 			AlunoID:         alunoID,
 			Aluno:           nome,
 			AlunoEmail:      email,
-			ComecouEm:       comecou,
 			Atrasada:        atrasada,
 			Estado:          estado,
 			PodeColetar:     podeColetar,
