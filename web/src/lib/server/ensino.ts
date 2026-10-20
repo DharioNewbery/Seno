@@ -655,6 +655,18 @@ export async function listarMinhasAtribuicoes(
   });
 }
 
+/** Abre (idempotente) a tentativa — POST /atribuicoes/:id/tentativa. */
+export async function abrirTentativa(
+  request: Request,
+  token: string,
+  id: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/atribuicoes/${id}/tentativa`, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
 export async function gravarTentativa(
   request: Request,
   token: string,

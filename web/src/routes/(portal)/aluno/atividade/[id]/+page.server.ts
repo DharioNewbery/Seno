@@ -1,4 +1,5 @@
 import {
+  abrirTentativa,
   mensagemDaApi,
   visaoAluno,
   gravarTentativa,
@@ -16,6 +17,10 @@ export const load: PageServerLoad = async ({ locals, cookies, request, params })
   const id = Number(params.id);
   if (!Number.isInteger(id) || id < 1) redirect(303, "/aluno");
   try {
+    // Abre a tentativa explicitamente (idempotente; vem antes do
+    // autosave: o prazo efetivo ancla no comecou_em real). Falhas de
+    // janela/prazo não bloqueiam a visualização — o autosave valida.
+    await abrirTentativa(request, token, id);
     const r = await visaoAluno(request, token, id);
     if (r.status === 401) redirect(303, "/");
     if (r.status === 404) redirect(303, "/aluno");
