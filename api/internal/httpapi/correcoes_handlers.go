@@ -97,6 +97,22 @@ func (d *Dependencies) reexecutarCorrecao(c *gin.Context) {
 }
 
 
+// publicarCorrecoesLote: POST /v1/atribuicoes/:id/correcoes/publicar —
+// publica de uma vez as correções confirmadas e não publicadas.
+func (d *Dependencies) publicarCorrecoesLote(c *gin.Context) {
+	user, _ := currentUser(c)
+	id, ok := idDaRota(c)
+	if !ok {
+		return
+	}
+	n, err := d.CorrecaoS.PublicarLote(c.Request.Context(), user, id)
+	if err != nil {
+		platform.ErrorBody(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"publicadas": n})
+}
+
 // minhaCorrecao: GET /v1/submissoes/:id/minha — aluno vê a correção
 // publicada (§Visibilidade); antes disso, apenas estado.
 func (d *Dependencies) minhaCorrecao(c *gin.Context) {

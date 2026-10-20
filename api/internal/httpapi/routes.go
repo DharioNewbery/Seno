@@ -153,6 +153,7 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	sub.POST("/submissao", deps.EntregarSubmissao)
 	sub.GET("/submissoes", deps.ListarSubmissoes)
 	sub.POST("/coletar/:aluno_id", deps.ColetarRascunho)
+	sub.POST("/correcoes/publicar", deps.publicarCorrecoesLote)
 	sub.POST("/monitor/alunos/:aluno_id/reexecutar", deps.MonitorReexecutar)
 	sub.DELETE("/monitor/alunos/:aluno_id/submissao", deps.MonitorExcluir)
 	sub.GET("/monitor/alunos/:aluno_id/submissao", deps.MonitorObterSubmissao)

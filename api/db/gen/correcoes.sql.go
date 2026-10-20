@@ -464,6 +464,24 @@ func (q *Queries) PublicarCorrecao(ctx context.Context, id int64) (int64, error)
 	return result.RowsAffected(), nil
 }
 
+const publicarCorrecoesDaAtribuicao = `-- name: PublicarCorrecoesDaAtribuicao :execrows
+UPDATE correcoes c
+SET publicada_em = now()
+FROM submissoes s
+WHERE c.submissao_id = s.id
+  AND s.atribuicao_id = $1
+  AND c.confirmada_em IS NOT NULL
+  AND c.publicada_em IS NULL
+`
+
+func (q *Queries) PublicarCorrecoesDaAtribuicao(ctx context.Context, atribuicaoID int64) (int64, error) {
+	result, err := q.db.Exec(ctx, publicarCorrecoesDaAtribuicao, atribuicaoID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const resetNotasCorrecaoTarefas = `-- name: ResetNotasCorrecaoTarefas :exec
 UPDATE correcao_tarefas
 SET nota_auto = NULL,

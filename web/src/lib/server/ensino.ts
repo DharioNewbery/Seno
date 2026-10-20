@@ -897,6 +897,20 @@ export async function editarCorrecao(
   });
 }
 
+/** Publica de uma vez as correções confirmadas da atribuição. */
+export async function publicarCorrecoesLote(
+  request: Request,
+  token: string,
+  atribuicaoID: number,
+): Promise<Resultado> {
+  return chamar(
+    request,
+    token,
+    `/v1/atribuicoes/${atribuicaoID}/correcoes/publicar`,
+    { method: "POST", body: "{}" },
+  );
+}
+
 /** Ações: confirmar | publicar | reexecutar. */
 export async function acaoCorrecao(
   request: Request,

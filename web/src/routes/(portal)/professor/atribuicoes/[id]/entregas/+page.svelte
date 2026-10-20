@@ -28,6 +28,9 @@
         ({data.entregas.length} registros)
       </span>
     </div>
+    <form method="POST" action="?/publicar_tudo">
+      <button class="botao publicar" title="Publica de uma vez as correções já confirmadas">Publicar confirmadas</button>
+    </form>
     <a class="voltar" href={`/professor/atribuicoes/${data.atribuicao?.id ?? ""}`}>
       ← Configuração
     </a>
@@ -179,6 +182,13 @@
     color: var(--seno-blue-600);
     text-decoration: none;
     font-size: 0.9rem;
+  }
+  .botao.publicar {
+    background: #2f855a;
+    color: var(--seno-white);
+  }
+  .botao.publicar:hover {
+    background: #276749;
   }
   .aviso.ok {
     background: #e6f4ea;

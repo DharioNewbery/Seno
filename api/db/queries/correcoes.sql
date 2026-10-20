@@ -57,6 +57,15 @@ WHERE id = $1
   AND confirmada_em IS NOT NULL
   AND publicada_em IS NULL;
 
+-- name: PublicarCorrecoesDaAtribuicao :execrows
+UPDATE correcoes c
+SET publicada_em = now()
+FROM submissoes s
+WHERE c.submissao_id = s.id
+  AND s.atribuicao_id = $1
+  AND c.confirmada_em IS NOT NULL
+  AND c.publicada_em IS NULL;
+
 -- name: AplicarResultado :exec
 INSERT INTO resultados (correcao_tarefa_id, teste_id, status, stdout, stderr, compile_output, tempo, memoria, cpu)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)

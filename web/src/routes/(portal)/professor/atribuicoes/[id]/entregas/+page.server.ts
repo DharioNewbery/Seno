@@ -5,6 +5,7 @@ import {
   excluirSubmissao,
   listarEntregas,
   mensagemDaApi,
+  publicarCorrecoesLote,
   reexecutarMonitor,
   verAtribuicao,
   type Atribuicao,
@@ -84,6 +85,19 @@ export const actions: Actions = {
     if (r.status === 401) redirect(303, "/");
     if (!r.ok) return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
     return { ok: "Correção reenviada para execução no Monitor." };
+  },
+  publicar_tudo: async (evento) => {
+    const token = tokenDaSessao(evento.cookies);
+    if (!token) return fail(401, { erro: "Sessão encerrada." });
+    const atribuicaoID = Number(evento.params.id);
+    const r = await publicarCorrecoesLote(evento.request, token, atribuicaoID);
+    if (r.status === 401) redirect(303, "/");
+    if (!r.ok) return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
+    const n = (r.body as { publicadas?: number } | null)?.publicadas ?? 0;
+    if (n === 0) {
+      return { ok: "Nada a publicar: nenhuma correção confirmada pendente." };
+    }
+    return { ok: `${n} correção(ões) publicada(s) para os alunos.` };
   },
 };
 

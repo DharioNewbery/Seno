@@ -648,6 +648,36 @@ func (s *Service) Publicar(
 	return s.VerProfessor(ctx, actor, submissaoID)
 }
 
+// PublicarLote publica de uma vez as correções confirmadas e não
+// publicadas da atribuição (dono|staff); devolve quantas publicou.
+// Idempotente: já publicadas ficam de fora — reexecução devolve 0.
+func (s *Service) PublicarLote(
+	ctx context.Context, actor domain.User, atribuicaoID int64,
+) (int64, error) {
+	atr, err := s.store.Q.GetAtribuicao(ctx, atribuicaoID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, jaNaoEncontrada()
+		}
+		return 0, err
+	}
+	if !actor.IsStaff() && actor.ID != atr.TurmaProfessorID {
+		return 0, jaNaoEncontrada()
+	}
+	n, err := s.store.Q.PublicarCorrecoesDaAtribuicao(ctx, atribuicaoID)
+	if err != nil {
+		return 0, err
+	}
+	if n > 0 {
+		s.audit.Record(ctx, platform.LogEntry{
+			ActorID: &actor.ID, Actor: actor.Email,
+			Kind:   LogKindCorrecaoPublish,
+			Detail: fmt.Sprintf("atribuicao=%d publicadas=%d", atribuicaoID, n),
+		})
+	}
+	return n, nil
+}
+
 // ------------------------------------------------------------ aluno
 
 // VerAluno: correção da própria submissão — detalhes só se publicada.
