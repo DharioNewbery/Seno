@@ -12,7 +12,6 @@ import (
 )
 
 const ajustarCorrecaoTarefa = `-- name: AjustarCorrecaoTarefa :execrows
-
 UPDATE correcao_tarefas
 SET nota_final = COALESCE($3, nota_final),
     feedback   = COALESCE($4, feedback)
@@ -28,8 +27,16 @@ type AjustarCorrecaoTarefaParams struct {
 }
 
 func (q *Queries) AjustarCorrecaoTarefa(ctx context.Context, arg AjustarCorrecaoTarefaParams) (int64, error) {
-	result, err := q.db.Exec(ctx, ajustarCorrecaoTarefa, arg.CorrecaoID, arg.ID, arg.NotaFinal, arg.Feedback)
-	return result.RowsAffected(), err
+	result, err := q.db.Exec(ctx, ajustarCorrecaoTarefa,
+		arg.CorrecaoID,
+		arg.ID,
+		arg.NotaFinal,
+		arg.Feedback,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const aplicarResultado = `-- name: AplicarResultado :exec
@@ -457,6 +464,50 @@ func (q *Queries) PublicarCorrecao(ctx context.Context, id int64) (int64, error)
 	return result.RowsAffected(), nil
 }
 
+const resetNotasCorrecaoTarefas = `-- name: ResetNotasCorrecaoTarefas :exec
+UPDATE correcao_tarefas
+SET nota_auto = NULL,
+    nota_final = NULL,
+    feedback = NULL
+WHERE correcao_id = $1
+`
+
+func (q *Queries) ResetNotasCorrecaoTarefas(ctx context.Context, correcaoID int64) error {
+	_, err := q.db.Exec(ctx, resetNotasCorrecaoTarefas, correcaoID)
+	return err
+}
+
+const resetResultadosCorrecao = `-- name: ResetResultadosCorrecao :exec
+DELETE FROM resultados
+WHERE correcao_tarefa_id IN (
+    SELECT id FROM correcao_tarefas WHERE correcao_id = $1
+)
+`
+
+func (q *Queries) ResetResultadosCorrecao(ctx context.Context, correcaoID int64) error {
+	_, err := q.db.Exec(ctx, resetResultadosCorrecao, correcaoID)
+	return err
+}
+
+const resetStatusCorrecao = `-- name: ResetStatusCorrecao :exec
+UPDATE correcoes
+SET status = $2,
+    confirmada_por = NULL,
+    confirmada_em = NULL,
+    publicada_em = NULL
+WHERE id = $1
+`
+
+type ResetStatusCorrecaoParams struct {
+	ID     int64  `json:"id"`
+	Status string `json:"status"`
+}
+
+func (q *Queries) ResetStatusCorrecao(ctx context.Context, arg ResetStatusCorrecaoParams) error {
+	_, err := q.db.Exec(ctx, resetStatusCorrecao, arg.ID, arg.Status)
+	return err
+}
+
 const setNotaAuto = `-- name: SetNotaAuto :exec
 UPDATE correcao_tarefas
 SET nota_auto = $2
@@ -544,48 +595,3 @@ func (q *Queries) UpdateStatusCorrecao(ctx context.Context, arg UpdateStatusCorr
 	_, err := q.db.Exec(ctx, updateStatusCorrecao, arg.ID, arg.Status)
 	return err
 }
-
-const resetResultadosCorrecao = `-- name: ResetResultadosCorrecao :exec
-DELETE FROM resultados
-WHERE correcao_tarefa_id IN (
-    SELECT id FROM correcao_tarefas WHERE correcao_id = $1
-)
-`
-
-func (q *Queries) ResetResultadosCorrecao(ctx context.Context, correcaoID int64) error {
-	_, err := q.db.Exec(ctx, resetResultadosCorrecao, correcaoID)
-	return err
-}
-
-const resetNotasCorrecaoTarefas = `-- name: ResetNotasCorrecaoTarefas :exec
-UPDATE correcao_tarefas
-SET nota_auto = NULL,
-    nota_final = NULL,
-    feedback = NULL
-WHERE correcao_id = $1
-`
-
-func (q *Queries) ResetNotasCorrecaoTarefas(ctx context.Context, correcaoID int64) error {
-	_, err := q.db.Exec(ctx, resetNotasCorrecaoTarefas, correcaoID)
-	return err
-}
-
-const resetStatusCorrecao = `-- name: ResetStatusCorrecao :exec
-UPDATE correcoes
-SET status = $2,
-    confirmada_por = NULL,
-    confirmada_em = NULL,
-    publicada_em = NULL
-WHERE id = $1
-`
-
-type ResetStatusCorrecaoParams struct {
-	ID     int64  `json:"id"`
-	Status string `json:"status"`
-}
-
-func (q *Queries) ResetStatusCorrecao(ctx context.Context, arg ResetStatusCorrecaoParams) error {
-	_, err := q.db.Exec(ctx, resetStatusCorrecao, arg.ID, arg.Status)
-	return err
-}
-

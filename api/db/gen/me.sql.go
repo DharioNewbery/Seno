@@ -11,6 +11,67 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getTurmaAluno = `-- name: GetTurmaAluno :one
+SELECT t.id,
+       t.titulo,
+       t.encerrado_em,
+       t.created_at,
+       m.codigo    AS materia_codigo,
+       m.nome      AS materia_nome,
+       p.trimestre,
+       p.ano,
+       up.first_name AS prof_first_name,
+       up.last_name  AS prof_last_name,
+       uu.email      AS prof_email
+FROM matriculas mt
+JOIN turmas t ON t.id = mt.turma_id
+JOIN materias m ON m.id = t.materia_id
+JOIN periodos_letivos p ON p.id = t.periodo_id
+JOIN users uu ON uu.id = t.professor_id
+JOIN persons up ON up.id = uu.person_id
+WHERE mt.aluno_id = $1
+  AND mt.turma_id = $2
+  AND mt.saida_em IS NULL
+`
+
+type GetTurmaAlunoParams struct {
+	AlunoID int64 `json:"aluno_id"`
+	TurmaID int64 `json:"turma_id"`
+}
+
+type GetTurmaAlunoRow struct {
+	ID            int64              `json:"id"`
+	Titulo        *string            `json:"titulo"`
+	EncerradoEm   pgtype.Timestamptz `json:"encerrado_em"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	MateriaCodigo string             `json:"materia_codigo"`
+	MateriaNome   string             `json:"materia_nome"`
+	Trimestre     int16              `json:"trimestre"`
+	Ano           int16              `json:"ano"`
+	ProfFirstName string             `json:"prof_first_name"`
+	ProfLastName  string             `json:"prof_last_name"`
+	ProfEmail     string             `json:"prof_email"`
+}
+
+func (q *Queries) GetTurmaAluno(ctx context.Context, arg GetTurmaAlunoParams) (GetTurmaAlunoRow, error) {
+	row := q.db.QueryRow(ctx, getTurmaAluno, arg.AlunoID, arg.TurmaID)
+	var i GetTurmaAlunoRow
+	err := row.Scan(
+		&i.ID,
+		&i.Titulo,
+		&i.EncerradoEm,
+		&i.CreatedAt,
+		&i.MateriaCodigo,
+		&i.MateriaNome,
+		&i.Trimestre,
+		&i.Ano,
+		&i.ProfFirstName,
+		&i.ProfLastName,
+		&i.ProfEmail,
+	)
+	return i, err
+}
+
 const listAtribuicoesAluno = `-- name: ListAtribuicoesAluno :many
 SELECT a.id,
        a.turma_id,
@@ -124,6 +185,42 @@ func (q *Queries) ListAtribuicoesAluno(ctx context.Context, arg ListAtribuicoesA
 	return items, nil
 }
 
+const listColegasTurma = `-- name: ListColegasTurma :many
+SELECT p.first_name,
+       p.last_name
+FROM matriculas mt
+JOIN users u ON u.id = mt.aluno_id
+JOIN persons p ON p.id = u.person_id
+WHERE mt.turma_id = $1
+  AND mt.saida_em IS NULL
+ORDER BY p.first_name, p.last_name
+`
+
+type ListColegasTurmaRow struct {
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+}
+
+func (q *Queries) ListColegasTurma(ctx context.Context, turmaID int64) ([]ListColegasTurmaRow, error) {
+	rows, err := q.db.Query(ctx, listColegasTurma, turmaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListColegasTurmaRow{}
+	for rows.Next() {
+		var i ListColegasTurmaRow
+		if err := rows.Scan(&i.FirstName, &i.LastName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTurmasAluno = `-- name: ListTurmasAluno :many
 
 SELECT t.id,
@@ -195,101 +292,3 @@ func (q *Queries) ListTurmasAluno(ctx context.Context, alunoID int64) ([]ListTur
 	}
 	return items, nil
 }
-
-const getTurmaAluno = `-- name: GetTurmaAluno :one
-SELECT t.id,
-       t.titulo,
-       t.encerrado_em,
-       t.created_at,
-       m.codigo    AS materia_codigo,
-       m.nome      AS materia_nome,
-       p.trimestre,
-       p.ano,
-       up.first_name AS prof_first_name,
-       up.last_name  AS prof_last_name,
-       uu.email      AS prof_email
-FROM matriculas mt
-JOIN turmas t ON t.id = mt.turma_id
-JOIN materias m ON m.id = t.materia_id
-JOIN periodos_letivos p ON p.id = t.periodo_id
-JOIN users uu ON uu.id = t.professor_id
-JOIN persons up ON up.id = uu.person_id
-WHERE mt.aluno_id = $1
-  AND mt.turma_id = $2
-  AND mt.saida_em IS NULL
-`
-
-type GetTurmaAlunoParams struct {
-	AlunoID int64 `json:"aluno_id"`
-	TurmaID int64 `json:"turma_id"`
-}
-
-type GetTurmaAlunoRow struct {
-	ID            int64              `json:"id"`
-	Titulo        *string            `json:"titulo"`
-	EncerradoEm   pgtype.Timestamptz `json:"encerrado_em"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	MateriaCodigo string             `json:"materia_codigo"`
-	MateriaNome   string             `json:"materia_nome"`
-	Trimestre     int16              `json:"trimestre"`
-	Ano           int16              `json:"ano"`
-	ProfFirstName string             `json:"prof_first_name"`
-	ProfLastName  string             `json:"prof_last_name"`
-	ProfEmail     string             `json:"prof_email"`
-}
-
-func (q *Queries) GetTurmaAluno(ctx context.Context, arg GetTurmaAlunoParams) (GetTurmaAlunoRow, error) {
-	row := q.db.QueryRow(ctx, getTurmaAluno, arg.AlunoID, arg.TurmaID)
-	var i GetTurmaAlunoRow
-	err := row.Scan(
-		&i.ID,
-		&i.Titulo,
-		&i.EncerradoEm,
-		&i.CreatedAt,
-		&i.MateriaCodigo,
-		&i.MateriaNome,
-		&i.Trimestre,
-		&i.Ano,
-		&i.ProfFirstName,
-		&i.ProfLastName,
-		&i.ProfEmail,
-	)
-	return i, err
-}
-
-const listColegasTurma = `-- name: ListColegasTurma :many
-SELECT p.first_name,
-       p.last_name
-FROM matriculas mt
-JOIN users u ON u.id = mt.aluno_id
-JOIN persons p ON p.id = u.person_id
-WHERE mt.turma_id = $1
-  AND mt.saida_em IS NULL
-ORDER BY p.first_name, p.last_name
-`
-
-type ListColegasTurmaRow struct {
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-}
-
-func (q *Queries) ListColegasTurma(ctx context.Context, turmaID int64) ([]ListColegasTurmaRow, error) {
-	rows, err := q.db.Query(ctx, listColegasTurma, turmaID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListColegasTurmaRow{}
-	for rows.Next() {
-		var i ListColegasTurmaRow
-		if err := rows.Scan(&i.FirstName, &i.LastName); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-

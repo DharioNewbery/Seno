@@ -155,57 +155,6 @@ func (q *Queries) InsertTentativa(ctx context.Context, arg InsertTentativaParams
 	return i, err
 }
 
-const matriculaAtiva = `-- name: MatriculaAtiva :one
-SELECT count(*) > 0 AS matriculado
-FROM matriculas
-WHERE turma_id = $1
-  AND aluno_id = $2
-  AND saida_em IS NULL
-`
-
-type MatriculaAtivaParams struct {
-	TurmaID int64 `json:"turma_id"`
-	AlunoID int64 `json:"aluno_id"`
-}
-
-// Matrícula ativa do aluno na turma (chave para abrir tentativa).
-func (q *Queries) MatriculaAtiva(ctx context.Context, arg MatriculaAtivaParams) (bool, error) {
-	row := q.db.QueryRow(ctx, matriculaAtiva, arg.TurmaID, arg.AlunoID)
-	var matriculado bool
-	err := row.Scan(&matriculado)
-	return matriculado, err
-}
-
-const restaurarTentativa = `-- name: RestaurarTentativa :exec
-INSERT INTO tentativas (atribuicao_id, aluno_id, comecou_em, revisao, gravado_em, snapshot, created_by)
-VALUES ($1, $2, $3, 1, now(), $4, $5)
-ON CONFLICT (atribuicao_id, aluno_id) DO UPDATE
-SET comecou_em = EXCLUDED.comecou_em,
-    revisao = 1,
-    gravado_em = now(),
-    snapshot = EXCLUDED.snapshot,
-    created_by = EXCLUDED.created_by
-`
-
-type RestaurarTentativaParams struct {
-	AtribuicaoID int64              `json:"atribuicao_id"`
-	AlunoID      int64              `json:"aluno_id"`
-	ComecouEm    pgtype.Timestamptz `json:"comecou_em"`
-	Snapshot     []byte             `json:"snapshot"`
-	CreatedBy    pgtype.Int8        `json:"created_by"`
-}
-
-func (q *Queries) RestaurarTentativa(ctx context.Context, arg RestaurarTentativaParams) error {
-	_, err := q.db.Exec(ctx, restaurarTentativa,
-		arg.AtribuicaoID,
-		arg.AlunoID,
-		arg.ComecouEm,
-		arg.Snapshot,
-		arg.CreatedBy,
-	)
-	return err
-}
-
 const listTentativasSemSubmissao = `-- name: ListTentativasSemSubmissao :many
 SELECT t.id,
        t.atribuicao_id,
@@ -267,3 +216,53 @@ func (q *Queries) ListTentativasSemSubmissao(ctx context.Context, atribuicaoID i
 	return items, nil
 }
 
+const matriculaAtiva = `-- name: MatriculaAtiva :one
+SELECT count(*) > 0 AS matriculado
+FROM matriculas
+WHERE turma_id = $1
+  AND aluno_id = $2
+  AND saida_em IS NULL
+`
+
+type MatriculaAtivaParams struct {
+	TurmaID int64 `json:"turma_id"`
+	AlunoID int64 `json:"aluno_id"`
+}
+
+// Matrícula ativa do aluno na turma (chave para abrir tentativa).
+func (q *Queries) MatriculaAtiva(ctx context.Context, arg MatriculaAtivaParams) (bool, error) {
+	row := q.db.QueryRow(ctx, matriculaAtiva, arg.TurmaID, arg.AlunoID)
+	var matriculado bool
+	err := row.Scan(&matriculado)
+	return matriculado, err
+}
+
+const restaurarTentativa = `-- name: RestaurarTentativa :exec
+INSERT INTO tentativas (atribuicao_id, aluno_id, comecou_em, revisao, gravado_em, snapshot, created_by)
+VALUES ($1, $2, $3, 1, now(), $4, $5)
+ON CONFLICT (atribuicao_id, aluno_id) DO UPDATE
+SET comecou_em = EXCLUDED.comecou_em,
+    revisao = 1,
+    gravado_em = now(),
+    snapshot = EXCLUDED.snapshot,
+    created_by = EXCLUDED.created_by
+`
+
+type RestaurarTentativaParams struct {
+	AtribuicaoID int64              `json:"atribuicao_id"`
+	AlunoID      int64              `json:"aluno_id"`
+	ComecouEm    pgtype.Timestamptz `json:"comecou_em"`
+	Snapshot     []byte             `json:"snapshot"`
+	CreatedBy    pgtype.Int8        `json:"created_by"`
+}
+
+func (q *Queries) RestaurarTentativa(ctx context.Context, arg RestaurarTentativaParams) error {
+	_, err := q.db.Exec(ctx, restaurarTentativa,
+		arg.AtribuicaoID,
+		arg.AlunoID,
+		arg.ComecouEm,
+		arg.Snapshot,
+		arg.CreatedBy,
+	)
+	return err
+}

@@ -32,6 +32,19 @@ func (q *Queries) ApagarTentativa(ctx context.Context, arg ApagarTentativaParams
 	return result.RowsAffected(), nil
 }
 
+const deleteSubmissao = `-- name: DeleteSubmissao :execrows
+DELETE FROM submissoes
+WHERE id = $1
+`
+
+func (q *Queries) DeleteSubmissao(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSubmissao, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getSubmissaoAluno = `-- name: GetSubmissaoAluno :one
 SELECT id, atribuicao_id, aluno_id, comecou_em, entregue_em, atrasada, snapshot
 FROM submissoes
@@ -66,6 +79,51 @@ func (q *Queries) GetSubmissaoAluno(ctx context.Context, arg GetSubmissaoAlunoPa
 		&i.EntregueEm,
 		&i.Atrasada,
 		&i.Snapshot,
+	)
+	return i, err
+}
+
+const getSubmissaoPorID = `-- name: GetSubmissaoPorID :one
+SELECT s.id,
+       s.atribuicao_id,
+       s.aluno_id,
+       s.comecou_em,
+       s.entregue_em,
+       s.atrasada,
+       s.observacao,
+       s.snapshot,
+       t.professor_id AS turma_professor_id
+FROM submissoes s
+JOIN atribuicoes a ON a.id = s.atribuicao_id
+JOIN turmas t ON t.id = a.turma_id
+WHERE s.id = $1
+`
+
+type GetSubmissaoPorIDRow struct {
+	ID               int64              `json:"id"`
+	AtribuicaoID     int64              `json:"atribuicao_id"`
+	AlunoID          int64              `json:"aluno_id"`
+	ComecouEm        pgtype.Timestamptz `json:"comecou_em"`
+	EntregueEm       pgtype.Timestamptz `json:"entregue_em"`
+	Atrasada         bool               `json:"atrasada"`
+	Observacao       *string            `json:"observacao"`
+	Snapshot         []byte             `json:"snapshot"`
+	TurmaProfessorID int64              `json:"turma_professor_id"`
+}
+
+func (q *Queries) GetSubmissaoPorID(ctx context.Context, id int64) (GetSubmissaoPorIDRow, error) {
+	row := q.db.QueryRow(ctx, getSubmissaoPorID, id)
+	var i GetSubmissaoPorIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.AtribuicaoID,
+		&i.AlunoID,
+		&i.ComecouEm,
+		&i.EntregueEm,
+		&i.Atrasada,
+		&i.Observacao,
+		&i.Snapshot,
+		&i.TurmaProfessorID,
 	)
 	return i, err
 }
@@ -180,59 +238,3 @@ func (q *Queries) ListSubmissoesAtribuicao(ctx context.Context, atribuicaoID int
 	}
 	return items, nil
 }
-
-const deleteSubmissao = `-- name: DeleteSubmissao :execrows
-DELETE FROM submissoes
-WHERE id = $1
-`
-
-func (q *Queries) DeleteSubmissao(ctx context.Context, id int64) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteSubmissao, id)
-	return result.RowsAffected(), err
-}
-
-const getSubmissaoPorID = `-- name: GetSubmissaoPorID :one
-SELECT s.id,
-       s.atribuicao_id,
-       s.aluno_id,
-       s.comecou_em,
-       s.entregue_em,
-       s.atrasada,
-       s.observacao,
-       s.snapshot,
-       t.professor_id AS turma_professor_id
-FROM submissoes s
-JOIN atribuicoes a ON a.id = s.atribuicao_id
-JOIN turmas t ON t.id = a.turma_id
-WHERE s.id = $1
-`
-
-type GetSubmissaoPorIDRow struct {
-	ID               int64              `json:"id"`
-	AtribuicaoID     int64              `json:"atribuicao_id"`
-	AlunoID          int64              `json:"aluno_id"`
-	ComecouEm        pgtype.Timestamptz `json:"comecou_em"`
-	EntregueEm       pgtype.Timestamptz `json:"entregue_em"`
-	Atrasada         bool               `json:"atrasada"`
-	Observacao       *string            `json:"observacao"`
-	Snapshot         []byte             `json:"snapshot"`
-	TurmaProfessorID int64              `json:"turma_professor_id"`
-}
-
-func (q *Queries) GetSubmissaoPorID(ctx context.Context, id int64) (GetSubmissaoPorIDRow, error) {
-	row := q.db.QueryRow(ctx, getSubmissaoPorID, id)
-	var i GetSubmissaoPorIDRow
-	err := row.Scan(
-		&i.ID,
-		&i.AtribuicaoID,
-		&i.AlunoID,
-		&i.ComecouEm,
-		&i.EntregueEm,
-		&i.Atrasada,
-		&i.Observacao,
-		&i.Snapshot,
-		&i.TurmaProfessorID,
-	)
-	return i, err
-}
-

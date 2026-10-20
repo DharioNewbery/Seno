@@ -37,6 +37,7 @@ type Atribuico struct {
 	PodeAtrasado bool               `json:"pode_atrasado"`
 	CreatedBy    pgtype.Int8        `json:"created_by"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	MonitorID    *string            `json:"monitor_id"`
 }
 
 type CorrecaoTarefa struct {
@@ -112,6 +113,18 @@ type Matricula struct {
 	SaidaEm   pgtype.Timestamptz `json:"saida_em"`
 	CreatedBy pgtype.Int8        `json:"created_by"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type MonitorEstadoAluno struct {
+	AtribuicaoID   int64              `json:"atribuicao_id"`
+	AlunoID        int64              `json:"aluno_id"`
+	Estado         string             `json:"estado"`
+	NT             pgtype.Int4        `json:"n_t"`
+	EntregueEm     pgtype.Timestamptz `json:"entregue_em"`
+	NotaAuto       pgtype.Numeric     `json:"nota_auto"`
+	CorrecaoStatus *string            `json:"correcao_status"`
+	PrazoEfetivo   pgtype.Timestamptz `json:"prazo_efetivo"`
+	AtualizadoEm   pgtype.Timestamptz `json:"atualizado_em"`
 }
 
 type OneTimeToken struct {
