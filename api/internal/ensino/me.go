@@ -40,6 +40,7 @@ type AtribuicaoDoAluno struct {
 	Entregue      bool       `json:"entregue"`
 	EntregueEm    *time.Time `json:"entregue_em,omitempty"`
 	Atrasada      bool       `json:"atrasada"`
+	SubmissaoID   *int64     `json:"submissao_id,omitempty"`
 	PublicadaEm   *time.Time `json:"publicada_em,omitempty"`
 	NotaFinal     *int32     `json:"nota_final,omitempty"`
 }
@@ -87,6 +88,14 @@ func intSegPtr(v pgtype.Int4) *int32 {
 		return nil
 	}
 	out := v.Int32
+	return &out
+}
+
+func idPtr64(v pgtype.Int8) *int64 {
+	if !v.Valid {
+		return nil
+	}
+	out := v.Int64
 	return &out
 }
 
@@ -249,6 +258,7 @@ func (s *Service) MinhasAtribuicoes(
 			Entregue:      row.MinhaEntrega.Valid,
 			EntregueEm:    horaPtr(row.MinhaEntrega),
 			Atrasada:      row.MinhaAtrasada.Bool,
+			SubmissaoID:   idPtr64(row.MinhaSubmissaoID),
 			PublicadaEm:   horaPtr(row.PublicadaEm),
 			NotaFinal:     notaPtrMeu(row.MinhaNotaTexto, row.PublicadaEm),
 		})

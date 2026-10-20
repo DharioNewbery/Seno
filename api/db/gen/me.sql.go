@@ -87,6 +87,7 @@ SELECT a.id,
        atv.nome        AS atividade_nome,
        tt.revisao      AS minha_revisao,
        tt.gravado_em   AS meu_gravado_em,
+       ss.id AS minha_submissao_id,
        ss.entregue_em  AS minha_entrega,
        ss.atrasada     AS minha_atrasada,
        pub.pub_em      AS publicada_em,
@@ -136,6 +137,7 @@ type ListAtribuicoesAlunoRow struct {
 	AtividadeNome    string             `json:"atividade_nome"`
 	MinhaRevisao     pgtype.Int4        `json:"minha_revisao"`
 	MeuGravadoEm     pgtype.Timestamptz `json:"meu_gravado_em"`
+	MinhaSubmissaoID pgtype.Int8        `json:"minha_submissao_id"`
 	MinhaEntrega     pgtype.Timestamptz `json:"minha_entrega"`
 	MinhaAtrasada    pgtype.Bool        `json:"minha_atrasada"`
 	PublicadaEm      pgtype.Timestamptz `json:"publicada_em"`
@@ -170,6 +172,7 @@ func (q *Queries) ListAtribuicoesAluno(ctx context.Context, arg ListAtribuicoesA
 			&i.AtividadeNome,
 			&i.MinhaRevisao,
 			&i.MeuGravadoEm,
+			&i.MinhaSubmissaoID,
 			&i.MinhaEntrega,
 			&i.MinhaAtrasada,
 			&i.PublicadaEm,

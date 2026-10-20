@@ -612,6 +612,7 @@ export interface AtribuicaoDoAluno {
   entregue: boolean;
   entregue_em?: string;
   atrasada: boolean;
+  submissao_id?: number;
   publicada_em?: string;
   nota_final?: number;
 }
@@ -894,6 +895,23 @@ export async function editarCorrecao(
   return chamar(request, token, `/v1/submissoes/${submissaoID}/correcao`, {
     method: "PATCH",
     body: JSON.stringify(cad),
+  });
+}
+
+/** Correção publicada da própria submissão (§Visibilidade). */
+export interface VisaoCorrecaoAluno {
+  publicada: boolean;
+  publicada_em?: string;
+  correcao: Correcao | null;
+}
+
+export async function minhaCorrecao(
+  request: Request,
+  token: string,
+  submissaoID: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/submissoes/${submissaoID}/minha`, {
+    method: "GET",
   });
 }
 

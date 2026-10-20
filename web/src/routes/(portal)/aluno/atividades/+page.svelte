@@ -1,7 +1,6 @@
 <script lang="ts">
   // Atividades do aluno (atribuições das minhas turmas): filtro por
-  // turma, estado do rascunho e prazo. Entrega final chega com o
-  // módulo de submissões.
+  // turma, estado do rascunho e prazo; correção publicada no portal.
   import { page } from "$app/state";
   import { SvelteURLSearchParams } from "svelte/reactivity";
   import type { PageProps } from "./$types";
@@ -89,6 +88,9 @@
             </a>
           {:else if a.entregue}
             <span class="meta">Entregue em {a.entregue_em ? new Date(a.entregue_em).toLocaleString("pt-BR") : ""}</span>
+            {#if a.publicada_em}
+              <a class="corrigido" href={`/aluno/submissao/${a.submissao_id}`}>Correção publicada →</a>
+            {/if}
           {:else}
             <span class="estado encerrada">Turma encerrada</span>
           {/if}
@@ -103,8 +105,8 @@
   </ul>
 
   <p class="nota">
-    A entrega final (submissão) e a correção chegam com os próximos
-    módulos; por enquanto o progresso fica salvo como rascunho.
+    Quando o professor publicar as notas, a correção completa (feedback e
+    resultados por teste) fica disponível em "Correção publicada".
   </p>
 </section>
 
@@ -232,6 +234,11 @@
   }
   .abrir:hover {
     background: var(--seno-blue-700);
+  }
+  .corrigido {
+    color: var(--seno-blue-600);
+    text-decoration: none;
+    font-size: 0.86rem;
   }
   .vazio {
     color: var(--seno-gray-500);
