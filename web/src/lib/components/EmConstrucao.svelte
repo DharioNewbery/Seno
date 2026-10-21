@@ -18,7 +18,7 @@
   .construcao {
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
-    border-radius: 12px;
+    border-radius: var(--raio-lg);
     padding: 2rem;
     display: flex;
     flex-direction: column;

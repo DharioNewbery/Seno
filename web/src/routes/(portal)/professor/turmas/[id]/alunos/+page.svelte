@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { soData } from "#lib/formato";
   // Alunos da turma: matrículas ativas (toggle de encerradas), matrícula
   // individual, matrícula em lote (linhas email,nome,sobrenome), busca de
   // aluno existente por e-mail/nome para adicionar, e remoção (saída).
@@ -163,10 +164,10 @@
               <span class="estado encerrada">Matrícula encerrada</span>
             {/if}
           </td>
-          <td>{new Date(m.entrada_em).toLocaleDateString("pt-BR")}</td>
+          <td>{soData(m.entrada_em)}</td>
           {#if incluir}
             <td>
-              {m.saida_em ? new Date(m.saida_em).toLocaleDateString("pt-BR") : "—"}
+              {m.saida_em ? soData(m.saida_em) : "—"}
             </td>
           {/if}
           <td class="acao-cell">
@@ -198,30 +199,9 @@
   .nomes {
     margin: 0;
   }
-  .voltar {
-    color: var(--seno-blue-600);
-    text-decoration: none;
-    font-size: 0.88rem;
-  }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .aviso.ok {
-    background: var(--seno-blue-100);
-    color: var(--seno-blue-800);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .falhas {
+        .falhas {
     background: var(--seno-gray-100);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.6rem 1rem 0.6rem 1.8rem;
     font-size: 0.85rem;
     color: var(--seno-gray-700);
@@ -240,7 +220,7 @@
   }
   .mini-filtro a {
     border: 1px solid var(--seno-gray-300);
-    border-radius: 999px;
+    border-radius: var(--raio-pill);
     padding: 0.25rem 0.8rem;
     color: var(--seno-gray-700);
     font-size: 0.82rem;
@@ -259,7 +239,7 @@
   }
   .acoes-criacao .modo {
     border: 1px solid var(--seno-gray-300);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.35rem 0.8rem;
     color: var(--seno-gray-700);
     text-decoration: none;
@@ -281,7 +261,7 @@
     gap: 0.6rem;
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
+    border-radius: var(--raio-lg);
     padding: 1rem;
   }
   .individual {
@@ -291,7 +271,7 @@
   .individual input,
   .pesquisa input {
     border: 1px solid var(--seno-gray-300);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.5rem 0.6rem;
     font-size: 0.9rem;
     background: var(--seno-white);
@@ -302,7 +282,7 @@
   }
   .lote textarea {
     border: 1px solid var(--seno-gray-300);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.5rem 0.6rem;
     font-size: 0.9rem;
     font-family: inherit;
@@ -317,7 +297,7 @@
     background: var(--seno-blue-600);
     color: var(--seno-white);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.5rem 0.9rem;
     font-size: 0.9rem;
     cursor: pointer;
@@ -335,7 +315,7 @@
     border: 1px solid var(--seno-red);
   }
   button.vermelho:hover {
-    background: #fdecea;
+    background: var(--seno-red-50);
   }
   .pesquisa {
     display: flex;
@@ -357,22 +337,15 @@
     gap: 0.6rem;
     background: var(--seno-white);
     border: 1px dashed var(--seno-gray-300);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.5rem 0.8rem;
   }
   .quem {
     display: flex;
     flex-direction: column;
   }
-  .estado {
-    font-size: 0.72rem;
-    border-radius: 999px;
-    padding: 0.15rem 0.5rem;
-    background: var(--seno-gray-100);
-    color: var(--seno-gray-700);
-  }
-  .estado.active {
-    background: #e6f4ea;
+    .estado.active {
+    background: var(--seno-green-50);
     color: var(--seno-green);
   }
   .estado.pending {
@@ -381,7 +354,7 @@
   }
   .estado.disabled,
   .estado.encerrada {
-    background: #fdecea;
+    background: var(--seno-red-50);
     color: var(--seno-red);
   }
   .tabela {
@@ -389,7 +362,7 @@
     border-collapse: collapse;
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
+    border-radius: var(--raio-lg);
     overflow: hidden;
   }
   .tabela th {
@@ -411,12 +384,4 @@
   .acao-cell {
     text-align: right;
   }
-  .vazio {
-    text-align: center;
-    color: var(--seno-gray-500);
-  }
-  .dica {
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-  }
-</style>
+    </style>

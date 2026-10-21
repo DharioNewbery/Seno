@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dataHora } from "#lib/formato";
   import type { PageProps } from "./$types";
 
   let { data }: PageProps = $props();
@@ -28,7 +29,7 @@
 
   function paraTexto(iso: string | undefined): string {
     if (!iso) return "Sem prazo";
-    return `Prazo ${new Date(iso).toLocaleString("pt-BR")}`;
+    return `Prazo ${dataHora(iso)}`;
   }
 </script>
 
@@ -100,7 +101,7 @@
                   </a>
                 {:else if a.entregue}
                   <span class="meta">
-                    Entregue em {a.entregue_em ? new Date(a.entregue_em).toLocaleString("pt-BR") : ""}
+                    Entregue em {a.entregue_em ? dataHora(a.entregue_em) : ""}
                   </span>
                 {:else}
                   <span class="estado encerrada">Turma encerrada</span>
@@ -144,19 +145,10 @@
   .navegacao {
     margin-bottom: -0.25rem;
   }
-  .voltar {
-    color: var(--seno-primary, #0056b3);
-    text-decoration: none;
-    font-size: 0.9rem;
-    font-weight: 500;
-  }
-  .voltar:hover {
-    text-decoration: underline;
-  }
-  .cabecalho-turma {
-    background: var(--seno-white, #fff);
-    border: 1px solid var(--seno-gray-300, #ddd);
-    border-radius: 12px;
+      .cabecalho-turma {
+    background: var(--seno-white);
+    border: 1px solid var(--seno-gray-300);
+    border-radius: var(--raio-lg);
     padding: 1.25rem 1.5rem;
     display: flex;
     justify-content: space-between;
@@ -176,38 +168,38 @@
   .tag {
     font-size: 0.75rem;
     padding: 0.2rem 0.5rem;
-    border-radius: 6px;
+    border-radius: var(--raio-sm);
     font-weight: 600;
   }
   .tag.codigo {
-    background: #eef2ff;
+    background: var(--seno-blue-100);
     color: #3730a3;
   }
   .tag.ativa {
-    background: #e6f4ea;
-    color: #137333;
+    background: var(--seno-green-50);
+    color: var(--seno-green);
   }
   .tag.encerrada {
-    background: #f1f3f4;
-    color: #5f6368;
+    background: var(--seno-gray-100);
+    color: var(--seno-gray-500);
   }
   .cabecalho-turma h1 {
     margin: 0;
     font-size: 1.4rem;
-    color: var(--seno-text, #111);
+    color: var(--seno-text);
   }
   .subtitulo {
     margin: 0;
-    color: var(--seno-gray-500, #666);
+    color: var(--seno-gray-500);
     font-size: 1rem;
   }
   .metadados {
     display: flex;
     gap: 2rem;
-    background: #f8f9fa;
+    background: var(--seno-gray-50);
     padding: 0.8rem 1.2rem;
-    border-radius: 8px;
-    border: 1px solid var(--seno-gray-200, #eee);
+    border-radius: var(--raio-md);
+    border: 1px solid var(--seno-gray-200);
   }
   .dado {
     display: flex;
@@ -216,7 +208,7 @@
   }
   .dado .rotulo {
     font-size: 0.75rem;
-    color: var(--seno-gray-500, #666);
+    color: var(--seno-gray-500);
     text-transform: uppercase;
     font-weight: 600;
   }
@@ -226,7 +218,7 @@
   }
   .dado .email {
     font-size: 0.8rem;
-    color: var(--seno-gray-500, #777);
+    color: var(--seno-gray-500);
   }
   .grade-conteudo {
     display: grid;
@@ -240,14 +232,14 @@
     }
   }
   .painel {
-    background: var(--seno-white, #fff);
-    border: 1px solid var(--seno-gray-300, #ddd);
-    border-radius: 12px;
+    background: var(--seno-white);
+    border: 1px solid var(--seno-gray-300);
+    border-radius: var(--raio-lg);
     padding: 1.2rem;
   }
   .painel-topo {
     margin-bottom: 0.9rem;
-    border-bottom: 1px solid var(--seno-gray-200, #eee);
+    border-bottom: 1px solid var(--seno-gray-200);
     padding-bottom: 0.6rem;
   }
   .painel-topo h2 {
@@ -258,7 +250,7 @@
     gap: 0.4rem;
   }
   .contador {
-    color: var(--seno-gray-500, #666);
+    color: var(--seno-gray-500);
     font-size: 0.85rem;
     font-weight: 400;
   }
@@ -271,9 +263,9 @@
     gap: 0.75rem;
   }
   .lista-atividades li {
-    border: 1px solid var(--seno-gray-200, #eee);
-    background: #fafafa;
-    border-radius: 8px;
+    border: 1px solid var(--seno-gray-200);
+    background: var(--seno-gray-50);
+    border-radius: var(--raio-md);
     padding: 0.85rem 1rem;
     display: flex;
     justify-content: space-between;
@@ -286,54 +278,28 @@
     flex-direction: column;
     gap: 0.2rem;
   }
-  .meta {
-    font-size: 0.82rem;
-    color: var(--seno-gray-500, #666);
-  }
-  .acao-area {
+    .acao-area {
     display: flex;
     align-items: center;
     gap: 0.75rem;
   }
-  .estado {
-    padding: 0.25rem 0.6rem;
-    border-radius: 999px;
-    font-size: 0.78rem;
-    font-weight: 600;
-  }
-  .estado.nota {
-    background: #e8f0fe;
+    .estado.nota {
+    background: var(--seno-blue-100);
     color: #1967d2;
   }
   .estado.entregue {
-    background: #e6f4ea;
-    color: #137333;
+    background: var(--seno-green-50);
+    color: var(--seno-green);
   }
   .estado.andamento {
-    background: #fef7e0;
-    color: #b06000;
+    background: var(--seno-amber-50);
+    color: var(--seno-amber);
   }
-  .estado.encerrada {
-    background: #f1f3f4;
-    color: #5f6368;
+    .estado.nao {
+    background: var(--seno-gray-100);
+    color: var(--seno-gray-500);
   }
-  .estado.nao {
-    background: #f1f3f4;
-    color: #5f6368;
-  }
-  .abrir {
-    background: var(--seno-primary, #0056b3);
-    color: #fff;
-    padding: 0.35rem 0.8rem;
-    border-radius: 6px;
-    text-decoration: none;
-    font-size: 0.85rem;
-    font-weight: 500;
-  }
-  .abrir:hover {
-    opacity: 0.9;
-  }
-  .lista-colegas {
+      .lista-colegas {
     list-style: none;
     padding: 0;
     margin: 0;
@@ -348,26 +314,12 @@
     align-items: center;
     gap: 0.6rem;
     padding: 0.45rem 0.6rem;
-    border-radius: 6px;
-    background: #f8f9fa;
+    border-radius: var(--raio-sm);
+    background: var(--seno-gray-50);
     font-size: 0.9rem;
   }
   .icone-aluno {
     font-size: 0.9rem;
     opacity: 0.7;
   }
-  .vazio {
-    padding: 1.5rem;
-    text-align: center;
-    color: var(--seno-gray-500, #777);
-    font-size: 0.9rem;
-  }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red, #c00);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-</style>
+    </style>

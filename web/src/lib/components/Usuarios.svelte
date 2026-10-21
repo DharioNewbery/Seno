@@ -175,28 +175,7 @@
     margin: 0;
   }
 
-  .total {
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-  }
-
-  .aviso {
-    padding: 0.6rem 0.9rem;
-    border-radius: 8px;
-    font-size: 0.9rem;
-  }
-
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-  }
-
-  .aviso.ok {
-    background: var(--seno-blue-100);
-    color: var(--seno-blue-800);
-  }
-
-  .busca {
+          .busca {
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
@@ -205,7 +184,7 @@
   .busca input,
   .busca select {
     border: 1px solid var(--seno-gray-300);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.5rem 0.65rem;
     background: var(--seno-white);
     font-size: 0.9rem;
@@ -216,7 +195,7 @@
     background: var(--seno-blue-600);
     color: var(--seno-white);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.5rem 0.9rem;
     font-size: 0.9rem;
     cursor: pointer;
@@ -230,7 +209,7 @@
     margin-left: auto;
     background: var(--seno-blue-600);
     color: var(--seno-white);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.5rem 0.9rem;
     font-size: 0.9rem;
     text-decoration: none;
@@ -239,25 +218,14 @@
   .ir-criar:hover {
     background: var(--seno-blue-700);
   }
-
-  .lista {
-    list-style: none;
+  .lista > li {
     padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
+    display: block;
   }
 
-  .lista li {
-    background: var(--seno-white);
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
-  }
-
-  .lista li.destaque {
-    border: 2px solid var(--seno-blue-500);
+  .lista > li.destaque {
     background: var(--seno-blue-100);
+    box-shadow: inset 3px 0 0 var(--seno-blue-500);
   }
 
   .card {
@@ -298,20 +266,12 @@
     font-size: 0.72rem;
     background: var(--seno-blue-100);
     color: var(--seno-blue-800);
-    border-radius: 999px;
+    border-radius: var(--raio-pill);
     padding: 0.15rem 0.55rem;
   }
 
-  .estado {
-    font-size: 0.75rem;
-    border-radius: 999px;
-    padding: 0.2rem 0.6rem;
-    background: var(--seno-gray-100);
-    color: var(--seno-gray-700);
-  }
-
-  .estado.active {
-    background: #e6f4ea;
+    .estado.active {
+    background: var(--seno-green-50);
     color: var(--seno-green);
   }
 
@@ -321,26 +281,11 @@
   }
 
   .estado.disabled {
-    background: #fdecea;
+    background: var(--seno-red-50);
     color: var(--seno-red);
   }
 
-  .vazio {
-    color: var(--seno-gray-500);
-    text-align: center;
-    padding: 1rem;
-  }
-
-  .paginacao {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1rem;
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-  }
-
-  .botao-pag {
+      .botao-pag {
     color: var(--seno-blue-600);
     text-decoration: none;
   }

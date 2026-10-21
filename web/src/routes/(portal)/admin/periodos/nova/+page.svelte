@@ -45,7 +45,7 @@
   .cartao {
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
-    border-radius: 12px;
+    border-radius: var(--raio-lg);
     padding: 1.5rem;
     display: flex;
     flex-direction: column;
@@ -54,12 +54,7 @@
   .cartao h2 {
     margin: 0;
   }
-  .dica {
-    margin: 0;
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-  }
-  label {
+    label {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
@@ -69,18 +64,11 @@
     font-weight: 600;
     color: var(--seno-gray-700);
   }
-  input,
-  select {
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 8px;
-    padding: 0.55rem 0.7rem;
-    background: var(--seno-gray-100);
-  }
-  button {
+    button {
     background: var(--seno-blue-600);
     color: var(--seno-white);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.65rem;
     font-weight: 600;
     cursor: pointer;
@@ -88,17 +76,4 @@
   button:hover {
     background: var(--seno-blue-700);
   }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .voltar {
-    color: var(--seno-blue-600);
-    text-decoration: none;
-    font-size: 0.9rem;
-  }
-</style>
+    </style>

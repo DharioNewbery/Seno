@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dataHora } from "#lib/formato";
   // Histórico de Execução de teste (últimos 7 dias, PROJETO §Execução
   // de teste); só o próprio aluno vê. Resultados ficam embutidos na
   // listagem (somente testes públicos).
@@ -21,7 +22,7 @@
         <div class="identidade">
           <strong>{e.atividade_nome || "Atividade"} · tarefa #{e.tarefa_id}</strong>
           <span class="meta">
-            {e.linguagem} · {new Date(e.criado_em).toLocaleString("pt-BR")}
+            {e.linguagem} · {dataHora(e.criado_em)}
           </span>
         </div>
         <ul class="resultados">
@@ -59,29 +60,7 @@
   .cabeca h2 {
     margin: 0;
   }
-  .total {
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-    font-weight: 400;
-  }
-  .voltar {
-    color: var(--seno-blue-600);
-    text-decoration: none;
-    font-size: 0.9rem;
-  }
-  .lista {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-  }
-  .lista li {
-    background: var(--seno-white);
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
-    padding: 0.75rem 1rem;
+        .lista li {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -89,11 +68,7 @@
   .identidade strong {
     color: var(--seno-blue-900);
   }
-  .meta {
-    color: var(--seno-gray-500);
-    font-size: 0.83rem;
-  }
-  .resultados {
+    .resultados {
     list-style: none;
     padding: 0;
     margin: 0;
@@ -109,13 +84,13 @@
     flex-wrap: wrap;
   }
   .resultados li.ok .veredito {
-    background: #e6f4ea;
+    background: var(--seno-green-50);
     color: var(--seno-green);
   }
   .veredito {
-    border-radius: 999px;
+    border-radius: var(--raio-pill);
     padding: 0.1rem 0.5rem;
-    background: #fdecea;
+    background: var(--seno-red-50);
     color: var(--seno-red);
     font-size: 0.74rem;
   }
@@ -126,8 +101,4 @@
   .sem {
     color: var(--seno-gray-500);
   }
-  .vazio {
-    color: var(--seno-gray-500);
-    text-align: center;
-  }
-</style>
+  </style>

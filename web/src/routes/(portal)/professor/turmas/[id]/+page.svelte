@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dataHora } from "#lib/formato";
   // Painel de controle da turma: dados + navegação gerencial (alunos),
   // placeholders de seções futuras e ações de dono (renomear, encerrar,
   // excluir — com confirmação).
@@ -136,7 +137,7 @@
               <strong>{a.atividade_nome || "Atividade"}</strong>
               <span class="meta">
                 {a.prazo
-                  ? `Prazo ${new Date(a.prazo).toLocaleString("pt-BR")}`
+                  ? `Prazo ${dataHora(a.prazo)}`
                   : "Sem prazo"} ·
                 {a.duracao_seg
                   ? `${Math.round(a.duracao_seg / 3600 * 10) / 10} h de duração`
@@ -185,20 +186,7 @@
     color: var(--seno-gray-500);
     font-size: 0.88rem;
   }
-  .estado {
-    font-size: 0.75rem;
-    border-radius: 999px;
-    padding: 0.2rem 0.6rem;
-  }
-  .estado.ativa {
-    background: #e6f4ea;
-    color: var(--seno-green);
-  }
-  .estado.encerrada {
-    background: var(--seno-gray-100);
-    color: var(--seno-gray-700);
-  }
-  .opcoes {
+        .opcoes {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
     gap: 0.75rem;
@@ -209,7 +197,7 @@
     gap: 0.3rem;
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
+    border-radius: var(--raio-lg);
     padding: 1rem 1.1rem;
     text-decoration: none;
     color: inherit;
@@ -237,7 +225,7 @@
     background: var(--seno-blue-600);
     color: var(--seno-white);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.5rem 0.9rem;
     font-size: 0.9rem;
     cursor: pointer;
@@ -246,10 +234,10 @@
     background: var(--seno-blue-700);
   }
   .acao.amarela {
-    background: #b7791f;
+    background: var(--seno-amber-500);
   }
   .acao.amarela:hover {
-    background: #975a16;
+    background: var(--seno-amber);
   }
   .acao.vermelha {
     background: none;
@@ -257,13 +245,13 @@
     border: 1px solid var(--seno-red);
   }
   .acao.vermelha:hover {
-    background: #fdecea;
+    background: var(--seno-red-50);
   }
   .secundario {
     background: none;
     border: 1px solid var(--seno-gray-300);
     color: var(--seno-gray-700);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.45rem 0.7rem;
     font-size: 0.85rem;
     cursor: pointer;
@@ -275,7 +263,7 @@
   }
   .renomear input {
     border: 1px solid var(--seno-gray-300);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.45rem 0.6rem;
     font-size: 0.9rem;
   }
@@ -286,26 +274,10 @@
     font-size: 0.85rem;
     color: var(--seno-gray-700);
     background: var(--seno-gray-100);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.5rem 0.7rem;
   }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .aviso.ok {
-    background: var(--seno-blue-100);
-    color: var(--seno-blue-800);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .atribuicoes {
+      .atribuicoes {
     display: flex;
     flex-direction: column;
     gap: 0.7rem;
@@ -313,24 +285,19 @@
   .cabeca-atrib h3 {
     margin: 0;
   }
-  .total {
-    color: var(--seno-gray-500);
-    font-size: 0.82rem;
-    font-weight: 400;
-  }
-  .atribuir {
+    .atribuir {
     display: flex;
     align-items: end;
     gap: 0.55rem;
     flex-wrap: wrap;
     background: var(--seno-gray-100);
-    border-radius: 10px;
+    border-radius: var(--raio-lg);
     padding: 0.7rem 0.85rem;
   }
   .atribuir select,
   .atribuir input {
     border: 1px solid var(--seno-gray-300);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.4rem 0.55rem;
     font-size: 0.85rem;
     background: var(--seno-white);
@@ -364,7 +331,7 @@
   .lista-atrib li {
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
+    border-radius: var(--raio-lg);
     padding: 0.7rem 0.9rem;
     display: flex;
     align-items: center;
@@ -377,39 +344,11 @@
     flex-direction: column;
     gap: 0.15rem;
   }
-  .meta {
-    color: var(--seno-gray-500);
-    font-size: 0.79rem;
-  }
-  .acao-area {
+    .acao-area {
     display: flex;
     gap: 0.4rem;
   }
   .acao-area form {
     display: contents;
   }
-  .peq {
-    background: var(--seno-blue-600);
-    color: var(--seno-white);
-    border: none;
-    border-radius: 8px;
-    padding: 0.3rem 0.65rem;
-    font-size: 0.8rem;
-    cursor: pointer;
-  }
-  .peq.vermelho {
-    background: none;
-    color: var(--seno-red);
-    border: 1px solid var(--seno-red);
-  }
-  .peq.vermelho:hover {
-    background: #fdecea;
-  }
-  .peq:hover {
-    background: var(--seno-blue-700);
-  }
-  .vazio {
-    color: var(--seno-gray-500);
-    text-align: center;
-  }
-</style>
+          </style>

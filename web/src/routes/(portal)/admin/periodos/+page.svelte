@@ -72,47 +72,12 @@
   .cabeca h2 {
     margin: 0;
   }
-  .total {
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-    font-weight: 400;
-  }
-  .nova {
-    background: var(--seno-blue-600);
-    color: var(--seno-white);
-    border-radius: 8px;
-    padding: 0.45rem 0.9rem;
-    text-decoration: none;
-    font-size: 0.9rem;
-    font-weight: 600;
-  }
-  .nova:hover {
-    background: var(--seno-blue-700);
-  }
-  .ano-grupo h3 {
+        .ano-grupo h3 {
     color: var(--seno-blue-900);
     margin: 0.6rem 0 0.4rem;
     font-size: 1rem;
   }
-  .lista {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.45rem;
-  }
-  .lista li {
-    background: var(--seno-white);
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
-    padding: 0.7rem 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-  }
-  .rotulo {
+      .rotulo {
     font-weight: 600;
     color: var(--seno-blue-900);
   }
@@ -129,40 +94,4 @@
     text-decoration: none;
     font-size: 0.88rem;
   }
-  .peq {
-    background: var(--seno-blue-600);
-    color: var(--seno-white);
-    border: none;
-    border-radius: 8px;
-    padding: 0.35rem 0.75rem;
-    font-size: 0.82rem;
-    cursor: pointer;
-  }
-  .peq.vermelho {
-    background: none;
-    color: var(--seno-red);
-    border: 1px solid var(--seno-red);
-  }
-  .peq.vermelho:hover {
-    background: #fdecea;
-  }
-  .vazio {
-    color: var(--seno-gray-500);
-  }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .aviso.ok {
-    background: var(--seno-blue-100);
-    color: var(--seno-blue-800);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-</style>
+            </style>

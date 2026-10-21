@@ -1,5 +1,16 @@
+/* ==========================================================================
+   Seno — sistema de design
+   1. Tokens   2. Base   3. Controles de formulário   4. Componentes comuns
+   Os componentes (.aviso, .lista, .estado, .nova, .abrir, .peq, .voltar,
+   .paginacao, .meta, .total, .dica, .vazio) valem para todas as telas: não
+   redefina esses nomes dentro de uma página — ajuste aqui.
+   ========================================================================== */
+
+/* ---------- 1. Tokens ---------- */
 :root {
+  /* Marca: branco + escala de azul. */
   --seno-white: #ffffff;
+  --seno-blue-950: #082a5a;
   --seno-blue-900: #0d3b7a;
   --seno-blue-800: #124a94;
   --seno-blue-700: #175bb0;
@@ -9,19 +20,59 @@
   --seno-blue-300: #94bcf8;
   --seno-blue-200: #c2d8fb;
   --seno-blue-100: #e8f0fd;
+  --seno-primary: var(--seno-blue-600);
+
+  /* Neutros (cinza-azulado). O 500 foi escurecido para passar em contraste
+     AA (≥ 4.5:1) como texto secundário sobre branco e sobre o fundo da página. */
   --seno-gray-900: #1a2332;
-  --seno-gray-700: #4a5568;
-  --seno-gray-500: #718096;
+  --seno-gray-700: #44505f;
+  --seno-gray-500: #5b6779;
   --seno-gray-300: #cbd5e0;
+  --seno-gray-200: #e2e8f0;
   --seno-gray-100: #f4f6f9;
+  --seno-gray-50: #f9fafc;
+  --seno-bg: #f3f6fb;
+  --seno-line: #e2e8f0;
+
+  /* Semânticas: cada tom tem texto (700), preenchimento (50) e borda (200). */
   --seno-red: #c53030;
-  --seno-green: #2f855a;
+  --seno-red-700: #a32424;
+  --seno-red-50: #fdecea;
+  --seno-red-200: #f5c2bd;
+  --seno-green: #276749;
+  --seno-green-50: #e6f4ea;
+  --seno-green-200: #bfe3cc;
+  --seno-amber: #8a4b08;
+  --seno-amber-500: #d97706;
+  --seno-amber-50: #fdf1d8;
+  --seno-amber-200: #f1d9a3;
+
+  /* Forma */
+  --raio-sm: 6px;
+  --raio-md: 8px;
+  --raio-lg: 12px;
+  --raio-pill: 999px;
+  --foco: 0 0 0 3px rgb(47 128 237 / 0.35);
+  --sombra-flutuante: 0 12px 32px rgb(8 42 90 / 0.18);
+
+  /* Tipografia */
+  --fonte:
+    "IBM Plex Sans Variable", "Segoe UI", system-ui, -apple-system, "Helvetica Neue",
+    sans-serif;
+  --fonte-mono:
+    "IBM Plex Mono", ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
 }
 
+/* ---------- 2. Base ---------- */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 html,
@@ -30,15 +81,371 @@ body {
   padding: 0;
   background: var(--seno-white);
   color: var(--seno-gray-900);
-  font-family:
-    "Segoe UI",
-    system-ui,
-    -apple-system,
-    sans-serif;
+  font-family: var(--fonte);
+  font-size: 1rem;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 h1,
 h2,
-h3 {
+h3,
+h4 {
   color: var(--seno-blue-900);
+  font-weight: 600;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: 1.625rem;
+  letter-spacing: -0.015em;
+}
+
+h2 {
+  font-size: 1.3rem;
+  letter-spacing: -0.01em;
+}
+
+h3 {
+  font-size: 1.05rem;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+a {
+  color: var(--seno-blue-700);
+  text-underline-offset: 0.18em;
+}
+
+a:hover {
+  color: var(--seno-blue-900);
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--fonte-mono);
+  font-size: 0.9em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--seno-blue-500);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--seno-blue-200);
+  color: var(--seno-blue-950);
+}
+
+table {
+  border-collapse: collapse;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- 3. Controles de formulário ---------- */
+input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"]),
+select,
+textarea {
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--seno-gray-900);
+  background: var(--seno-white);
+  border: 1px solid var(--seno-gray-300);
+  border-radius: var(--raio-md);
+  padding: 0.55rem 0.75rem;
+  transition:
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+
+input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"]),
+select {
+  min-height: 2.5rem;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--seno-gray-500);
+  opacity: 0.8;
+}
+
+input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"]):hover,
+select:hover,
+textarea:hover {
+  border-color: var(--seno-gray-500);
+}
+
+input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"]):focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--seno-blue-500);
+  box-shadow: var(--foco);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background: var(--seno-gray-100);
+  color: var(--seno-gray-500);
+  cursor: not-allowed;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--seno-blue-600);
+}
+
+/* ---------- 4. Componentes comuns ---------- */
+
+/* Avisos (erro / sucesso / informação) */
+.aviso {
+  margin: 0;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--seno-blue-200);
+  border-radius: var(--raio-md);
+  background: var(--seno-blue-100);
+  color: var(--seno-blue-900);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.aviso.erro {
+  background: var(--seno-red-50);
+  border-color: var(--seno-red-200);
+  color: var(--seno-red-700);
+}
+
+.aviso.ok {
+  background: var(--seno-green-50);
+  border-color: var(--seno-green-200);
+  color: var(--seno-green);
+}
+
+/* Lista de linhas: um painel só, com divisórias — em vez de um cartão por item. */
+.lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--seno-white);
+  border: 1px solid var(--seno-line);
+  border-radius: var(--raio-lg);
+  overflow: hidden;
+}
+
+.lista > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.85rem 1.1rem;
+  transition: background-color 0.12s;
+}
+
+.lista > li + li {
+  border-top: 1px solid var(--seno-line);
+}
+
+.lista > li:not(.vazio):hover {
+  background: var(--seno-gray-50);
+}
+
+.lista > li.vazio {
+  justify-content: center;
+}
+
+.lista strong {
+  font-weight: 600;
+}
+
+/* Estados em pílula; o ponto repete o significado sem depender só da cor. */
+.estado {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.18rem 0.6rem;
+  border-radius: var(--raio-pill);
+  background: var(--seno-gray-100);
+  color: var(--seno-gray-700);
+  font-size: 0.76rem;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.estado::before {
+  content: "";
+  flex: none;
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.estado.ativa {
+  background: var(--seno-green-50);
+  color: var(--seno-green);
+}
+
+.estado.encerrada {
+  background: var(--seno-gray-100);
+  color: var(--seno-gray-700);
+}
+
+/* Ações: primária (.nova / .abrir), pequena (.peq) e de retorno (.voltar). */
+.nova,
+.abrir {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--seno-blue-600);
+  color: var(--seno-white);
+  border-radius: var(--raio-md);
+  padding: 0.45rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.12s;
+}
+
+.abrir {
+  padding: 0.38rem 0.8rem;
+  font-size: 0.86rem;
+}
+
+.nova:hover,
+.abrir:hover {
+  background: var(--seno-blue-700);
+  color: var(--seno-white);
+}
+
+.peq {
+  background: var(--seno-blue-600);
+  color: var(--seno-white);
+  border: 1px solid transparent;
+  border-radius: var(--raio-md);
+  padding: 0.35rem 0.75rem;
+  font: inherit;
+  font-size: 0.83rem;
+  font-weight: 500;
+  cursor: pointer;
+  width: fit-content;
+  transition: background-color 0.12s;
+}
+
+.peq:hover {
+  background: var(--seno-blue-700);
+}
+
+.peq:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.peq.vermelho {
+  background: var(--seno-white);
+  color: var(--seno-red);
+  border-color: var(--seno-red);
+}
+
+.peq.vermelho:hover {
+  background: var(--seno-red-50);
+}
+
+.voltar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--seno-blue-700);
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.voltar:hover {
+  color: var(--seno-blue-900);
+  text-decoration: underline;
+}
+
+/* Paginação */
+.paginacao {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  color: var(--seno-gray-500);
+  font-size: 0.85rem;
+}
+
+.paginacao a {
+  color: var(--seno-blue-700);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.paginacao a:hover {
+  text-decoration: underline;
+}
+
+.paginacao a.desab {
+  color: var(--seno-gray-300);
+  pointer-events: none;
+}
+
+/* Texto de apoio */
+.meta {
+  color: var(--seno-gray-500);
+  font-size: 0.85rem;
+}
+
+.total {
+  color: var(--seno-gray-500);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.dica {
+  margin: 0;
+  color: var(--seno-gray-500);
+  font-size: 0.85rem;
+}
+
+.vazio {
+  padding: 1.5rem 1rem;
+  color: var(--seno-gray-500);
+  font-size: 0.92rem;
+  text-align: center;
 }

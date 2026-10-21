@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dataHora } from "#lib/formato";
   // Correção publicada da entrega do aluno: nota total, notas e
   // feedback por tarefa e resultados dos testes (§Visibilidade).
   import type { PageProps } from "./$types";
@@ -30,7 +31,7 @@
       <div class="cabeca">
         <h2>Correção publicada</h2>
         <span class="meta">
-          {new Date(visao.publicada_em ?? "").toLocaleString("pt-BR")}
+          {dataHora(visao.publicada_em ?? "")}
         </span>
       </div>
 
@@ -89,14 +90,10 @@
   .cabeca h2 {
     margin: 0;
   }
-  .meta {
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-  }
-  .cartao {
+    .cartao {
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
-    border-radius: 12px;
+    border-radius: var(--raio-lg);
     padding: 1.1rem 1.3rem;
     display: flex;
     flex-direction: column;
@@ -142,13 +139,13 @@
     color: var(--seno-gray-700);
   }
   .resultados li.ok .veredito {
-    background: #e6f4ea;
+    background: var(--seno-green-50);
     color: var(--seno-green);
   }
   .veredito {
-    border-radius: 999px;
+    border-radius: var(--raio-pill);
     padding: 0.1rem 0.5rem;
-    background: #fdecea;
+    background: var(--seno-red-50);
     color: var(--seno-red);
     font-size: 0.74rem;
   }
@@ -157,7 +154,7 @@
     white-space: pre-wrap;
     font-size: 0.78rem;
     background: var(--seno-gray-100);
-    border-radius: 6px;
+    border-radius: var(--raio-sm);
     padding: 0.35rem 0.5rem;
   }
   details summary {
@@ -168,20 +165,4 @@
     color: var(--seno-gray-700);
     font-size: 0.92rem;
   }
-  .aviso {
-    background: var(--seno-blue-100);
-    color: var(--seno-blue-800);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-  }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-  }
-  .voltar {
-    color: var(--seno-blue-600);
-    text-decoration: none;
-    font-size: 0.9rem;
-  }
-</style>
+      </style>

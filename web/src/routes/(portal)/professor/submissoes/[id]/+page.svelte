@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dataHora } from "#lib/formato";
   // Correção da entrega (professor): resultados automáticos por teste,
   // ajuste de nota/feedback por tarefa, confirmação e publicação.
   import type { PageProps } from "./$types";
@@ -30,8 +31,8 @@
       <div>
         <h2>{visao.submissao.aluno} — {visao.submissao.atividade_nome}</h2>
         <span class="meta">
-          {new Date(visao.submissao.entregue_em).toLocaleString("pt-BR")}
-          {#if visao.submissao.atrasada}· <span style:color="#c0392b">atrasada</span>{/if}
+          {dataHora(visao.submissao.entregue_em)}
+          {#if visao.submissao.atrasada}· <span style:color="var(--seno-red)">atrasada</span>{/if}
         </span>
       </div>
       <div class="estado-area">
@@ -150,29 +151,18 @@
   .cabeca h2 {
     margin: 0 0 0.2rem;
   }
-  .meta {
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-  }
-  .estado-area {
+    .estado-area {
     display: flex;
     gap: 0.4rem;
   }
-  .estado {
-    font-size: 0.75rem;
-    border-radius: 999px;
-    padding: 0.2rem 0.6rem;
-    background: var(--seno-gray-100);
-    color: var(--seno-gray-700);
-  }
-  .estado.publicada {
-    background: #e6f4ea;
+    .estado.publicada {
+    background: var(--seno-green-50);
     color: var(--seno-green);
   }
   .cartao {
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
-    border-radius: 12px;
+    border-radius: var(--raio-lg);
     padding: 1.3rem;
     display: flex;
     flex-direction: column;
@@ -188,21 +178,12 @@
     font-weight: 600;
     color: var(--seno-gray-700);
   }
-  input,
-  textarea {
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 8px;
-    padding: 0.45rem 0.6rem;
-    font-size: 0.9rem;
-    background: var(--seno-gray-100);
-    font-family: inherit;
-  }
-  fieldset input {
+    fieldset input {
     background: var(--seno-white);
   }
   fieldset {
     border: 1px solid var(--seno-gray-200);
-    border-radius: 10px;
+    border-radius: var(--raio-lg);
     padding: 0.75rem 0.95rem;
     display: flex;
     flex-direction: column;
@@ -241,13 +222,13 @@
     color: var(--seno-gray-700);
   }
   .resultados li.ok .veredito {
-    background: #e6f4ea;
+    background: var(--seno-green-50);
     color: var(--seno-green);
   }
   .veredito {
-    border-radius: 999px;
+    border-radius: var(--raio-pill);
     padding: 0.1rem 0.5rem;
-    background: #fdecea;
+    background: var(--seno-red-50);
     color: var(--seno-red);
     font-size: 0.74rem;
   }
@@ -256,7 +237,7 @@
     white-space: pre-wrap;
     font-size: 0.78rem;
     background: var(--seno-gray-100);
-    border-radius: 6px;
+    border-radius: var(--raio-sm);
     padding: 0.35rem 0.5rem;
   }
   details summary {
@@ -270,7 +251,7 @@
     background: var(--seno-blue-600);
     color: var(--seno-white);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.6rem 1.2rem;
     font-weight: 600;
     cursor: pointer;
@@ -291,7 +272,7 @@
     background: var(--seno-blue-600);
     color: var(--seno-white);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.5rem 0.9rem;
     cursor: pointer;
     font-size: 0.9rem;
@@ -300,10 +281,10 @@
     background: var(--seno-blue-700);
   }
   .acao.verde {
-    background: #2f855a;
+    background: var(--seno-green);
   }
   .acao.verde:hover {
-    background: #276749;
+    background: var(--seno-green);
   }
   .acao.cinza {
     background: var(--seno-gray-600);
@@ -312,31 +293,10 @@
     background: var(--seno-gray-700);
   }
 
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .aviso.ok {
-    background: var(--seno-blue-100);
-    color: var(--seno-blue-800);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .voltar {
-    color: var(--seno-blue-600);
-    text-decoration: none;
-    font-size: 0.9rem;
-  }
-  .bloco-enunciado {
-    background: var(--seno-gray-100, #f8f9fa);
-    border: 1px solid var(--seno-gray-200, #e9ecef);
-    border-radius: 6px;
+        .bloco-enunciado {
+    background: var(--seno-gray-100);
+    border: 1px solid var(--seno-gray-200);
+    border-radius: var(--raio-sm);
     padding: 0.75rem 1rem;
     margin-bottom: 0.75rem;
   }
@@ -344,14 +304,14 @@
     display: block;
     font-weight: 600;
     font-size: 0.85rem;
-    color: var(--seno-gray-700, #495057);
+    color: var(--seno-gray-700);
     margin-bottom: 0.35rem;
   }
   .texto-enunciado {
     margin: 0;
     white-space: pre-wrap;
     font-size: 0.9rem;
-    color: var(--seno-gray-800, #212529);
+    color: var(--seno-gray-800);
     line-height: 1.5;
   }
   .bloco-codigo {

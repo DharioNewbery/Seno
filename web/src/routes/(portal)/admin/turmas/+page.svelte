@@ -96,19 +96,14 @@
   .cabeca h2 {
     margin: 0;
   }
-  .total {
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-    font-weight: 400;
-  }
-  .filtros {
+    .filtros {
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
   }
   .filtros select {
     border: 1px solid var(--seno-gray-300);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.5rem 0.6rem;
     background: var(--seno-white);
     font-size: 0.88rem;
@@ -117,7 +112,7 @@
     background: var(--seno-blue-600);
     color: var(--seno-white);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.5rem 0.9rem;
     font-size: 0.88rem;
     cursor: pointer;
@@ -125,34 +120,7 @@
   .filtros button:hover {
     background: var(--seno-blue-700);
   }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .lista {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-  }
-  .lista li {
-    background: var(--seno-white);
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
-    padding: 0.85rem 1.05rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-  .identidade {
+        .identidade {
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
@@ -161,37 +129,4 @@
     color: var(--seno-gray-500);
     font-size: 0.83rem;
   }
-  .estado {
-    font-size: 0.73rem;
-    border-radius: 999px;
-    padding: 0.18rem 0.55rem;
-  }
-  .estado.ativa {
-    background: #e6f4ea;
-    color: var(--seno-green);
-  }
-  .estado.encerrada {
-    background: var(--seno-gray-100);
-    color: var(--seno-gray-700);
-  }
-  .vazio {
-    color: var(--seno-gray-500);
-    justify-content: center !important;
-  }
-  .paginacao {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1rem;
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-  }
-  .paginacao a {
-    color: var(--seno-blue-600);
-    text-decoration: none;
-  }
-  .paginacao a.desab {
-    color: var(--seno-gray-300);
-    pointer-events: none;
-  }
-</style>
+              </style>

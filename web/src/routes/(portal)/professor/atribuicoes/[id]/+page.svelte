@@ -105,14 +105,10 @@
   .cabeca h2 {
     margin: 0 0 0.2rem;
   }
-  .meta {
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-  }
-  .cartao {
+    .cartao {
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
-    border-radius: 12px;
+    border-radius: var(--raio-lg);
     padding: 1.4rem;
     display: flex;
     flex-direction: column;
@@ -136,16 +132,7 @@
   label.linha span {
     font-weight: 500;
   }
-  input,
-  select {
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 8px;
-    padding: 0.45rem 0.6rem;
-    font-size: 0.9rem;
-    background: var(--seno-gray-100);
-    font-family: inherit;
-  }
-  .botoes {
+    .botoes {
     display: flex;
     align-items: center;
     gap: 0.8rem;
@@ -154,7 +141,7 @@
     background: var(--seno-blue-600);
     color: var(--seno-white);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.6rem 1.2rem;
     font-weight: 600;
     cursor: pointer;
@@ -170,33 +157,12 @@
     background: none;
     color: var(--seno-red);
     border: 1px solid var(--seno-red);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.45rem 0.9rem;
     cursor: pointer;
     font-size: 0.86rem;
   }
   .acao.vermelha:hover {
-    background: #fdecea;
+    background: var(--seno-red-50);
   }
-  .voltar {
-    color: var(--seno-blue-600);
-    text-decoration: none;
-    font-size: 0.9rem;
-  }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .aviso.ok {
-    background: var(--seno-blue-100);
-    color: var(--seno-blue-800);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-</style>
+      </style>

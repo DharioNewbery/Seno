@@ -75,59 +75,7 @@
   .cabeca h2 {
     margin: 0;
   }
-  .total {
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-    font-weight: 400;
-  }
-  .nova {
-    background: var(--seno-blue-600);
-    color: var(--seno-white);
-    border-radius: 8px;
-    padding: 0.45rem 0.9rem;
-    text-decoration: none;
-    font-size: 0.9rem;
-    font-weight: 600;
-  }
-  .nova:hover {
-    background: var(--seno-blue-700);
-  }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .aviso.ok {
-    background: var(--seno-blue-100);
-    color: var(--seno-blue-800);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .lista {
-    list-style: none;
-    padding: 0;
-    margin: 0.4rem 0 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-  }
-  .lista li {
-    background: var(--seno-white);
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
-    padding: 0.8rem 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.7rem;
-    flex-wrap: wrap;
-  }
-  .identidade {
+                .identidade {
     display: flex;
     flex-direction: column;
   }
@@ -159,28 +107,4 @@
     text-decoration: none;
     font-size: 0.86rem;
   }
-  .peq {
-    background: var(--seno-blue-600);
-    color: var(--seno-white);
-    border: none;
-    border-radius: 8px;
-    padding: 0.32rem 0.7rem;
-    font-size: 0.8rem;
-    cursor: pointer;
-  }
-  .peq.vermelho {
-    background: none;
-    color: var(--seno-red);
-    border: 1px solid var(--seno-red);
-  }
-  .peq.vermelho:hover {
-    background: #fdecea;
-  }
-  .peq:hover {
-    background: var(--seno-blue-700);
-  }
-  .vazio {
-    color: var(--seno-gray-500);
-    justify-content: center !important;
-  }
-</style>
+          </style>

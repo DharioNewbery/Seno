@@ -97,54 +97,7 @@
   .cabeca h2 {
     margin: 0;
   }
-  .total {
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-    font-weight: 400;
-  }
-  .nova {
-    background: var(--seno-blue-600);
-    color: var(--seno-white);
-    border-radius: 8px;
-    padding: 0.45rem 0.9rem;
-    text-decoration: none;
-    font-size: 0.9rem;
-    font-weight: 600;
-  }
-  .nova:hover {
-    background: var(--seno-blue-700);
-  }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .aviso.ok {
-    background: var(--seno-blue-100);
-    color: var(--seno-blue-800);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .lista {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-  }
-  .lista li {
-    background: var(--seno-white);
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
-    padding: 0.85rem 1.05rem;
-  }
-  .linha {
+                .linha {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -180,7 +133,7 @@
     background: var(--seno-blue-600);
     color: var(--seno-white);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.35rem 0.75rem;
     font-size: 0.82rem;
     cursor: pointer;
@@ -189,27 +142,15 @@
   .edicao button:hover {
     background: var(--seno-blue-700);
   }
-  .peq.vermelho {
-    background: none;
-    color: var(--seno-red);
-    border: 1px solid var(--seno-red);
-  }
-  .peq.vermelho:hover {
-    background: #fdecea;
-  }
-  .edicao {
+      .edicao {
     display: flex;
     gap: 0.4rem;
     flex-wrap: wrap;
   }
   .edicao input {
     border: 1px solid var(--seno-gray-300);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.45rem 0.6rem;
     font-size: 0.88rem;
   }
-  .vazio {
-    color: var(--seno-gray-500);
-    text-align: center;
-  }
-</style>
+  </style>

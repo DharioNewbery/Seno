@@ -65,39 +65,7 @@
   .cabeca h2 {
     margin: 0;
   }
-  .total {
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-    font-weight: 400;
-  }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .lista {
-    list-style: none;
-    padding: 0;
-    margin: 0.4rem 0 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-  }
-  .lista li {
-    background: var(--seno-white);
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
-    padding: 0.85rem 1.05rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.8rem;
-    flex-wrap: wrap;
-  }
-  .identidade {
+          .identidade {
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
@@ -105,29 +73,12 @@
   .identidade strong {
     color: var(--seno-blue-900);
   }
-  .meta {
-    color: var(--seno-gray-500);
-    font-size: 0.83rem;
-  }
-  .acao-area {
+    .acao-area {
     display: flex;
     align-items: center;
     gap: 0.5rem;
   }
-  .estado {
-    font-size: 0.73rem;
-    border-radius: 999px;
-    padding: 0.18rem 0.55rem;
-  }
-  .estado.ativa {
-    background: #e6f4ea;
-    color: var(--seno-green);
-  }
-  .estado.encerrada {
-    background: var(--seno-gray-100);
-    color: var(--seno-gray-700);
-  }
-  .titulo-link {
+        .titulo-link {
     text-decoration: none;
     color: inherit;
   }
@@ -135,18 +86,7 @@
     text-decoration: underline;
     color: var(--seno-blue-700);
   }
-  .abrir {
-    background: var(--seno-blue-600);
-    color: var(--seno-white);
-    border-radius: 8px;
-    padding: 0.4rem 0.8rem;
-    text-decoration: none;
-    font-size: 0.86rem;
-  }
-  .abrir:hover {
-    background: var(--seno-blue-700);
-  }
-  .abrir.secundario {
+      .abrir.secundario {
     background: var(--seno-gray-100);
     color: var(--seno-gray-700);
     border: 1px solid var(--seno-gray-300);
@@ -154,8 +94,4 @@
   .abrir.secundario:hover {
     background: var(--seno-gray-200);
   }
-  .vazio {
-    color: var(--seno-gray-500);
-    justify-content: center !important;
-  }
-</style>
+  </style>

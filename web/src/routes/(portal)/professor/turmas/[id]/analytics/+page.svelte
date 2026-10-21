@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dataHora, soData } from "#lib/formato";
   import type { PageProps } from "./$types";
 
   let { data }: PageProps = $props();
@@ -79,7 +80,7 @@
                         <strong>{a.atividade_nome}</strong>
                       </a>
                     </td>
-                    <td>{a.prazo ? new Date(a.prazo).toLocaleDateString("pt-BR") : "Sem prazo"}</td>
+                    <td>{a.prazo ? soData(a.prazo) : "Sem prazo"}</td>
                     <td>
                       <div class="barra-container">
                         <div class="barra" style={`width: ${Math.min(100, a.taxa_entrega)}%`}></div>
@@ -205,9 +206,9 @@
                   </span>
                 </div>
                 <div class="item-detalhes">
-                  <span>Prazo: {it.prazo ? new Date(it.prazo).toLocaleString("pt-BR") : "Sem prazo"}</span>
+                  <span>Prazo: {it.prazo ? dataHora(it.prazo) : "Sem prazo"}</span>
                   {#if it.entregue_em}
-                    <span>Entregue em: {new Date(it.entregue_em).toLocaleString("pt-BR")}</span>
+                    <span>Entregue em: {dataHora(it.entregue_em)}</span>
                   {/if}
                   {#if it.tempo_gasto_seg}
                     <span>Tempo de execução: {formatarMinutos(it.tempo_gasto_seg)}</span>
@@ -233,19 +234,10 @@
     flex-direction: column;
     gap: 1.25rem;
   }
-  .voltar {
-    color: var(--seno-primary, #0056b3);
-    text-decoration: none;
-    font-size: 0.9rem;
-    font-weight: 500;
-  }
-  .voltar:hover {
-    text-decoration: underline;
-  }
-  .cabeca-analytics {
-    background: var(--seno-white, #fff);
-    border: 1px solid var(--seno-gray-300, #ddd);
-    border-radius: 12px;
+      .cabeca-analytics {
+    background: var(--seno-white);
+    border: 1px solid var(--seno-gray-300);
+    border-radius: var(--raio-lg);
     padding: 1.25rem 1.5rem;
     display: flex;
     justify-content: space-between;
@@ -255,7 +247,7 @@
   }
   .materia {
     font-size: 0.85rem;
-    color: var(--seno-gray-500, #666);
+    color: var(--seno-gray-500);
     font-weight: 600;
     text-transform: uppercase;
   }
@@ -269,16 +261,16 @@
   }
   .aba {
     padding: 0.45rem 0.9rem;
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     text-decoration: none;
-    color: var(--seno-gray-700, #444);
+    color: var(--seno-gray-700);
     font-weight: 500;
     font-size: 0.9rem;
-    background: #f1f3f4;
+    background: var(--seno-gray-100);
   }
   .aba.ativa {
-    background: var(--seno-primary, #0056b3);
-    color: #fff;
+    background: var(--seno-primary);
+    color: var(--seno-white);
   }
   .grade-resumo {
     display: grid;
@@ -286,9 +278,9 @@
     gap: 1rem;
   }
   .card-metrica {
-    background: var(--seno-white, #fff);
-    border: 1px solid var(--seno-gray-300, #ddd);
-    border-radius: 10px;
+    background: var(--seno-white);
+    border: 1px solid var(--seno-gray-300);
+    border-radius: var(--raio-lg);
     padding: 1.2rem;
     display: flex;
     flex-direction: column;
@@ -296,18 +288,18 @@
   }
   .card-metrica .rotulo {
     font-size: 0.8rem;
-    color: var(--seno-gray-500, #666);
+    color: var(--seno-gray-500);
     text-transform: uppercase;
     font-weight: 600;
   }
   .card-metrica .valor {
     font-size: 1.8rem;
-    color: var(--seno-primary, #0056b3);
+    color: var(--seno-primary);
   }
   .tabela-secao {
-    background: var(--seno-white, #fff);
-    border: 1px solid var(--seno-gray-300, #ddd);
-    border-radius: 12px;
+    background: var(--seno-white);
+    border: 1px solid var(--seno-gray-300);
+    border-radius: var(--raio-lg);
     padding: 1.25rem;
   }
   .tabela-secao h2 {
@@ -324,12 +316,12 @@
   }
   .tabela th, .tabela td {
     padding: 0.75rem 0.9rem;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--seno-line);
     text-align: left;
   }
   .tabela th {
-    background: #f8f9fa;
-    color: var(--seno-gray-600, #555);
+    background: var(--seno-gray-50);
+    color: var(--seno-gray-600);
     font-weight: 600;
   }
   .barra-container {
@@ -341,15 +333,15 @@
   .barra {
     height: 8px;
     background: #34a853;
-    border-radius: 4px;
+    border-radius: var(--raio-sm);
     max-width: 60px;
   }
   .taxa {
     font-size: 0.82rem;
-    color: #444;
+    color: var(--seno-gray-700);
   }
   .atraso-alerta {
-    color: #d93025;
+    color: var(--seno-red);
     font-weight: 600;
   }
   .link-destaque {
@@ -358,22 +350,22 @@
   }
   .link-destaque:hover {
     text-decoration: underline;
-    color: var(--seno-primary, #0056b3);
+    color: var(--seno-primary);
   }
   .seletor-container {
     display: flex;
     align-items: center;
     gap: 0.8rem;
-    background: var(--seno-white, #fff);
-    border: 1px solid var(--seno-gray-300, #ddd);
-    border-radius: 10px;
+    background: var(--seno-white);
+    border: 1px solid var(--seno-gray-300);
+    border-radius: var(--raio-lg);
     padding: 0.9rem 1.2rem;
     font-size: 0.95rem;
   }
   .seletor-container select {
     padding: 0.4rem 0.8rem;
-    border-radius: 6px;
-    border: 1px solid var(--seno-gray-300, #ccc);
+    border-radius: var(--raio-sm);
+    border: 1px solid var(--seno-gray-300);
     font-size: 0.9rem;
   }
   .grade-tarefas {
@@ -383,9 +375,9 @@
     margin-top: 1rem;
   }
   .card-tarefa {
-    background: var(--seno-white, #fff);
-    border: 1px solid var(--seno-gray-300, #ddd);
-    border-radius: 10px;
+    background: var(--seno-white);
+    border: 1px solid var(--seno-gray-300);
+    border-radius: var(--raio-lg);
     padding: 1.1rem;
     display: flex;
     flex-direction: column;
@@ -395,12 +387,12 @@
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--seno-line);
     padding-bottom: 0.5rem;
   }
   .card-tarefa-header .pts {
     font-size: 0.85rem;
-    color: var(--seno-gray-500, #666);
+    color: var(--seno-gray-500);
   }
   .metricas-tarefa {
     display: flex;
@@ -413,16 +405,16 @@
     justify-content: space-between;
   }
   .taxa-acerto {
-    color: #137333;
+    color: var(--seno-green);
   }
   .vereditos {
-    border-top: 1px dashed #ddd;
+    border-top: 1px dashed var(--seno-gray-300);
     padding-top: 0.6rem;
     font-size: 0.82rem;
   }
   .titulo-v {
     font-weight: 600;
-    color: var(--seno-gray-600, #555);
+    color: var(--seno-gray-600);
   }
   .vereditos ul {
     list-style: none;
@@ -445,9 +437,9 @@
     gap: 0.8rem;
   }
   .timeline-item {
-    background: var(--seno-white, #fff);
-    border: 1px solid var(--seno-gray-300, #ddd);
-    border-radius: 10px;
+    background: var(--seno-white);
+    border: 1px solid var(--seno-gray-300);
+    border-radius: var(--raio-lg);
     padding: 1rem 1.25rem;
     display: flex;
     flex-direction: column;
@@ -463,38 +455,27 @@
     gap: 1.5rem;
     flex-wrap: wrap;
     font-size: 0.85rem;
-    color: var(--seno-gray-600, #666);
+    color: var(--seno-gray-600);
   }
   .status-pill {
     padding: 0.2rem 0.55rem;
-    border-radius: 999px;
+    border-radius: var(--raio-pill);
     font-size: 0.75rem;
     font-weight: 600;
   }
   .status-pill.entregue {
-    background: #e6f4ea;
-    color: #137333;
+    background: var(--seno-green-50);
+    color: var(--seno-green);
   }
   .status-pill.rascunho {
-    background: #fef7e0;
-    color: #b06000;
+    background: var(--seno-amber-50);
+    color: var(--seno-amber);
   }
   .status-pill.pendente {
-    background: #f1f3f4;
-    color: #5f6368;
+    background: var(--seno-gray-100);
+    color: var(--seno-gray-500);
   }
   .nota-pub {
     color: #1a73e8;
   }
-  .vazio {
-    padding: 2rem;
-    text-align: center;
-    color: var(--seno-gray-500, #666);
-  }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red, #c00);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-  }
-</style>
+    </style>

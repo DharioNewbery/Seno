@@ -86,7 +86,7 @@
 
 <div class="paginacao">
   <a href={paginadora(-1)} class:desab={pagina <= 1}>← Anterior</a>
-  <span>El: {pagina}</span>
+  <span>Página {pagina}</span>
   <a href={paginadora(1)} class:desab={pagina * por >= data.total}>Próxima →</a>
 </div>
 
@@ -104,30 +104,13 @@
   .cabecalho h2 {
     margin: 0;
   }
-  .total {
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-    font-weight: 400;
-  }
-  .nova {
-    background: var(--seno-blue-600);
-    color: var(--seno-white);
-    border-radius: 8px;
-    padding: 0.45rem 0.9rem;
-    text-decoration: none;
-    font-size: 0.9rem;
-    font-weight: 600;
-  }
-  .nova:hover {
-    background: var(--seno-blue-700);
-  }
-  .filtros {
+        .filtros {
     display: flex;
     gap: 0.4rem;
   }
   .filtros a {
     border: 1px solid var(--seno-gray-300);
-    border-radius: 999px;
+    border-radius: var(--raio-pill);
     padding: 0.25rem 0.8rem;
     color: var(--seno-gray-700);
     font-size: 0.83rem;
@@ -140,34 +123,7 @@
     color: var(--seno-blue-800);
     font-weight: 600;
   }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .lista {
-    list-style: none;
-    padding: 0;
-    margin: 0.5rem 0 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-  }
-  .lista li {
-    background: var(--seno-white);
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
-    padding: 0.9rem 1.1rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.8rem;
-    flex-wrap: wrap;
-  }
-  .identidade {
+        .identidade {
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
@@ -181,48 +137,4 @@
     align-items: center;
     gap: 0.5rem;
   }
-  .estado {
-    font-size: 0.73rem;
-    border-radius: 999px;
-    padding: 0.18rem 0.55rem;
-  }
-  .estado.ativa {
-    background: #e6f4ea;
-    color: var(--seno-green);
-  }
-  .estado.encerrada {
-    background: var(--seno-gray-100);
-    color: var(--seno-gray-700);
-  }
-  .abrir {
-    background: var(--seno-blue-600);
-    color: var(--seno-white);
-    border-radius: 8px;
-    padding: 0.4rem 0.8rem;
-    text-decoration: none;
-    font-size: 0.86rem;
-  }
-  .abrir:hover {
-    background: var(--seno-blue-700);
-  }
-  .vazio {
-    color: var(--seno-gray-500);
-    justify-content: center !important;
-  }
-  .paginacao {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1rem;
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-  }
-  .paginacao a {
-    color: var(--seno-blue-600);
-    text-decoration: none;
-  }
-  .paginacao a.desab {
-    color: var(--seno-gray-300);
-    pointer-events: none;
-  }
-</style>
+                  </style>

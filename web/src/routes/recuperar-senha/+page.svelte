@@ -1,6 +1,5 @@
 <script lang="ts">
-  import Logo from "#lib/components/Logo.svelte";
-  import { NOME_SISTEMA } from "#lib/config";
+  import TelaAcesso from "#lib/components/TelaAcesso.svelte";
 
   let email = $state("");
   let enviando = $state(false);
@@ -34,14 +33,9 @@
   }
 </script>
 
-<main class="recuperar">
-  <div class="marca">
-    <Logo tamanho={32} />
-    <h1>{NOME_SISTEMA}</h1>
-  </div>
-
+<TelaAcesso>
   {#if enviado}
-    <section class="cartao">
+    <section class="formulario">
       <h2>Pedido enviado</h2>
       <p>
         Se o e-mail estiver cadastrado, você receberá um link para redefinir a
@@ -50,7 +44,7 @@
       <a class="voltar" href="/">Voltar ao login</a>
     </section>
   {:else}
-    <form class="cartao" onsubmit={pedir}>
+    <form class="formulario" onsubmit={pedir}>
       <h2>Recuperar senha</h2>
       <p class="dica">
         Enviaremos um link de redefinição (uso único) para o seu e-mail.
@@ -74,107 +68,4 @@
       <a class="voltar" href="/">Voltar ao login</a>
     </form>
   {/if}
-</main>
-
-<style>
-  .recuperar {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1.25rem;
-    padding: 2rem;
-  }
-
-  .marca {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  .marca h1 {
-    margin: 0;
-    font-size: 1.6rem;
-  }
-
-  .cartao {
-    width: 100%;
-    max-width: 400px;
-    background: var(--seno-white);
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 12px;
-    padding: 2rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .cartao h2 {
-    margin: 0;
-  }
-
-  .dica {
-    margin: 0;
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-  }
-
-  label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  label span {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--seno-gray-700);
-  }
-
-  input {
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 8px;
-    padding: 0.65rem 0.75rem;
-    font-size: 1rem;
-    background: var(--seno-gray-100);
-  }
-
-  input:focus {
-    outline: 2px solid var(--seno-blue-500);
-    outline-offset: 1px;
-    border-color: var(--seno-blue-500);
-  }
-
-  button {
-    background: var(--seno-blue-600);
-    color: var(--seno-white);
-    border: none;
-    border-radius: 8px;
-    padding: 0.75rem;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  button:hover {
-    background: var(--seno-blue-700);
-  }
-
-  button:disabled {
-    opacity: 0.6;
-    cursor: wait;
-  }
-
-  .erro {
-    margin: 0;
-    color: var(--seno-red);
-    font-size: 0.9rem;
-  }
-
-  .voltar {
-    color: var(--seno-blue-600);
-    font-size: 0.9rem;
-    text-align: center;
-  }
-</style>
+</TelaAcesso>

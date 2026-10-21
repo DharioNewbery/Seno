@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dataHora, prazoRelativo } from "#lib/formato";
   // Atividades do aluno (atribuições das minhas turmas): filtro por
   // turma, estado do rascunho e prazo; correção publicada no portal.
   import { page } from "$app/state";
@@ -32,7 +33,7 @@
 
   function paraTexto(iso: string | undefined): string {
     if (!iso) return "Sem prazo";
-    return `Prazo ${new Date(iso).toLocaleString("pt-BR")}`;
+    return `Prazo ${dataHora(iso)}`;
   }
 
   const turmaFiltrada = $derived(
@@ -69,12 +70,16 @@
 
   <ul class="lista">
     {#each atribuicoes as a (a.id)}
+      {@const rel = a.entregue ? null : prazoRelativo(a.prazo)}
       <li>
         <div class="identidade">
           <strong>{a.atividade_nome}</strong>
           <span class="meta">
-            {a.materia_codigo} · {a.turma_titulo || `Turma ${a.turma_id}`} ·
+            {a.materia_codigo} · {a.turma_titulo || `Turma ${a.turma_id}`}
+          </span>
+          <span class="meta">
             {paraTexto(a.prazo)}
+            {#if rel}<b class="rel {rel.tom}">{rel.rotulo}</b>{/if}
             {#if a.pode_atrasado}· atraso permitido{/if}
           </span>
         </div>
@@ -87,7 +92,7 @@
               {a.em_andamento ? `Continuar (rev. ${a.minha_revisao})` : "Abrir"} →
             </a>
           {:else if a.entregue}
-            <span class="meta">Entregue em {a.entregue_em ? new Date(a.entregue_em).toLocaleString("pt-BR") : ""}</span>
+            <span class="meta">Entregue em {a.entregue_em ? dataHora(a.entregue_em) : ""}</span>
             {#if a.publicada_em}
               <a class="corrigido" href={`/aluno/submissao/${a.submissao_id}`}>Correção publicada →</a>
             {/if}
@@ -124,12 +129,7 @@
   .cabeca h2 {
     margin: 0;
   }
-  .total {
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-    font-weight: 400;
-  }
-  .filtro {
+    .filtro {
     color: var(--seno-gray-500);
     font-size: 0.85rem;
     font-weight: 400;
@@ -139,22 +139,14 @@
     text-decoration: none;
     font-size: 0.88rem;
   }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .turmas {
+    .turmas {
     display: flex;
     gap: 0.4rem;
     flex-wrap: wrap;
   }
   .turmas a {
     border: 1px solid var(--seno-gray-300);
-    border-radius: 999px;
+    border-radius: var(--raio-pill);
     padding: 0.25rem 0.8rem;
     color: var(--seno-gray-700);
     font-size: 0.83rem;
@@ -167,26 +159,7 @@
     color: var(--seno-blue-800);
     font-weight: 600;
   }
-  .lista {
-    list-style: none;
-    padding: 0;
-    margin: 0.4rem 0 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-  }
-  .lista li {
-    background: var(--seno-white);
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
-    padding: 0.85rem 1.05rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.8rem;
-    flex-wrap: wrap;
-  }
-  .identidade {
+      .identidade {
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
@@ -194,26 +167,29 @@
   .identidade strong {
     color: var(--seno-blue-900);
   }
-  .meta {
-    color: var(--seno-gray-500);
-    font-size: 0.83rem;
+    .rel {
+    font-weight: 600;
+  }
+  .rel.folga {
+    color: var(--seno-gray-700);
+  }
+  .rel.breve {
+    color: var(--seno-amber);
+  }
+  .rel.vencido {
+    color: var(--seno-red);
   }
   .acao-area {
     display: flex;
     align-items: center;
     gap: 0.5rem;
   }
-  .estado {
-    font-size: 0.73rem;
-    border-radius: 999px;
-    padding: 0.18rem 0.55rem;
-  }
-  .estado.nao {
+    .estado.nao {
     background: var(--seno-gray-100);
     color: var(--seno-gray-700);
   }
   .estado.andamento {
-    background: #e6f4ea;
+    background: var(--seno-green-50);
     color: var(--seno-green);
   }
   .estado.entregue {
@@ -221,30 +197,15 @@
     color: var(--seno-blue-800);
   }
   .estado.encerrada {
-    background: #fdecea;
+    background: var(--seno-red-50);
     color: var(--seno-red);
   }
-  .abrir {
-    background: var(--seno-blue-600);
-    color: var(--seno-white);
-    border-radius: 8px;
-    padding: 0.4rem 0.8rem;
-    text-decoration: none;
-    font-size: 0.86rem;
-  }
-  .abrir:hover {
-    background: var(--seno-blue-700);
-  }
-  .corrigido {
+      .corrigido {
     color: var(--seno-blue-600);
     text-decoration: none;
     font-size: 0.86rem;
   }
-  .vazio {
-    color: var(--seno-gray-500);
-    justify-content: center !important;
-  }
-  .nota {
+    .nota {
     color: var(--seno-gray-500);
     font-size: 0.82rem;
     margin: 0;

@@ -229,30 +229,10 @@
     color: var(--seno-red);
     font-size: 0.83rem;
   }
-  .peq {
-    background: var(--seno-blue-600);
-    color: var(--seno-white);
-    border: none;
-    border-radius: 8px;
-    padding: 0.35rem 0.75rem;
-    font-size: 0.83rem;
-    cursor: pointer;
-  }
-  .peq.vermelho {
-    background: none;
-    color: var(--seno-red);
-    border: 1px solid var(--seno-red);
-  }
-  .peq.vermelho:hover {
-    background: #fdecea;
-  }
-  .peq:hover {
-    background: var(--seno-blue-700);
-  }
-  .cartao {
+          .cartao {
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
-    border-radius: 12px;
+    border-radius: var(--raio-lg);
     padding: 1.4rem;
     display: flex;
     flex-direction: column;
@@ -268,16 +248,7 @@
     font-weight: 600;
     color: var(--seno-gray-700);
   }
-  input,
-  textarea {
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 8px;
-    padding: 0.5rem 0.65rem;
-    font-size: 0.9rem;
-    font-family: inherit;
-    background: var(--seno-gray-100);
-  }
-  fieldset input,
+    fieldset input,
   fieldset textarea {
     background: var(--seno-white);
   }
@@ -295,7 +266,7 @@
   }
   fieldset {
     border: 1px solid var(--seno-gray-200);
-    border-radius: 10px;
+    border-radius: var(--raio-lg);
     padding: 0.8rem 1rem;
     display: flex;
     flex-direction: column;
@@ -321,16 +292,11 @@
   .linha-pequena span {
     font-weight: 500;
   }
-  .dica {
-    color: var(--seno-gray-500);
-    font-size: 0.82rem;
-    margin: 0;
-  }
-  .cartao > button {
+    .cartao > button {
     background: var(--seno-blue-600);
     color: var(--seno-white);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.65rem;
     font-weight: 600;
     cursor: pointer;
@@ -338,23 +304,7 @@
   .cartao > button:hover {
     background: var(--seno-blue-700);
   }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .aviso.ok {
-    background: var(--seno-blue-100);
-    color: var(--seno-blue-800);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .teste-banco h3 {
+      .teste-banco h3 {
     margin: 0;
   }
   .teste-banco .dica {
@@ -377,13 +327,13 @@
     align-items: center;
   }
   .resultados-banco li.ok .veredito {
-    background: #e6f4ea;
+    background: var(--seno-green-50);
     color: var(--seno-green);
   }
   .veredito {
-    border-radius: 999px;
+    border-radius: var(--raio-pill);
     padding: 0.1rem 0.5rem;
-    background: #fdecea;
+    background: var(--seno-red-50);
     color: var(--seno-red);
     font-size: 0.74rem;
   }
@@ -394,7 +344,7 @@
   .metricas-tarefa-cartao {
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
+    border-radius: var(--raio-lg);
     padding: 1.1rem 1.3rem;
   }
   .metricas-tarefa-cartao h3 {

@@ -50,10 +50,10 @@
 
 <style>
   .editor-codigo-container {
-    border: 1px solid var(--seno-gray-300, #ccc);
-    border-radius: 8px;
+    border: 1px solid var(--seno-gray-300);
+    border-radius: var(--raio-md);
     overflow: hidden;
-    background: #fff;
+    background: var(--seno-white);
     min-height: 180px;
     margin: 0.4rem 0;
   }

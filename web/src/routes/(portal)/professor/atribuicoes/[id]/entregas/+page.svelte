@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dataHora } from "#lib/formato";
   // Entregas da atribuição: quem entregou, em quanto e atrasadas —
   // cada entrega abre o painel de correção e permite ações do professor
   // (coletar rascunho vencido, excluir submissão, reexecutar testes).
@@ -44,14 +45,14 @@
           <span class="meta">
             {e.aluno_email} ·
             {#if e.comecou_em}
-              com. {new Date(e.comecou_em).toLocaleString("pt-BR")}
+              com. {dataHora(e.comecou_em)}
             {/if}
             {#if e.estado === "rascunho"}
               · <span class="badge rascunho">Rascunho não entregue</span>
             {:else if e.entregue_em}
-              → ent. {new Date(e.entregue_em).toLocaleString("pt-BR")}
+              → ent. {dataHora(e.entregue_em)}
             {/if}
-            {#if e.atrasada}· <span style:color="#c0392b">atrasada</span>{/if}
+            {#if e.atrasada}· <span style:color="var(--seno-red)">atrasada</span>{/if}
             {#if e.do_monitor && e.nota_monitor != null}
               · nota (auto) {e.nota_monitor}
             {/if}
@@ -131,74 +132,19 @@
   .cabeca h2 {
     margin: 0 0 0.2rem;
   }
-  .meta {
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-  }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .lista {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-  }
-  .lista li {
-    background: var(--seno-white);
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
-    padding: 0.8rem 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.7rem;
-    flex-wrap: wrap;
-  }
-  .identidade {
+          .identidade {
     display: flex;
     flex-direction: column;
     gap: 0.15rem;
   }
-  .abrir {
-    background: var(--seno-blue-600);
-    color: var(--seno-white);
-    border-radius: 8px;
-    padding: 0.4rem 0.8rem;
-    text-decoration: none;
-    font-size: 0.86rem;
-  }
-  .abrir:hover {
-    background: var(--seno-blue-700);
-  }
-  .voltar {
-    color: var(--seno-blue-600);
-    text-decoration: none;
-    font-size: 0.9rem;
-  }
-  .botao.publicar {
-    background: #2f855a;
+        .botao.publicar {
+    background: var(--seno-green);
     color: var(--seno-white);
   }
   .botao.publicar:hover {
-    background: #276749;
+    background: var(--seno-green);
   }
-  .aviso.ok {
-    background: #e6f4ea;
-    color: var(--seno-green);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .acoes-linha {
+    .acoes-linha {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -209,25 +155,25 @@
   }
   .botao {
     border: none;
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.4rem 0.75rem;
     font-size: 0.84rem;
     cursor: pointer;
     font-weight: 500;
   }
   .botao.coletar {
-    background: #d97706;
+    background: var(--seno-amber-500);
     color: var(--seno-white);
   }
   .botao.coletar:hover {
-    background: #b45309;
+    background: var(--seno-amber);
   }
   .botao.perigo {
-    background: #fdecea;
+    background: var(--seno-red-50);
     color: var(--seno-red);
   }
   .botao.perigo:hover {
-    background: #fad2cf;
+    background: var(--seno-red-200);
   }
   .botao.neutro {
     background: var(--seno-gray-200);
@@ -237,15 +183,11 @@
     background: var(--seno-gray-300);
   }
   .badge.rascunho {
-    background: #fef3c7;
+    background: var(--seno-amber-50);
     color: #92400e;
     padding: 0.15rem 0.45rem;
-    border-radius: 999px;
+    border-radius: var(--raio-pill);
     font-size: 0.76rem;
     font-weight: 500;
   }
-  .vazio {
-    color: var(--seno-gray-500);
-    justify-content: center !important;
-  }
-</style>
+  </style>

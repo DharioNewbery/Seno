@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dataHora } from "#lib/formato";
   // Fazer atividade (aluno): enunciados da atividade + Editor de código
   // com autosave local (IndexedDB) e remoto (15 s ou ao parar de digitar).
   import EditorCodigo from "#lib/components/EditorCodigo.svelte";
@@ -187,7 +188,7 @@
         <h2>{visao.atividade.nome}</h2>
         <span class="meta">
           {visao.atribuicao.prazo
-            ? `Prazo: ${new Date(visao.atribuicao.prazo).toLocaleString("pt-BR")}`
+            ? `Prazo: ${dataHora(visao.atribuicao.prazo)}`
             : "Sem prazo"}
           — atrasado: {visao.atribuicao.pode_atrasado ? "permitido" : "não permitido"}
         </span>
@@ -288,29 +289,25 @@
   .cabeca h2 {
     margin: 0 0 0.2rem;
   }
-  .meta {
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-  }
-  .estado-save {
+    .estado-save {
     font-size: 0.8rem;
-    border-radius: 999px;
+    border-radius: var(--raio-pill);
     padding: 0.25rem 0.7rem;
     background: var(--seno-gray-100);
     color: var(--seno-gray-700);
   }
   .estado-save[data-estado="salvo"] {
-    background: #e6f4ea;
+    background: var(--seno-green-50);
     color: var(--seno-green);
   }
   .estado-save[data-estado="erro"] {
-    background: #fdecea;
+    background: var(--seno-red-50);
     color: var(--seno-red);
   }
   .tarefa {
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
-    border-radius: 12px;
+    border-radius: var(--raio-lg);
     padding: 1rem 1.2rem;
     display: flex;
     flex-direction: column;
@@ -324,7 +321,7 @@
   .ordem {
     background: var(--seno-blue-600);
     color: var(--seno-white);
-    border-radius: 999px;
+    border-radius: var(--raio-pill);
     width: 1.6rem;
     height: 1.6rem;
     display: grid;
@@ -341,7 +338,7 @@
   .ling {
     margin-left: auto;
     font-size: 0.72rem;
-    border-radius: 999px;
+    border-radius: var(--raio-pill);
     padding: 0.15rem 0.6rem;
     background: var(--seno-gray-100);
     color: var(--seno-gray-700);
@@ -360,17 +357,17 @@
     background: none;
     color: var(--seno-blue-600);
     border: 1px solid var(--seno-blue-600);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.35rem 0.8rem;
     font-size: 0.85rem;
     cursor: pointer;
   }
   .testar button:hover {
-    background: #eaf2ff;
+    background: var(--seno-blue-100);
   }
   .testes {
     background: var(--seno-gray-100);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.5rem 0.7rem;
   }
   .testes ul {
@@ -389,13 +386,13 @@
     flex-wrap: wrap;
   }
   .testes li.ok .veredito {
-    background: #e6f4ea;
+    background: var(--seno-green-50);
     color: var(--seno-green);
   }
   .veredito {
-    border-radius: 999px;
+    border-radius: var(--raio-pill);
     padding: 0.1rem 0.5rem;
-    background: #fdecea;
+    background: var(--seno-red-50);
     color: var(--seno-red);
     font-size: 0.74rem;
   }
@@ -408,7 +405,7 @@
     white-space: pre-wrap;
     font-size: 0.78rem;
     background: var(--seno-white);
-    border-radius: 6px;
+    border-radius: var(--raio-sm);
     padding: 0.3rem 0.45rem;
   }
   details summary {
@@ -431,7 +428,7 @@
     background: var(--seno-blue-600);
     color: var(--seno-white);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.6rem 1.1rem;
     cursor: pointer;
   }
@@ -445,7 +442,7 @@
     border: 1px solid var(--seno-red);
   }
   .rodape .entregar:hover {
-    background: #fdecea;
+    background: var(--seno-red-50);
   }
   .confirma-entrega {
     display: flex;
@@ -453,7 +450,7 @@
     gap: 0.55rem;
     flex-wrap: wrap;
     background: var(--seno-gray-100);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.5rem 0.7rem;
     font-size: 0.85rem;
     color: var(--seno-gray-700);
@@ -462,7 +459,7 @@
     background: var(--seno-red);
     color: var(--seno-white);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.4rem 0.8rem;
     cursor: pointer;
   }
@@ -471,12 +468,4 @@
     color: var(--seno-gray-700);
     border: 1px solid var(--seno-gray-300);
   }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-</style>
+  </style>

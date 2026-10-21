@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dataHora } from "#lib/formato";
   import type { PageProps } from "./$types";
   import EditorCodigo from "#lib/components/EditorCodigo.svelte";
 
@@ -41,7 +42,7 @@
         <p class="meta">
           <span>Atividade: <strong>{atv.nome}</strong></span>
           <span>·</span>
-          <span>Entregue em: {new Date(sub.entregue_em).toLocaleString("pt-BR")}</span>
+          <span>Entregue em: {dataHora(sub.entregue_em)}</span>
           {#if sub.atrasada}
             <span class="badge perigo">Atrasada</span>
           {/if}
@@ -177,19 +178,10 @@
   .navegacao {
     margin-bottom: 0.25rem;
   }
-  .voltar {
-    color: var(--seno-blue-600);
-    text-decoration: none;
-    font-size: 0.9rem;
-    font-weight: 500;
-  }
-  .voltar:hover {
-    text-decoration: underline;
-  }
-  .cabecalho {
+      .cabecalho {
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
+    border-radius: var(--raio-lg);
     padding: 1.25rem;
     display: flex;
     align-items: center;
@@ -201,16 +193,7 @@
     margin: 0 0 0.4rem;
     font-size: 1.4rem;
   }
-  .meta {
-    margin: 0;
-    color: var(--seno-gray-600);
-    font-size: 0.9rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
-  .acoes {
+    .acoes {
     display: flex;
     align-items: center;
     gap: 1.2rem;
@@ -236,42 +219,42 @@
   }
   .botao {
     border: none;
-    border-radius: 6px;
+    border-radius: var(--raio-sm);
     padding: 0.45rem 0.85rem;
     font-size: 0.85rem;
     font-weight: 500;
     cursor: pointer;
   }
   .botao.neutro {
-    background: var(--seno-gray-200, #e9ecef);
-    color: var(--seno-gray-800, #343a40);
+    background: var(--seno-gray-200);
+    color: var(--seno-gray-800);
   }
   .botao.neutro:hover {
-    background: var(--seno-gray-300, #dee2e6);
+    background: var(--seno-gray-300);
   }
   .botao.perigo {
-    background: #fdecea;
-    color: var(--seno-red, #c0392b);
-    border: 1px solid #f5c6cb;
+    background: var(--seno-red-50);
+    color: var(--seno-red);
+    border: 1px solid var(--seno-red-200);
   }
   .botao.perigo:hover {
-    background: #f8d7da;
+    background: var(--seno-red-50);
   }
   .badge {
     display: inline-block;
     padding: 0.2rem 0.55rem;
-    border-radius: 6px;
+    border-radius: var(--raio-sm);
     font-size: 0.78rem;
     font-weight: 600;
     text-transform: uppercase;
   }
   .badge.sucesso {
-    background: #e6f4ea;
-    color: #137333;
+    background: var(--seno-green-50);
+    color: var(--seno-green);
   }
   .badge.perigo {
-    background: #fce8e6;
-    color: #c5221f;
+    background: var(--seno-red-50);
+    color: var(--seno-red);
   }
   .badge.neutro {
     background: var(--seno-gray-200);
@@ -285,7 +268,7 @@
   .tarefa-cartao {
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
+    border-radius: var(--raio-lg);
     padding: 1.25rem;
     display: flex;
     flex-direction: column;
@@ -319,23 +302,23 @@
     color: var(--seno-gray-800);
   }
   .bloco-enunciado {
-    background: var(--seno-gray-100, #f8f9fa);
-    border: 1px solid var(--seno-gray-200, #e9ecef);
-    border-radius: 6px;
+    background: var(--seno-gray-100);
+    border: 1px solid var(--seno-gray-200);
+    border-radius: var(--raio-sm);
     padding: 0.75rem 1rem;
   }
   .subrotulo {
     display: block;
     font-weight: 600;
     font-size: 0.85rem;
-    color: var(--seno-gray-700, #495057);
+    color: var(--seno-gray-700);
     margin-bottom: 0.35rem;
   }
   .texto-enunciado {
     margin: 0;
     white-space: pre-wrap;
     font-size: 0.9rem;
-    color: var(--seno-gray-800, #212529);
+    color: var(--seno-gray-800);
     line-height: 1.5;
   }
   .bloco-codigo {
@@ -361,18 +344,18 @@
   }
   .item-teste {
     border: 1px solid var(--seno-gray-200);
-    border-radius: 6px;
+    border-radius: var(--raio-sm);
     padding: 0.55rem 0.85rem;
-    background: #fafafa;
+    background: var(--seno-gray-50);
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
   }
   .item-teste.ok {
-    border-left: 4px solid #137333;
+    border-left: 4px solid var(--seno-green);
   }
   .item-teste.falha {
-    border-left: 4px solid #c5221f;
+    border-left: 4px solid var(--seno-red);
   }
   .teste-info {
     display: flex;
@@ -397,9 +380,9 @@
   }
   .detalhe-saida pre {
     background: #1e1e1e;
-    color: #f8f9fa;
+    color: var(--seno-gray-50);
     padding: 0.6rem;
-    border-radius: 4px;
+    border-radius: var(--raio-sm);
     overflow-x: auto;
     font-family: monospace;
     font-size: 0.8rem;
@@ -411,20 +394,4 @@
     font-style: italic;
     margin: 0.2rem 0;
   }
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-  .aviso.ok {
-    background: var(--seno-blue-100);
-    color: var(--seno-blue-800);
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-</style>
+    </style>

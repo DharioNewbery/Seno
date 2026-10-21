@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { soData } from "#lib/formato";
   // Tela de inspeção de usuário: detalhes completos + edição de cargos via
   // checkboxes (o super vê admin; o admin comum vê aluno/professor) e botão
   // de reset de senha. As regras continuam garantidas pela API: ninguém
@@ -56,12 +57,7 @@
   }
 
   function data(iso: string | undefined | null): string {
-    if (!iso) return "—";
-    return new Date(iso).toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    return soData(iso);
   }
 </script>
 
@@ -198,23 +194,7 @@
     gap: 1.25rem;
   }
 
-  .aviso {
-    padding: 0.6rem 0.9rem;
-    border-radius: 8px;
-    font-size: 0.9rem;
-  }
-
-  .aviso.erro {
-    background: #fdecea;
-    color: var(--seno-red);
-  }
-
-  .aviso.ok {
-    background: var(--seno-blue-100);
-    color: var(--seno-blue-800);
-  }
-
-  .cabecalho {
+        .cabecalho {
     display: flex;
     align-items: center;
     gap: 0.9rem;
@@ -224,16 +204,8 @@
     margin: 0;
   }
 
-  .estado {
-    font-size: 0.75rem;
-    border-radius: 999px;
-    padding: 0.2rem 0.6rem;
-    background: var(--seno-gray-100);
-    color: var(--seno-gray-700);
-  }
-
-  .estado.active {
-    background: #e6f4ea;
+    .estado.active {
+    background: var(--seno-green-50);
     color: var(--seno-green);
   }
 
@@ -243,7 +215,7 @@
   }
 
   .estado.disabled {
-    background: #fdecea;
+    background: var(--seno-red-50);
     color: var(--seno-red);
   }
 
@@ -253,7 +225,7 @@
     gap: 0.75rem;
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
+    border-radius: var(--raio-lg);
     padding: 1rem 1.2rem;
     margin: 0;
   }
@@ -273,7 +245,7 @@
   .cartao {
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
-    border-radius: 10px;
+    border-radius: var(--raio-lg);
     padding: 1rem 1.2rem;
     display: flex;
     flex-direction: column;
@@ -302,7 +274,7 @@
     font-size: 0.78rem;
     background: var(--seno-blue-100);
     color: var(--seno-blue-800);
-    border-radius: 999px;
+    border-radius: var(--raio-pill);
     padding: 0.2rem 0.7rem;
   }
 
@@ -343,7 +315,7 @@
     background: var(--seno-blue-600);
     color: var(--seno-white);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.5rem 0.9rem;
     font-size: 0.9rem;
     cursor: pointer;
@@ -370,14 +342,14 @@
   }
 
   .acao.ruim:hover {
-    background: #fdecea;
+    background: var(--seno-red-50);
   }
 
   .form-cargos button:not(.neutro) {
     background: var(--seno-blue-600);
     color: var(--seno-white);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.5rem 0.9rem;
     font-size: 0.9rem;
     cursor: pointer;

@@ -59,14 +59,16 @@
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    background: var(--seno-bg);
   }
 
   .cabecalho {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1rem 2rem;
-    border-bottom: 1px solid var(--seno-gray-300);
+    padding: 0.9rem 2rem;
+    background: var(--seno-white);
+    border-bottom: 1px solid var(--seno-line);
   }
 
   .marca {
@@ -84,7 +86,7 @@
   .cabecalho button {
     background: none;
     border: 1px solid var(--seno-gray-300);
-    border-radius: 8px;
+    border-radius: var(--raio-md);
     padding: 0.4rem 0.9rem;
     cursor: pointer;
     color: var(--seno-gray-700);
@@ -115,19 +117,16 @@
     flex-direction: column;
     gap: 0.5rem;
     padding: 1.25rem;
-    border: 1px solid var(--seno-gray-300);
-    border-radius: 12px;
+    border: 1px solid var(--seno-line);
+    border-radius: var(--raio-lg);
     text-decoration: none;
     color: inherit;
     background: var(--seno-white);
-    transition:
-      border-color 0.15s,
-      box-shadow 0.15s;
+    transition: border-color 0.12s;
   }
 
   .cartao:hover {
     border-color: var(--seno-blue-500);
-    box-shadow: 0 4px 14px rgba(30, 108, 210, 0.12);
   }
 
   .titulo {
@@ -152,7 +151,7 @@
     font-size: 0.75rem;
     background: var(--seno-blue-100);
     color: var(--seno-blue-800);
-    border-radius: 999px;
+    border-radius: var(--raio-pill);
     padding: 0.2rem 0.6rem;
   }
 </style>
