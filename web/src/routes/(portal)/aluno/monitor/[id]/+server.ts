@@ -23,6 +23,7 @@ export const GET: RequestHandler = async (event) => {
       method: "GET",
       headers: comBearer(token),
     });
+    if (res.status === 409) return para(`/aluno/atividades/${params.id}`);
     if (!res.ok) return para(editor);
     const body = (await res.json()) as { url?: string };
     if (!body.url) return para(editor);

@@ -86,15 +86,19 @@
         <div class="acao-area">
           <span class="estado {estado(a).classe}">{estado(a).rotulo}</span>
           {#if a.turma_ativa && !a.entregue}
-            <!-- Fase 9.4: entra pelo BFF (st → Monitor); cai no editor se a
-                 integração estiver desligada -->
-            <a class="abrir" href={`/aluno/monitor/${a.id}`}>
+            <!-- Tela pré-atividade: inspeção; o início (Monitor/editor, Fase
+                 9.4) acontece lá. -->
+            <a class="abrir" href={`/aluno/atividades/${a.id}`}>
               {a.em_andamento ? `Continuar (rev. ${a.minha_revisao})` : "Abrir"} →
             </a>
           {:else if a.entregue}
             <span class="meta">Entregue em {a.entregue_em ? dataHora(a.entregue_em) : ""}</span>
-            {#if a.publicada_em}
-              <a class="corrigido" href={`/aluno/submissao/${a.submissao_id}`}>Correção publicada →</a>
+            {#if a.submissao_id}
+              <a class="abrir" href={`/aluno/submissao/${a.submissao_id}`}>
+                {a.publicada_em ? "Ver respostas e nota →" : "Ver submissão →"}
+              </a>
+            {:else}
+              <a class="abrir secundario" href={`/aluno/atividades/${a.id}`}>Inspecionar →</a>
             {/if}
           {:else}
             <span class="estado encerrada">Turma encerrada</span>
@@ -209,5 +213,13 @@
     color: var(--seno-gray-500);
     font-size: 0.82rem;
     margin: 0;
+  }
+  .abrir.secundario {
+    background: var(--seno-gray-100);
+    color: var(--seno-gray-700);
+    border: 1px solid var(--seno-gray-300);
+  }
+  .abrir.secundario:hover {
+    background: var(--seno-gray-200);
   }
 </style>

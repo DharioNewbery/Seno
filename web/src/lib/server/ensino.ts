@@ -704,6 +704,11 @@ export interface Entrega {
   pode_coletar?: boolean;
   /** Entrega feita no Monitor (espelho do /estado): sem submissão na API. */
   do_monitor?: boolean;
+  correcao_status?: string;
+  nota_auto?: number;
+  nota_final?: number;
+  confirmada?: boolean;
+  publicada?: boolean;
   nota_monitor?: number;
   correcao_monitor?: string;
 }
@@ -876,6 +881,7 @@ export interface Correcao {
 export interface VisaoCorrecaoProfessor {
   submissao: {
     id: number;
+    atribuicao_id: number;
     aluno: string;
     aluno_email: string;
     atividade_nome: string;
@@ -915,6 +921,29 @@ export interface VisaoCorrecaoAluno {
   publicada: boolean;
   publicada_em?: string;
   correcao: Correcao | null;
+}
+
+/** A própria submissão do aluno: metadados + snapshot do que foi entregue. */
+export interface SubmissaoAluno {
+  id: number;
+  atribuicao_id: number;
+  aluno_id: number;
+  comecou_em: string;
+  entregue_em: string;
+  atrasada: boolean;
+  observacao?: string;
+  snapshot: { tasks?: { id: number; text: string }[] };
+}
+
+/** A própria submissão do aluno (o dono lê; os demais recebem 404). */
+export async function minhaSubmissao(
+  request: Request,
+  token: string,
+  submissaoID: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/submissoes/${submissaoID}`, {
+    method: "GET",
+  });
 }
 
 export async function minhaCorrecao(
