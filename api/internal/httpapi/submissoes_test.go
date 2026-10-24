@@ -1,10 +1,16 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/seno-project/seno/api/internal/monitor"
+	"github.com/seno-project/seno/contract"
 )
 
 // TestSubmissoes valida a entrega final (PROJETO §Submissão/§Atribuição):
@@ -239,13 +245,58 @@ func TestSubmissoes(t *testing.T) {
 		}
 	}
 
+	// Aluno lê a própria entrega pelo id; os demais casos são 404
+	// (outro aluno, professor — nem a existência é revelada).
+	w, minha := chama(t, r, "GET", "/v1/submissoes/"+intStr(idSub),
+		"", autenticado(tokCarla))
+	if w.Code != http.StatusOK {
+		t.Fatalf("minha submissão: %d corpo %v", w.Code, minha)
+	}
+	if minha["atribuicao_id"].(float64) != float64(idAtr1) || !minha["atrasada"].(bool) {
+		t.Errorf("conteúdo da submissão: %v", minha)
+	}
+	if minha["snapshot"] != nil {
+		t.Errorf("snapshot antes de publicação deve ser nulo para o aluno: %v", minha["snapshot"])
+	}
+	for _, outro := range []string{tokBruno, tokPaula, tokSuper} {
+		w, _ = chama(t, r, "GET", "/v1/submissoes/"+intStr(idSub), "", autenticado(outro))
+		if w.Code != http.StatusNotFound {
+			t.Errorf("submissão alheia: %d", w.Code)
+		}
+	}
+
+	// Professor visualiza a correção com entregue_em e atrasada preenchidos
+	w, profCor := chama(t, r, "GET", "/v1/submissoes/"+intStr(idSub)+"/correcao", "", autenticado(tokPaula))
+	if w.Code != http.StatusOK {
+		t.Fatalf("professor ver correcao: %d corpo %v", w.Code, profCor)
+	}
+	submResumo := profCor["submissao"].(map[string]any)
+	if !submResumo["atrasada"].(bool) {
+		t.Errorf("visao professor esperava atrasada=true: %v", submResumo)
+	}
+	if ent, ok := submResumo["entregue_em"].(string); !ok || ent == "" || ent == "0001-01-01T00:00:00Z" {
+		t.Errorf("visao professor esperava entregue_em válido: %v", submResumo["entregue_em"])
+	}
+
+	// Após publicação da correção, o aluno passa a ter acesso ao snapshot com as próprias respostas
+	if _, err := pool.Exec(context.Background(),
+		"UPDATE correcoes SET confirmada_em = now(), publicada_em = now() WHERE submissao_id = $1", idSub); err != nil {
+		t.Fatalf("publicando correcao: %v", err)
+	}
+	w, minhaPub := chama(t, r, "GET", "/v1/submissoes/"+intStr(idSub), "", autenticado(tokCarla))
+	if w.Code != http.StatusOK {
+		t.Fatalf("minha submissão pós publicação: %d corpo %v", w.Code, minhaPub)
+	}
+	if minhaPub["snapshot"] == nil {
+		t.Errorf("snapshot pós publicação deve ser liberado para o aluno: %v", minhaPub)
+	}
+
 	// Id inválido → 422.
 	w, _ = chama(t, r, "POST", "/v1/atribuicoes/abc/submissao", "{}",
 		autenticado(tokCarla))
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Errorf("id inválido: %d", w.Code)
 	}
-	_ = idSub
 	_ = pool
 }
 
@@ -353,4 +404,165 @@ func TestAcoesProfessorEntregas(t *testing.T) {
 	}
 	_ = pool
 }
+
+func TestIngestaoMonitorHMAC(t *testing.T) {
+	pool := testeDB(t)
+	deps, r := montaAPI(t, pool)
+
+	secretMonitor := "chave-secreta-hmac-monitor-32-chars-long"
+	deps.Monitor = monitor.New(deps.Store, deps.Audit, "http://monitor:8081", "http://localhost:5174", secretMonitor)
+
+	if err := bootstrapSuper(t, deps); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	tokSuper := logar(t, r, "super@seno.dev", "102938")
+
+	criarProfessor(t, r, tokSuper, "prof.mon@seno.dev", "Pedro", "Monitor")
+	ativaNovoUsuario(t, r, pool, "prof.mon@seno.dev", "senha-prof-mon-1")
+	tokProf := logar(t, r, "prof.mon@seno.dev", "senha-prof-mon-1")
+
+	w, materia := chama(t, r, "POST", "/v1/materias", `{"codigo":"MON","nome":"Monitor"}`, autenticado(tokSuper))
+	idMateria := int64(materia["id"].(float64))
+	w, periodo := chama(t, r, "POST", "/v1/periodos", `{"trimestre":1,"ano":2029}`, autenticado(tokSuper))
+	idPeriodo := int64(periodo["id"].(float64))
+	w, turma := chama(t, r, "POST", "/v1/turmas", `{"materia_id":`+intStr(idMateria)+`,"periodo_id":`+intStr(idPeriodo)+`,"titulo":"M1"}`, autenticado(tokProf))
+	idTurma := int64(turma["id"].(float64))
+
+	w, mat := chama(t, r, "POST", "/v1/turmas/"+intStr(idTurma)+"/matriculas",
+		`{"email":"aluno.mon@seno.dev","first_name":"Lucas","last_name":"Mon"}`, autenticado(tokProf))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("matricula falhou: %d %v", w.Code, mat)
+	}
+	alunoID := int64(mat["id"].(float64))
+
+	w, tarefa := chama(t, r, "POST", "/v1/tarefas", `{
+		"nome":"Tarefa Mon",
+		"enunciado":"Enunciado mon",
+		"testes":[{"stdin":"1","stdout_esperado":"1","publico":true}]
+	}`, autenticado(tokProf))
+	idTarefa := int64(tarefa["id"].(float64))
+
+	w, atv := chama(t, r, "POST", "/v1/atividades", `{
+		"nome":"Atividade Mon",
+		"conteudo":{"schema_version":1,"components":[{"type":"task_default","id":`+intStr(idTarefa)+`,"value_pts":10,"language":"python"}]},
+		"tarefas":[{"tarefa_id":`+intStr(idTarefa)+`,"ordem":1,"valor_pts":10,"linguagem":"python"}]
+	}`, autenticado(tokProf))
+	idAtv := int64(atv["id"].(float64))
+
+	w, atrib := chama(t, r, "POST", "/v1/atribuicoes", `{
+		"turma_id":`+intStr(idTurma)+`,
+		"atividade_id":`+intStr(idAtv)+`
+	}`, autenticado(tokProf))
+	idAtr := int64(atrib["id"].(float64))
+
+	// Associa um monitor_id à atribuição
+	mid := "mon_test_123"
+	if _, err := pool.Exec(context.Background(), `UPDATE atribuicoes SET monitor_id = $1 WHERE id = $2`, mid, idAtr); err != nil {
+		t.Fatalf("update monitor_id: %v", err)
+	}
+
+	// 1. Chamada sem HMAC ou com HMAC inválido deve ser rejeitada com 401
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/interna/monitor/submissoes", bytes.NewReader([]byte("{}")))
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("esperava 401 para push sem HMAC, obteve %d", rec.Code)
+	}
+
+	// 2. Chamada com HMAC assinado corretamente
+	agora := time.Now().UTC()
+	notaVal := 10.0
+	pacote := contract.PacoteSubmissaoMonitor{
+		MonitorID:       mid,
+		AtribuicaoAPIID: idAtr,
+		AlunoAPIID:      alunoID,
+		Submissao: &contract.SubmissaoMonitor{
+			ID:         1,
+			AlunoID:    alunoID,
+			NT:         1,
+			ComecouEm:  agora.Add(-30 * time.Minute),
+			EntregueEm: agora,
+			Atrasada:   false,
+			Respostas:  map[string]string{"1": "print(1)"},
+		},
+		Correcao: &contract.CorrecaoMonitor{
+			Status:   "concluida",
+			NotaAuto: &notaVal,
+			Tarefas: []contract.TarefaCorrecaoMonitor{
+				{
+					Ordem:       1,
+					TarefaAPIID: idTarefa,
+					NotaAuto:    &notaVal,
+					Testes: []contract.ResultadoTesteMonitor{
+						{
+							Ordem:         1,
+							Status:        "accepted",
+							Stdout:        "1\n",
+							Stderr:        "",
+							CompileOutput: "",
+							Tempo:         0.012,
+							Memoria:       1024,
+						},
+					},
+				},
+			},
+		},
+	}
+	corpo, err := json.Marshal(pacote)
+	if err != nil {
+		t.Fatalf("marshal pacote: %v", err)
+	}
+
+	mac, ts := contract.AssinarMAC([]byte(secretMonitor), time.Now(), corpo)
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/v1/interna/monitor/submissoes", bytes.NewReader(corpo))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(contract.HeaderMAC, mac)
+	req.Header.Set(contract.HeaderTime, ts)
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("push com HMAC valido falhou: %d %s", rec.Code, rec.Body.String())
+	}
+
+	var resPush map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &resPush)
+	subID := int64(resPush["submissao_id"].(float64))
+	if subID < 1 {
+		t.Fatalf("submissao_id invalido gerado: %v", resPush)
+	}
+
+	// 3. Verifica que a submissão agora aparece nas entregas para o professor
+	w, lista := chama(t, r, "GET", "/v1/atribuicoes/"+intStr(idAtr)+"/submissoes", "", autenticado(tokProf))
+	if w.Code != http.StatusOK {
+		t.Fatalf("listar entregas apos ingestao: %d %v", w.Code, lista)
+	}
+	subs := lista["submissoes"].([]any)
+	if len(subs) != 1 {
+		t.Fatalf("esperava 1 entrega ingerida, obteve %d", len(subs))
+	}
+	ent := subs[0].(map[string]any)
+	if ent["correcao_status"] != "concluida" {
+		t.Errorf("status da correcao: %v", ent["correcao_status"])
+	}
+	if nAuto, _ := ent["nota_auto"].(float64); nAuto != 10 {
+		t.Errorf("nota_auto da entrega: %v", ent["nota_auto"])
+	}
+
+	// 4. Professor confirma a validação da correção
+	w, _ = chama(t, r, "POST", "/v1/submissoes/"+intStr(subID)+"/correcao/confirmar", "", autenticado(tokProf))
+	if w.Code != http.StatusOK {
+		t.Fatalf("confirmar correcao: %d", w.Code)
+	}
+
+	// 5. Professor publica as notas para toda a turma de uma vez
+	w, pub := chama(t, r, "POST", "/v1/atribuicoes/"+intStr(idAtr)+"/correcoes/publicar", "", autenticado(tokProf))
+	if w.Code != http.StatusOK {
+		t.Fatalf("publicar em lote: %d %v", w.Code, pub)
+	}
+	if pubN, _ := pub["publicadas"].(float64); pubN != 1 {
+		t.Errorf("esperava 1 publicada, obteve %v", pub["publicadas"])
+	}
+}
+
 

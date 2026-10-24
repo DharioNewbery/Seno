@@ -14,7 +14,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -45,7 +47,7 @@ type Service struct {
 // New cria o serviço; url vazio = integração desligada (Enfileirar no-op).
 func New(st *store.Store, audit *platform.Audit, url, publicURL, secret string) *Service {
 	if url == "" {
-		return &Service{st: st}
+		return &Service{st: st, audit: audit, secret: []byte(secret)}
 	}
 	return &Service{
 		st: st, audit: audit, url: url, publicURL: publicURL,
@@ -56,6 +58,14 @@ func New(st *store.Store, audit *platform.Audit, url, publicURL, secret string) 
 
 // Ligado informa se a integração está configurada (nil-safe p/ testes).
 func (s *Service) Ligado() bool { return s != nil && s.url != "" }
+
+// VerificarMAC valida a assinatura HMAC de uma chamada interna vinda do Monitor.
+func (s *Service) VerificarMAC(corpo []byte, mac, tempo string) error {
+	if s == nil || len(s.secret) == 0 {
+		return contract.ErrMACInvalido
+	}
+	return contract.VerificarMAC(s.secret, corpo, mac, tempo, time.Minute)
+}
 
 type payloadTransferencia struct {
 	AtribuicaoID int64 `json:"atribuicao_id"`
@@ -271,7 +281,10 @@ func (s *Service) montarCarga(ctx context.Context, atividadeID int64) ([]contrac
 		tes := make([]contract.TesteCarga, 0, len(testes))
 		for _, te := range testes {
 			tes = append(tes, contract.TesteCarga{
-				Stdin: te.Stdin, StdoutEsperado: te.StdoutEsperado, Publico: te.Publico,
+				TesteAPIID:     te.ID,
+				Stdin:          te.Stdin,
+				StdoutEsperado: te.StdoutEsperado,
+				Publico:        te.Publico,
 			})
 		}
 		var limites *contract.Limites
@@ -387,7 +400,8 @@ func (s *Service) Ciclo(ctx context.Context, intervalo time.Duration) {
 }
 
 // PollEstado consome GET /interna/v1/atividades/:monitor_id/estado de cada
-// atribuição transferida e grava o snapshot em monitor_estado_aluno.
+// atribuição transferida, grava o snapshot em monitor_estado_aluno e ingere
+// definitivamente na API qualquer submissão entregue no Monitor.
 func (s *Service) PollEstado(ctx context.Context) error {
 	if !s.Ligado() {
 		return nil
@@ -425,6 +439,11 @@ func (s *Service) PollEstado(ctx context.Context) error {
 		for _, al := range est.Alunos {
 			if err := s.gravaEstado(ctx, a.ID, &al); err != nil {
 				return err
+			}
+			if al.Estado == "entregue" {
+				if _, errSync := s.SincronizarSubmissaoAluno(ctx, a.Mid, a.ID, al.AlunoAPIID); errSync != nil {
+					slog.Debug("monitor: sincronização de submissão pendente", "monitor_id", a.Mid, "aluno", al.AlunoAPIID, "err", errSync)
+				}
 			}
 		}
 	}
@@ -549,6 +568,17 @@ func (s *Service) Entrar(ctx context.Context, aluno domain.User, atribuicaoID in
 			http.StatusConflict, platform.CodeConflict,
 			"Atribuição ainda não transferida ao Monitor.")
 	}
+	var jaEntregou bool
+	_ = s.st.Pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM submissoes WHERE atribuicao_id = $1 AND aluno_id = $2)`,
+		atribuicaoID, aluno.ID,
+	).Scan(&jaEntregou)
+	if jaEntregou {
+		return "", platform.NewAPIError(
+			http.StatusConflict, platform.CodeConflict,
+			"Atividade já submetida.")
+	}
+
 	jti, err := contract.STNonce()
 	if err != nil {
 		return "", err
@@ -611,7 +641,8 @@ func (s *Service) ExcluirSubmissao(ctx context.Context, mid string, alunoID int6
 	return nil
 }
 
-// ColetarTentativa aciona a coleta de tentativa no Monitor via rota interna HMAC.
+// ColetarTentativa aciona a coleta de tentativa no Monitor via rota interna HMAC
+// e sincroniza a submissão gerada para as tabelas definitivas da API.
 func (s *Service) ColetarTentativa(ctx context.Context, mid string, alunoID int64) error {
 	if !s.Ligado() {
 		return errors.New("integração com Monitor desligada")
@@ -633,6 +664,7 @@ func (s *Service) ColetarTentativa(ctx context.Context, mid string, alunoID int6
 		corpo, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return fmt.Errorf("monitor coletar %s/%d: %d (%s)", mid, alunoID, resp.StatusCode, string(corpo))
 	}
+	_, _ = s.SincronizarSubmissaoAluno(ctx, mid, 0, alunoID)
 	return nil
 }
 
@@ -701,3 +733,283 @@ func (s *Service) ObterSubmissao(ctx context.Context, mid string, alunoID int64)
 	return &det, nil
 }
 
+// ObterPacoteSubmissao busca o pacote completo de submissão e correção no Monitor via HMAC.
+func (s *Service) ObterPacoteSubmissao(ctx context.Context, mid string, alunoID int64) (*contract.PacoteSubmissaoMonitor, error) {
+	if !s.Ligado() {
+		return nil, errors.New("integração com Monitor desligada")
+	}
+	mac, tempo := contract.AssinarMAC(s.secret, time.Now(), nil)
+	url := fmt.Sprintf("%s/interna/v1/atividades/%s/alunos/%d/submissao", s.url, mid, alunoID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set(contract.HeaderMAC, mac)
+	req.Header.Set(contract.HeaderTime, tempo)
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		corpo, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, fmt.Errorf("monitor obter pacote submissao %s/%d: %d (%s)", mid, alunoID, resp.StatusCode, string(corpo))
+	}
+	var pac contract.PacoteSubmissaoMonitor
+	if err := json.NewDecoder(resp.Body).Decode(&pac); err != nil {
+		return nil, err
+	}
+	if pac.MonitorID == "" {
+		pac.MonitorID = mid
+	}
+	if pac.AlunoAPIID == 0 {
+		pac.AlunoAPIID = alunoID
+	}
+	return &pac, nil
+}
+
+// SincronizarSubmissaoAluno consulta o Monitor para o aluno informado e ingere a submissão/correção na API.
+func (s *Service) SincronizarSubmissaoAluno(ctx context.Context, mid string, atribuicaoID, alunoID int64) (int64, error) {
+	pac, err := s.ObterPacoteSubmissao(ctx, mid, alunoID)
+	if err != nil {
+		return 0, err
+	}
+	if atribuicaoID > 0 && pac.AtribuicaoAPIID == 0 {
+		pac.AtribuicaoAPIID = atribuicaoID
+	}
+	return s.IngerirSubmissao(ctx, pac)
+}
+
+// IngerirSubmissao persiste na API (submissoes, correcoes, correcao_tarefas e resultados)
+// toda a informação gerada pelo Monitor após a entrega da atividade pelo aluno.
+// Se a correção já tiver sido publicada pelo professor na API, preserva as notas finais e feedbacks.
+func (s *Service) IngerirSubmissao(ctx context.Context, p *contract.PacoteSubmissaoMonitor) (int64, error) {
+	if p == nil || p.Submissao == nil || p.Submissao.EntregueEm.IsZero() {
+		return 0, nil
+	}
+	alunoID := p.AlunoAPIID
+	if alunoID == 0 {
+		alunoID = p.Submissao.AlunoID
+	}
+	if alunoID == 0 {
+		return 0, errors.New("monitor: aluno_api_id ausente no pacote de submissão")
+	}
+
+	atribuicaoID := p.AtribuicaoAPIID
+	if atribuicaoID == 0 && p.MonitorID != "" {
+		err := s.st.Pool.QueryRow(ctx,
+			`SELECT id FROM atribuicoes WHERE monitor_id = $1`, p.MonitorID).Scan(&atribuicaoID)
+		if err != nil {
+			return 0, fmt.Errorf("monitor: atribuição para monitor_id %q não encontrada: %w", p.MonitorID, err)
+		}
+	}
+	if atribuicaoID == 0 {
+		return 0, errors.New("monitor: atribuicao_api_id ausente no pacote de submissão")
+	}
+
+	tarefasAtrib, err := s.st.Q.TarefasDaAtribuicao(ctx, atribuicaoID)
+	if err != nil {
+		return 0, fmt.Errorf("monitor: tarefas da atribuição %d: %w", atribuicaoID, err)
+	}
+
+	type snapItem struct {
+		ID   int64  `json:"id"`
+		Text string `json:"text"`
+	}
+	type snapDoc struct {
+		Tasks []snapItem `json:"tasks"`
+	}
+	ordemParaTarefa := make(map[int]int64, len(tarefasAtrib))
+	snap := snapDoc{Tasks: make([]snapItem, 0, len(tarefasAtrib))}
+	for _, ta := range tarefasAtrib {
+		ordemParaTarefa[int(ta.Ordem)] = ta.TarefaID
+		code := ""
+		if p.Submissao.Respostas != nil {
+			if c, ok := p.Submissao.Respostas[strconv.Itoa(int(ta.Ordem))]; ok {
+				code = c
+			} else if c, ok := p.Submissao.Respostas[strconv.FormatInt(ta.TarefaID, 10)]; ok {
+				code = c
+			}
+		}
+		snap.Tasks = append(snap.Tasks, snapItem{ID: ta.TarefaID, Text: code})
+	}
+	snapBytes, err := json.Marshal(snap)
+	if err != nil {
+		return 0, fmt.Errorf("monitor: serializando snapshot: %w", err)
+	}
+
+	comecouEm := p.Submissao.ComecouEm
+	if comecouEm.IsZero() {
+		comecouEm = p.Submissao.EntregueEm
+	}
+
+	// Prepara mapa de testes por tarefa caso o pacote venha sem TesteAPIID explícito.
+	testesPorTarefa := make(map[int64][]gen.ListTestesTarefaRow, len(tarefasAtrib))
+	for _, ta := range tarefasAtrib {
+		if ts, errT := s.st.Q.ListTestesTarefa(ctx, ta.TarefaID); errT == nil {
+			testesPorTarefa[ta.TarefaID] = ts
+		}
+	}
+
+	corStatus := "pendente"
+	if p.Correcao != nil {
+		switch p.Correcao.Status {
+		case "concluida":
+			corStatus = "concluida"
+		case "executando":
+			corStatus = "executando"
+		case "erro", "falhou":
+			corStatus = "falhou"
+		default:
+			corStatus = "pendente"
+		}
+	}
+
+	tx, err := s.st.Pool.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("monitor: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var submissaoID int64
+	err = tx.QueryRow(ctx, `
+		INSERT INTO submissoes (atribuicao_id, aluno_id, snapshot, comecou_em, entregue_em, atrasada)
+		VALUES ($1, $2, $3::jsonb, $4, $5, $6)
+		ON CONFLICT (atribuicao_id, aluno_id) DO UPDATE SET
+			snapshot = EXCLUDED.snapshot,
+			comecou_em = EXCLUDED.comecou_em,
+			entregue_em = EXCLUDED.entregue_em,
+			atrasada = EXCLUDED.atrasada
+		RETURNING id`,
+		atribuicaoID, alunoID, string(snapBytes), comecouEm, p.Submissao.EntregueEm, p.Submissao.Atrasada,
+	).Scan(&submissaoID)
+	if err != nil {
+		return 0, fmt.Errorf("monitor: upsert submissoes: %w", err)
+	}
+
+	var correcaoID int64
+	err = tx.QueryRow(ctx, `
+		INSERT INTO correcoes (submissao_id, status)
+		VALUES ($1, $2)
+		ON CONFLICT (submissao_id) DO UPDATE SET
+			status = CASE WHEN correcoes.publicada_em IS NOT NULL THEN correcoes.status ELSE EXCLUDED.status END
+		RETURNING id`,
+		submissaoID, corStatus,
+	).Scan(&correcaoID)
+	if err != nil {
+		return 0, fmt.Errorf("monitor: upsert correcoes: %w", err)
+	}
+
+	ctIDPorTarefa := make(map[int64]int64, len(tarefasAtrib))
+	for _, ta := range tarefasAtrib {
+		var ctID int64
+		if err := tx.QueryRow(ctx, `
+			INSERT INTO correcao_tarefas (correcao_id, tarefa_id, valor_pts)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (correcao_id, tarefa_id) DO UPDATE SET
+				valor_pts = EXCLUDED.valor_pts
+			RETURNING id`,
+			correcaoID, ta.TarefaID, ta.ValorPts,
+		).Scan(&ctID); err != nil {
+			return 0, fmt.Errorf("monitor: upsert correcao_tarefas: %w", err)
+		}
+		ctIDPorTarefa[ta.TarefaID] = ctID
+	}
+
+	if p.Correcao != nil {
+		tarefasCor := p.Correcao.Tarefas
+		if len(tarefasCor) == 0 && len(p.Correcao.Resultados) > 0 {
+			var parsed struct {
+				Tarefas []contract.TarefaCorrecaoMonitor `json:"tarefas"`
+			}
+			_ = json.Unmarshal(p.Correcao.Resultados, &parsed)
+			tarefasCor = parsed.Tarefas
+		}
+		for _, tc := range tarefasCor {
+			tarefaID := tc.TarefaAPIID
+			if tarefaID == 0 {
+				tarefaID = ordemParaTarefa[tc.Ordem]
+			}
+			ctID, ok := ctIDPorTarefa[tarefaID]
+			if !ok {
+				continue
+			}
+			if tc.NotaAuto != nil {
+				notaInt := int32(math.Round(*tc.NotaAuto))
+				if _, err := tx.Exec(ctx, `
+					UPDATE correcao_tarefas
+					SET nota_auto = $2
+					WHERE id = $1`, ctID, notaInt); err != nil {
+					return 0, fmt.Errorf("monitor: update nota_auto: %w", err)
+				}
+			}
+			listaTestes := testesPorTarefa[tarefaID]
+			for _, te := range tc.Testes {
+				testeID := te.TesteAPIID
+				if testeID == 0 && te.Ordem >= 1 && te.Ordem <= len(listaTestes) {
+					testeID = listaTestes[te.Ordem-1].ID
+				}
+				if testeID == 0 {
+					continue
+				}
+				tempoStr := fmt.Sprintf("%.3f", te.Tempo)
+				cpuVal := te.CPU
+				if cpuVal == 0 {
+					cpuVal = te.Tempo
+				}
+				cpuStr := fmt.Sprintf("%.3f", cpuVal)
+				memStr := strconv.Itoa(te.Memoria)
+				if _, err := tx.Exec(ctx, `
+					INSERT INTO resultados
+						(correcao_tarefa_id, teste_id, status, stdout, stderr, compile_output, tempo, memoria, cpu)
+					VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+					ON CONFLICT (correcao_tarefa_id, teste_id) DO UPDATE SET
+						status = EXCLUDED.status,
+						stdout = EXCLUDED.stdout,
+						stderr = EXCLUDED.stderr,
+						compile_output = EXCLUDED.compile_output,
+						tempo = EXCLUDED.tempo,
+						memoria = EXCLUDED.memoria,
+						cpu = EXCLUDED.cpu`,
+					ctID, testeID, te.Status,
+					nullIfEmpty(te.Stdout), nullIfEmpty(te.Stderr), nullIfEmpty(te.CompileOutput),
+					tempoStr, memStr, cpuStr,
+				); err != nil {
+					return 0, fmt.Errorf("monitor: upsert resultados: %w", err)
+				}
+			}
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("monitor: commit ingestão: %w", err)
+	}
+
+	// Mantém monitor_estado_aluno sincronizado com os dados recebidos.
+	nt := p.Submissao.NT
+	if nt <= 0 {
+		nt = 1
+	}
+	entregue := p.Submissao.EntregueEm
+	var notaAuto *float64
+	if p.Correcao != nil {
+		notaAuto = p.Correcao.NotaAuto
+	}
+	_ = s.gravaEstado(ctx, atribuicaoID, &contract.EstadoAluno{
+		AlunoAPIID:      alunoID,
+		Estado:          "entregue",
+		NT:              nt,
+		UltimaSubmissao: &entregue,
+		NotaAuto:        notaAuto,
+		CorrecaoStatus:  corStatus,
+	})
+
+	return submissaoID, nil
+}
+
+func nullIfEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}

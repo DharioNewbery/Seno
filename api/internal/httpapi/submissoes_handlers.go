@@ -2,12 +2,15 @@
 package httpapi
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/seno-project/seno/contract"
 	"github.com/seno-project/seno/api/internal/platform"
 )
 
@@ -48,6 +51,22 @@ func (d *Dependencies) EntregarSubmissao(c *gin.Context) {
 	c.JSON(http.StatusCreated, sub)
 }
 
+// MinhaSubmissao: GET /v1/submissoes/:id — o aluno lê a própria entrega
+// (metadados + snapshot); os demais casos são 404 (sem revelar existência).
+func (d *Dependencies) MinhaSubmissao(c *gin.Context) {
+	user, _ := currentUser(c)
+	id, ok := idDaRota(c)
+	if !ok {
+		return
+	}
+	sub, err := d.SubmissaoS.Minha(c.Request.Context(), user, id)
+	if err != nil {
+		platform.ErrorBody(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, sub)
+}
+
 // ListarSubmissoes: GET /v1/atribuicoes/:id/submissoes — dono da turma
 // ou staff (quem entregou, atrasadas).
 func (d *Dependencies) ListarSubmissoes(c *gin.Context) {
@@ -75,10 +94,26 @@ func (d *Dependencies) ExcluirSubmissao(c *gin.Context) {
 	if !ok {
 		return
 	}
+	var atID, alID int64
+	var mid *string
+	_ = d.Store.Pool.QueryRow(c.Request.Context(), `
+		SELECT s.atribuicao_id, s.aluno_id, a.monitor_id
+		FROM submissoes s
+		JOIN atribuicoes a ON a.id = s.atribuicao_id
+		WHERE s.id = $1`, id).Scan(&atID, &alID, &mid)
+
 	if err := d.SubmissaoS.Excluir(c.Request.Context(), user, id); err != nil {
 		platform.ErrorBody(c, err)
 		return
 	}
+
+	if mid != nil && *mid != "" && d.Monitor != nil && d.Monitor.Ligado() {
+		_ = d.Monitor.ExcluirSubmissao(c.Request.Context(), *mid, alID)
+		_, _ = d.Store.Pool.Exec(c.Request.Context(), `
+			DELETE FROM monitor_estado_aluno WHERE atribuicao_id = $1 AND aluno_id = $2
+		`, atID, alID)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -213,6 +248,36 @@ func (d *Dependencies) MonitorObterSubmissao(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, det)
+}
+
+// ingerirSubmissaoMonitor: POST /v1/interna/monitor/submissoes — ingestão assíncrona/direta do Monitor.
+func (d *Dependencies) ingerirSubmissaoMonitor(c *gin.Context) {
+	if d.Monitor == nil {
+		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"erro": gin.H{"codigo": "MONITOR_DESLIGADO", "mensagem": "Integração com Monitor desligada."}})
+		return
+	}
+	mac := c.GetHeader(contract.HeaderMAC)
+	ts := c.GetHeader(contract.HeaderTime)
+	corpo, err := io.ReadAll(io.LimitReader(c.Request.Body, 10<<20))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"erro": gin.H{"codigo": "CORPO_INVALIDO", "mensagem": "Falha ao ler corpo da requisição."}})
+		return
+	}
+	if err := d.Monitor.VerificarMAC(corpo, mac, ts); err != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"erro": gin.H{"codigo": "SEM_PERMISSAO", "mensagem": "Assinatura HMAC inválida ou expirada."}})
+		return
+	}
+	var pacote contract.PacoteSubmissaoMonitor
+	if err := json.Unmarshal(corpo, &pacote); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"erro": gin.H{"codigo": "JSON_INVALIDO", "mensagem": "JSON inválido."}})
+		return
+	}
+	subID, err := d.Monitor.IngerirSubmissao(c.Request.Context(), &pacote)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"erro": gin.H{"codigo": "ERRO_INTERNO", "mensagem": err.Error()}})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "submissao_id": subID})
 }
 
 

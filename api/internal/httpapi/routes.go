@@ -11,7 +11,12 @@ import (
 // RegisterRoutes monta o roteador da API com o envelope de erros, as rotas
 // da fundação e as rotas de autenticação (ARQUITETURA §5).
 func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
-	r.Use(RequestLog(), OriginGuard(deps.Cfg.WebOrigin))
+	r.Use(RequestLog())
+
+	// Rota interna Monitor -> API (autenticada por HMAC, bypassa OriginGuard do frontend)
+	r.POST("/v1/interna/monitor/submissoes", deps.ingerirSubmissaoMonitor)
+
+	r.Use(OriginGuard(deps.Cfg.WebOrigin))
 
 	r.GET("/healthz", deps.Healthz)
 
@@ -163,6 +168,7 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	// enviado depois de publicar (§Visibilidade).
 	submissoesCorrecao := v1.Group("/submissoes/:id")
 	submissoesCorrecao.Use(deps.RequireAuth())
+	submissoesCorrecao.GET("", deps.MinhaSubmissao) // própria submissão (aluno)
 	submissoesCorrecao.DELETE("", deps.ExcluirSubmissao)
 	submissoesCorrecao.GET("/correcao", deps.verCorrecao)
 	submissoesCorrecao.PATCH("/correcao", deps.editarCorrecao)

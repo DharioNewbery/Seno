@@ -99,6 +99,7 @@ type Resultado struct {
 // SubmissaoResumo é o contexto/professor da submissão corrigida.
 type SubmissaoResumo struct {
 	ID            int64     `json:"id"`
+	AtribuicaoID  int64     `json:"atribuicao_id"`
 	Aluno         string    `json:"aluno"`
 	AlunoEmail    string    `json:"aluno_email"`
 	AtividadeNome string    `json:"atividade_nome"`
@@ -540,11 +541,16 @@ func (s *Service) VerProfessor(
 	if err != nil {
 		return VisaoProfessor{}, err
 	}
+	subRow, _ := s.store.Q.GetSubmissaoPorID(ctx, submissaoID)
 	return VisaoProfessor{
 		Submissao: SubmissaoResumo{
-			ID:         row.ID,
-			Aluno:      row.AlunoFirstName + " " + row.AlunoLastName,
-			AlunoEmail: row.AlunoEmail, AtividadeNome: row.AtividadeNome,
+			ID:            row.ID,
+			AtribuicaoID:  row.AtribuicaoID,
+			Aluno:         row.AlunoFirstName + " " + row.AlunoLastName,
+			AlunoEmail:    row.AlunoEmail,
+			AtividadeNome: row.AtividadeNome,
+			EntregueEm:    subRow.EntregueEm.Time,
+			Atrasada:      subRow.Atrasada,
 		},
 		Correcao: cor,
 	}, nil
@@ -613,6 +619,12 @@ func (s *Service) Confirmar(
 	if err != nil || cor == nil {
 		return VisaoProfessor{}, err
 	}
+	// Ao confirmar, assume nota_auto como nota_final para tarefas sem nota_final definida
+	_, _ = s.store.Pool.Exec(ctx, `
+		UPDATE correcao_tarefas
+		SET nota_final = nota_auto
+		WHERE correcao_id = $1 AND nota_final IS NULL AND nota_auto IS NOT NULL`, cor.ID)
+
 	if _, err := s.store.Q.ConfirmarCorrecao(ctx, gen.ConfirmarCorrecaoParams{
 		ID: cor.ID, ConfirmadaPor: int8Ptr(actor.ID),
 	}); err != nil {

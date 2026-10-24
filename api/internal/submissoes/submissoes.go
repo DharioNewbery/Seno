@@ -50,6 +50,7 @@ type Submissao struct {
 	ComecouEm    time.Time       `json:"comecou_em"`
 	EntregueEm   time.Time       `json:"entregue_em"`
 	Atrasada     bool            `json:"atrasada"`
+	Observacao   *string         `json:"observacao,omitempty"`
 	Snapshot     json.RawMessage `json:"snapshot"`
 }
 
@@ -57,16 +58,22 @@ type Submissao struct {
 //   - API: submissão própria ou rascunho pendente de coleta.
 //   - Monitor: o aluno entregou ou tem rascunho na prova do Monitor.
 type Entrega struct {
-	ID         int64      `json:"id"`
-	AlunoID    int64      `json:"aluno_id"`
-	Aluno      string     `json:"aluno"`
-	AlunoEmail string     `json:"aluno_email"`
-	ComecouEm  *time.Time `json:"comecou_em,omitempty"`
-	EntregueEm time.Time  `json:"entregue_em"`
-	Atrasada   bool       `json:"atrasada"`
-	Estado     string     `json:"estado"` // "entregue" | "rascunho"
-	PodeColetar bool      `json:"pode_coletar,omitempty"`
-	DoMonitor  bool       `json:"do_monitor,omitempty"`
+	ID          int64      `json:"id"`
+	AlunoID     int64      `json:"aluno_id"`
+	Aluno       string     `json:"aluno"`
+	AlunoEmail  string     `json:"aluno_email"`
+	ComecouEm   *time.Time `json:"comecou_em,omitempty"`
+	EntregueEm  time.Time  `json:"entregue_em"`
+	Atrasada    bool       `json:"atrasada"`
+	Estado      string     `json:"estado"` // "entregue" | "rascunho"
+	PodeColetar bool       `json:"pode_coletar,omitempty"`
+	DoMonitor   bool       `json:"do_monitor,omitempty"`
+
+	CorrecaoStatus string   `json:"correcao_status,omitempty"`
+	NotaAuto       *float64 `json:"nota_auto,omitempty"`
+	NotaFinal      *float64 `json:"nota_final,omitempty"`
+	Confirmada     bool     `json:"confirmada"`
+	Publicada      bool     `json:"publicada"`
 
 	NotaMonitor     *float64 `json:"nota_monitor,omitempty"`
 	CorrecaoMonitor string   `json:"correcao_monitor,omitempty"`
@@ -222,6 +229,41 @@ func (s *Service) Entregar(
 	return nova, nil
 }
 
+// Minha: o aluno lê a PRÓPRIA submissão pelo id (metadados + snapshot —
+// o conteúdo é dele, independe da publicação da correção §Visibilidade).
+// Qualquer outro caso (não existe, não é dele, não é aluno) é 404 —
+// nem a existência da submissão de outrem é revelada.
+func (s *Service) Minha(
+	ctx context.Context, actor domain.User, submissaoID int64,
+) (Submissao, error) {
+	row, err := s.store.Q.GetSubmissaoPorID(ctx, submissaoID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Submissao{}, platform.NewAPIError(
+				http.StatusNotFound, platform.CodeNotFound,
+				"Submissão não encontrada.")
+		}
+		return Submissao{}, err
+	}
+	if !domain.HasAnyRole(actor.Roles, domain.RoleStudent) || row.AlunoID != actor.ID {
+		return Submissao{}, platform.NewAPIError(
+			http.StatusNotFound, platform.CodeNotFound,
+			"Submissão não encontrada.")
+	}
+	var publicadaEm *time.Time
+	_ = s.store.Pool.QueryRow(ctx, `SELECT publicada_em FROM correcoes WHERE submissao_id = $1`, submissaoID).Scan(&publicadaEm)
+	snap := row.Snapshot
+	if publicadaEm == nil {
+		snap = nil
+	}
+	return Submissao{
+		ID: row.ID, AtribuicaoID: row.AtribuicaoID, AlunoID: row.AlunoID,
+		ComecouEm:  row.ComecouEm.Time,
+		EntregueEm: row.EntregueEm.Time, Atrasada: row.Atrasada,
+		Observacao: row.Observacao, Snapshot: snap,
+	}, nil
+}
+
 // Listar: entregas de uma atribuição (dono da turma|staff).
 func (s *Service) Listar(
 	ctx context.Context, actor domain.User, atribuicaoID int64,
@@ -244,6 +286,58 @@ func (s *Service) Listar(
 	if err != nil {
 		return nil, err
 	}
+
+	subIDs := make([]int64, len(rows))
+	for i, r := range rows {
+		subIDs[i] = r.ID
+	}
+	type infoCorrecao struct {
+		status     string
+		confirmada bool
+		publicada  bool
+		notaAuto   *float64
+		notaFinal  *float64
+	}
+	corMap := make(map[int64]infoCorrecao, len(subIDs))
+	if len(subIDs) > 0 {
+		cRows, err := s.store.Pool.Query(ctx, `
+			SELECT c.submissao_id, c.status,
+			       c.confirmada_em IS NOT NULL,
+			       c.publicada_em IS NOT NULL,
+			       SUM(ct.nota_auto)::float8,
+			       SUM(ct.nota_final)::float8,
+			       COUNT(ct.nota_final)
+			FROM correcoes c
+			LEFT JOIN correcao_tarefas ct ON ct.correcao_id = c.id
+			WHERE c.submissao_id = ANY($1)
+			GROUP BY c.id, c.submissao_id, c.status, c.confirmada_em, c.publicada_em`, subIDs)
+		if err == nil {
+			defer cRows.Close()
+			for cRows.Next() {
+				var (
+					sID        int64
+					status     string
+					conf, pub  bool
+					nAuto      pgtype.Float8
+					nFinal     pgtype.Float8
+					countFinal int
+				)
+				if err := cRows.Scan(&sID, &status, &conf, &pub, &nAuto, &nFinal, &countFinal); err == nil {
+					ic := infoCorrecao{status: status, confirmada: conf, publicada: pub}
+					if nAuto.Valid {
+						v := nAuto.Float64
+						ic.notaAuto = &v
+					}
+					if nFinal.Valid && countFinal > 0 {
+						v := nFinal.Float64
+						ic.notaFinal = &v
+					}
+					corMap[sID] = ic
+				}
+			}
+		}
+	}
+
 	out := make([]Entrega, 0, len(rows))
 	feitos := map[int64]bool{}
 	for _, row := range rows {
@@ -253,15 +347,21 @@ func (s *Service) Listar(
 			t := row.ComecouEm.Time
 			comecou = &t
 		}
+		ic := corMap[row.ID]
 		out = append(out, Entrega{
-			ID:         row.ID,
-			AlunoID:    row.AlunoID,
-			Aluno:      row.AlunoFirstName + " " + row.AlunoLastName,
-			AlunoEmail: row.AlunoEmail,
-			ComecouEm:  comecou,
-			EntregueEm: horaDe(row.EntregueEm),
-			Atrasada:   row.Atrasada,
-			Estado:     "entregue",
+			ID:             row.ID,
+			AlunoID:        row.AlunoID,
+			Aluno:          row.AlunoFirstName + " " + row.AlunoLastName,
+			AlunoEmail:     row.AlunoEmail,
+			ComecouEm:      comecou,
+			EntregueEm:     horaDe(row.EntregueEm),
+			Atrasada:       row.Atrasada,
+			Estado:         "entregue",
+			CorrecaoStatus: ic.status,
+			NotaAuto:       ic.notaAuto,
+			NotaFinal:      ic.notaFinal,
+			Confirmada:     ic.confirmada,
+			Publicada:      ic.publicada,
 		})
 	}
 
@@ -355,6 +455,7 @@ func (s *Service) listarEntregasMonitor(
 			Estado:          estado,
 			PodeColetar:     podeColetar,
 			DoMonitor:       true,
+			CorrecaoStatus:  status,
 			CorrecaoMonitor: status,
 		}
 		if entregueEm.Valid {
@@ -362,6 +463,7 @@ func (s *Service) listarEntregasMonitor(
 		}
 		if nota.Valid {
 			v := nota.Float64
+			e.NotaAuto = &v
 			e.NotaMonitor = &v
 		}
 		*out = append(*out, e)
@@ -406,6 +508,8 @@ func (s *Service) Excluir(ctx context.Context, actor domain.User, submissaoID in
 	if err != nil {
 		return err
 	}
+
+	_, _ = s.store.Pool.Exec(ctx, `DELETE FROM monitor_estado_aluno WHERE atribuicao_id = $1 AND aluno_id = $2`, row.AtribuicaoID, row.AlunoID)
 
 	s.audit.Record(ctx, platform.LogEntry{
 		ActorID: &actor.ID, Actor: actor.Email,
