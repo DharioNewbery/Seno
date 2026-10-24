@@ -29,54 +29,62 @@ export const load: PageServerLoad = async ({ locals, cookies, request, params })
   }
 };
 
+async function extrairEdicao(request: Request) {
+  const form = await request.formData();
+  const feedback = String(form.get("feedback") ?? "").trim();
+  const tarefas: { id: number; nota_final?: number; feedback?: string }[] = [];
+  for (const raw of form.getAll("ct_ids")) {
+    const id2 = Number(raw);
+    if (!Number.isInteger(id2) || id2 < 1) continue;
+    const telaNota = String(form.get(`nota_${id2}`) ?? "").trim();
+    const fb = String(form.get(`fb_${id2}`) ?? "").trim();
+    const item: { id: number; nota_final?: number; feedback?: string } = { id: id2 };
+    if (telaNota !== "") {
+      const n = Number(telaNota);
+      if (!Number.isFinite(n) || n < 0) {
+        return { erro: "Nota inválida." };
+      }
+      item.nota_final = Math.floor(n);
+    }
+    if (fb !== "") item.feedback = fb;
+    tarefas.push(item);
+  }
+  return {
+    dados: {
+      ...(feedback !== "" ? { feedback } : {}),
+      ...(tarefas.length > 0 ? { tarefas } : {}),
+    },
+    temCampos: form.has("feedback") || form.has("ct_ids"),
+  };
+}
+
 export const actions: Actions = {
   salvar: async (evento) => {
     const token = tokenDaSessao(evento.cookies);
     if (!token) return fail(401, { erro: "Sessão encerrada." });
     const id = Number(evento.params.id);
-    const form = await evento.request.formData();
-    const feedback = String(form.get("feedback") ?? "").trim();
-    const tarefas: { id: number; nota_final?: number; feedback?: string }[] = [];
-    // ids das correção-tarefa passados como multiple inputs ct_ids.
-    for (const raw of form.getAll("ct_ids")) {
-      const id2 = Number(raw);
-      if (!Number.isInteger(id2) || id2 < 1) continue;
-      const telaNota = String(form.get(`nota_${id2}`) ?? "").trim();
-      const fb = String(form.get(`fb_${id2}`) ?? "").trim();
-      const item: { id: number; nota_final?: number; feedback?: string } = { id: id2 };
-      if (telaNota !== "") {
-        const n = Number(telaNota);
-        if (!Number.isFinite(n) || n < 0) {
-          return fail(422, { erro: "Nota inválida." });
-        }
-        item.nota_final = Math.floor(n);
-      }
-      if (fb !== "") item.feedback = fb;
-      tarefas.push(item);
-    }
-    const r = await editarCorrecao(evento.request, token, id, {
-      ...(feedback !== "" ? { feedback } : {}),
-      ...(tarefas.length > 0 ? { tarefas } : {}),
-    });
+    const parse = await extrairEdicao(evento.request);
+    if ("erro" in parse && parse.erro) return fail(422, { erro: parse.erro });
+    const r = await editarCorrecao(evento.request, token, id, parse.dados ?? {});
     if (r.status === 401) redirect(303, "/");
     if (!r.ok) return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
-    return { ok: "Correção atualizada." };
+    return { ok: "Correção salva com sucesso." };
   },
   confirmar: async (evento) => {
     const token = tokenDaSessao(evento.cookies);
     if (!token) return fail(401, { erro: "Sessão encerrada." });
-    const r = await acaoCorrecao(evento.request, token, Number(evento.params.id), "confirmar");
+    const id = Number(evento.params.id);
+    const parse = await extrairEdicao(evento.request);
+    if ("erro" in parse && parse.erro) return fail(422, { erro: parse.erro });
+    if (parse.temCampos) {
+      const rEdit = await editarCorrecao(evento.request, token, id, parse.dados ?? {});
+      if (rEdit.status === 401) redirect(303, "/");
+      if (!rEdit.ok) return fail(rEdit.status || 500, { erro: mensagemDaApi(rEdit.body) });
+    }
+    const r = await acaoCorrecao(evento.request, token, id, "confirmar");
     if (r.status === 401) redirect(303, "/");
     if (!r.ok) return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
-    return { ok: "Correção confirmada." };
-  },
-  publicar: async (evento) => {
-    const token = tokenDaSessao(evento.cookies);
-    if (!token) return fail(401, { erro: "Sessão encerrada." });
-    const r = await acaoCorrecao(evento.request, token, Number(evento.params.id), "publicar");
-    if (r.status === 401) redirect(303, "/");
-    if (!r.ok) return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
-    return { ok: "Correção publicada — o aluno já vê a nota." };
+    return { ok: "Correção validada e confirmada com sucesso." };
   },
   reexecutar: async (evento) => {
     const token = tokenDaSessao(evento.cookies);

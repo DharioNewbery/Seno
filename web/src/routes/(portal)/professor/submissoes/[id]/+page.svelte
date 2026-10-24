@@ -69,29 +69,43 @@
             {/if}
             <input type="hidden" name="ct_ids" value={t.id} />
             <div class="linha">
+              {#if t.nota_auto !== undefined && t.nota_auto !== null}
+                <div class="mini auto-box">
+                  <span class="rotulo-mini">Nota automática</span>
+                  <span class="valor-auto">{t.nota_auto} / {t.valor_pts} pts</span>
+                </div>
+              {/if}
               <label class="mini">
-                <span>Nota final</span>
+                <span class="rotulo-mini">Nota final ({t.valor_pts} pts)</span>
                 <input
                   type="number"
                   name={`nota_${t.id}`}
                   min="0"
+                  max={t.valor_pts}
                   value={notaAtual(t)}
                   disabled={publicada}
                 />
               </label>
               <label class="mini grow">
-                <span>Feedback da tarefa</span>
-                <input name={`fb_${t.id}`} value={t.feedback ?? ""} disabled={publicada} />
+                <span class="rotulo-mini">Feedback da tarefa</span>
+                <input name={`fb_${t.id}`} value={t.feedback ?? ""} disabled={publicada} placeholder="Comentários sobre a resposta..." />
               </label>
             </div>
             <ul class="resultados">
               {#each t.resultados as res (res.teste_id)}
                 <li class:ok={res.status === "accepted"}>
-                  <span class="veredito">{res.status ?? "—"}</span>
-                  <span>teste #{res.teste_id} {res.publico ? "(público)" : "(privado)"}</span>
-                  {#if res.tempo}<span>{res.tempo}s</span>{/if}
-                  {#if res.memoria}<span>{res.memoria}KB</span>{/if}
-                  {#if res.stderr}<details><summary>stderr</summary><pre>{res.stderr}</pre></details>{/if}
+                  <div class="teste-cabeca">
+                    <span class="veredito">{res.status ?? "—"}</span>
+                    <span>teste #{res.teste_id} {res.publico ? "(público)" : "(privado)"}</span>
+                    {#if res.tempo}<span>· tempo: {res.tempo}s</span>{/if}
+                    {#if res.memoria}<span>· memória: {res.memoria}KB</span>{/if}
+                  </div>
+                  {#if res.stdout}
+                    <details><summary>stdout</summary><pre>{res.stdout}</pre></details>
+                  {/if}
+                  {#if res.stderr}
+                    <details><summary>stderr</summary><pre>{res.stderr}</pre></details>
+                  {/if}
                   {#if res.compile_output}
                     <details><summary>compilação</summary><pre>{res.compile_output}</pre></details>
                   {/if}
@@ -105,7 +119,8 @@
 
         {#if !publicada}
           <div class="botoes">
-            <button>Salvar correção</button>
+            <button type="submit" class="botao">Salvar correção</button>
+            <button type="submit" formaction="?/confirmar" class="botao verde">{cor?.confirmada_em ? "Reconfirmar validação" : "Confirmar / Validar"}</button>
           </div>
         {/if}
       </form>
@@ -117,19 +132,16 @@
               <button class="acao cinza">Reexecutar testes</button>
             </form>
           {/if}
-          <form method="POST" action="?/confirmar">
-            <button class="acao">Confirmar</button>
-          </form>
-          <form method="POST" action="?/publicar">
-            <button class="acao verde">Publicar notas</button>
-          </form>
-          <span class="meta">Publicar exige confirmação; depois disso congela.</span>
+          {#if cor?.confirmada_em}
+            <span class="badge-confirmada">✓ Validada e pronta para publicação</span>
+          {/if}
+          <span class="meta">A publicação das notas é feita para toda a turma de uma vez na tela de Entregas da atividade.</span>
         </div>
       {/if}
 
     {/if}
 
-    <a class="voltar" href={`/professor/atribuicoes/${data.submissaoID}/entregas`}>
+    <a class="voltar" href={`/professor/atribuicoes/${visao.submissao.atribuicao_id}/entregas`}>
       ← Entregas
     </a>
   {/if}
@@ -200,10 +212,44 @@
     align-items: end;
   }
   .mini {
-    width: 90px;
+    width: 120px;
   }
   .mini.grow {
     flex: 1;
+  }
+  .rotulo-mini {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--seno-gray-700);
+    display: block;
+    margin-bottom: 0.2rem;
+  }
+  .auto-box {
+    background: var(--seno-blue-50);
+    border: 1px solid var(--seno-blue-100);
+    border-radius: var(--raio-md);
+    padding: 0.35rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .valor-auto {
+    font-weight: 700;
+    color: var(--seno-blue-800);
+    font-size: 0.92rem;
+  }
+  .teste-cabeca {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .badge-confirmada {
+    background: var(--seno-green-50);
+    color: var(--seno-green);
+    font-weight: 600;
+    font-size: 0.82rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: var(--raio-md);
   }
   .resultados {
     list-style: none;
@@ -259,6 +305,12 @@
   .botoes button:hover {
     background: var(--seno-blue-700);
   }
+  .botoes button.verde {
+    background: var(--seno-green);
+  }
+  .botoes button.verde:hover {
+    background: #15803d;
+  }
   .trava {
     display: flex;
     align-items: center;
@@ -279,12 +331,6 @@
   }
   .acao:hover {
     background: var(--seno-blue-700);
-  }
-  .acao.verde {
-    background: var(--seno-green);
-  }
-  .acao.verde:hover {
-    background: var(--seno-green);
   }
   .acao.cinza {
     background: var(--seno-gray-600);
