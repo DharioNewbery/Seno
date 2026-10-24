@@ -450,8 +450,11 @@ func (s *Service) TarefaAnalytics(ctx context.Context, actor domain.User, tarefa
 		return nil, err
 	}
 
-	var nome, linguagem string
-	err := s.store.Pool.QueryRow(ctx, `SELECT nome, linguagem FROM tarefas WHERE id = $1`, tarefaID).Scan(&nome, &linguagem)
+	var nome string
+	var linguagem string
+	err := s.store.Pool.QueryRow(ctx, `
+		SELECT t.nome, COALESCE((SELECT at.linguagem FROM atividade_tarefas at WHERE at.tarefa_id = t.id LIMIT 1), '')
+		FROM tarefas t WHERE t.id = $1`, tarefaID).Scan(&nome, &linguagem)
 	if err != nil {
 		return nil, err
 	}
