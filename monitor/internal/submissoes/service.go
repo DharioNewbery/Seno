@@ -5,12 +5,15 @@
 package submissoes
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -29,10 +32,25 @@ type Service struct {
 	pool   *pgxpool.Pool
 	janela *tentativas.Service
 	j0     *judge0.Client
+	apiURL string
+	secret []byte
+	http   *http.Client
 }
 
 func New(pool *pgxpool.Pool, janela *tentativas.Service, j0 *judge0.Client) *Service {
-	return &Service{pool: pool, janela: janela, j0: j0}
+	return &Service{
+		pool:   pool,
+		janela: janela,
+		j0:     j0,
+		http:   &http.Client{Timeout: 10 * time.Second},
+	}
+}
+
+// WithAPIPush configura o envio imediato (push) de submissões e correções para a API principal.
+func (s *Service) WithAPIPush(apiURL, secret string) *Service {
+	s.apiURL = strings.TrimSuffix(strings.TrimSpace(apiURL), "/")
+	s.secret = []byte(secret)
+	return s
 }
 
 // Erros mapeados pelos handlers (§5.5).
@@ -77,8 +95,9 @@ func (s *Service) Cancelar(ctx context.Context, mid string, aluno int64, preID s
 }
 
 // Confirmar fecha a entrega: valida pre_id vivo + revisao_ref; congela as
-// respostas, anexa a pré-avaliação, APAGA a tentativa e agenda a correção
-// completa (públicos + privados) na fila (§5.5, efeito 1–4).
+// respostas, limpa os dados temporários de realização (tentativa, rascunhos,
+// pré-avaliações, ensaios), agenda a correção completa (públicos + privados)
+// na fila (§5.5, efeito 1–4) e transfere a submissão para a API.
 func (s *Service) Confirmar(ctx context.Context, mid string, aluno int64, preID string, agora time.Time) (*Entrega, error) {
 	// pré-avaliação: viva, não confirmada, não cancelada (409 senão).
 	var pre preAvaliacaoRow
@@ -98,8 +117,9 @@ func (s *Service) Confirmar(ctx context.Context, mid string, aluno int64, preID 
 	// revisão da tentativa = revisao_ref (409 ATUALIZADA senão).
 	var revisao int
 	var dados []byte
-	err = s.pool.QueryRow(ctx, `SELECT revisao, dados FROM tentativa
-	    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno).Scan(&revisao, &dados)
+	var abertaEm time.Time
+	err = s.pool.QueryRow(ctx, `SELECT revisao, dados, aberta_em FROM tentativa
+	    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno).Scan(&revisao, &dados, &abertaEm)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrSemTentativa
 	}
@@ -138,20 +158,25 @@ func (s *Service) Confirmar(ctx context.Context, mid string, aluno int64, preID 
 
 	var subID int64
 	if err := tx.QueryRow(ctx, `INSERT INTO submissao
-	    (monitor_id, aluno_api_id, n_t, dados, entregue_em, atrasada)
-	    VALUES ($1, $2, $3, $4::jsonb, $5, $6) RETURNING id`,
-		mid, aluno, nT, string(dados), agora, est.Atrasada).Scan(&subID); err != nil {
+	    (monitor_id, aluno_api_id, n_t, dados, comecou_em, entregue_em, atrasada)
+	    VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7) RETURNING id`,
+		mid, aluno, nT, string(dados), abertaEm, agora, est.Atrasada).Scan(&subID); err != nil {
 		return nil, fmt.Errorf("submissoes: gravando submissão: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `UPDATE pre_avaliacao SET submissao_id = $2, confirmada = true
-	    WHERE id = $1`, preID, subID); err != nil {
-		return nil, fmt.Errorf("submissoes: anexando pré: %w", err)
+	// Limpa dados temporários gerados durante a realização da atividade.
+	if _, err := tx.Exec(ctx, `DELETE FROM pre_avaliacao
+	    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno); err != nil {
+		return nil, fmt.Errorf("submissoes: limpando pre_avaliacao: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM execucao
+	    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno); err != nil {
+		return nil, fmt.Errorf("submissoes: limpando execucao: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM rascunho_ponto
 	    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno); err != nil {
 		return nil, fmt.Errorf("submissoes: rascunhos: %w", err)
 	}
-	// §5.5 efeito 3: apaga a tentativa (comportamento de hoje).
+	// §5.5 efeito 3: apaga a tentativa.
 	if _, err := tx.Exec(ctx, `DELETE FROM tentativa
 	    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno); err != nil {
 		return nil, fmt.Errorf("submissoes: apagando tentativa: %w", err)
@@ -164,6 +189,9 @@ func (s *Service) Confirmar(ctx context.Context, mid string, aluno int64, preID 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("submissoes: commit: %w", err)
 	}
+
+	// Envia imediatamente a submissão para a API (fonte única da verdade).
+	s.notificarAPI(ctx, mid, aluno)
 
 	if _, err := fila.Agenda(ctx, s.pool, KindCorrecao, map[string]any{
 		"submissao_id": subID,
@@ -212,23 +240,30 @@ type payloadCorrecao struct {
 // --- estrutura da correção --------------------------------------------------
 
 type resultadoCOR struct {
-	Ordem    int        `json:"ordem"`
-	Veredito string     `json:"veredito"`
-	Testes   []testeCOR `json:"testes"`
+	Ordem       int        `json:"ordem"`
+	TarefaAPIID int64      `json:"tarefa_api_id,omitempty"`
+	Veredito    string     `json:"veredito"`
+	Testes      []testeCOR `json:"testes"`
 	// Tarefa aberta (sem testes): nil — o professor preenche a nota manual.
 	Nota *float64 `json:"nota_auto,omitempty"`
 }
 
 type testeCOR struct {
-	Ordem   int     `json:"ordem"`
-	Status  string  `json:"status"`
-	Tempo   float64 `json:"tempo"`
-	Memoria int     `json:"memoria"`
-	Privado bool    `json:"privado"`
+	Ordem         int     `json:"ordem"`
+	TesteAPIID    int64   `json:"teste_api_id,omitempty"`
+	Status        string  `json:"status"`
+	Stdout        string  `json:"stdout,omitempty"`
+	Stderr        string  `json:"stderr,omitempty"`
+	CompileOutput string  `json:"compile_output,omitempty"`
+	Tempo         float64 `json:"tempo"`
+	CPU           float64 `json:"cpu,omitempty"`
+	Memoria       int     `json:"memoria"`
+	Privado       bool    `json:"privado"`
 }
 
-// HandlerHub devolve o handler da fila para kind "correcao": processa TODOS
-// os testes (públicos + privados) e grava nota por tarefa (nota_auto).
+// Handler devolve o handler da fila para kind "correcao": processa TODOS
+// os testes (públicos + privados), grava nota por tarefa (nota_auto) e
+// transfere o pacote consolidado para a API principal.
 func (s *Service) Handler() fila.Handler {
 	return func(ctx context.Context, payload json.RawMessage) error {
 		var p payloadCorrecao
@@ -250,7 +285,7 @@ func (s *Service) Handler() fila.Handler {
 			Carga contract.Carga `json:"carga"`
 		}
 		if err := json.Unmarshal(carga, &t); err != nil {
-			return fmt.Errorf("correcao: carga ilegígível: %w", err)
+			return fmt.Errorf("correcao: carga ilegível: %w", err)
 		}
 		respostas := map[string]any{}
 		_ = json.Unmarshal(dados, &respostas)
@@ -278,7 +313,11 @@ func (s *Service) Handler() fila.Handler {
 			if lim == nil {
 				lim = &contract.Limites{TempoCPUMs: 5000, TempoTotalMs: 10000, MemoriaMB: 128}
 			}
-			r := resultadoCOR{Ordem: tarefa.Ordem, Veredito: "accepted"}
+			r := resultadoCOR{
+				Ordem:       tarefa.Ordem,
+				TarefaAPIID: tarefa.TarefaAPIID,
+				Veredito:    "accepted",
+			}
 			acertos, total := 0, 0
 			for i, te := range tarefa.Testes {
 				total++
@@ -299,12 +338,24 @@ func (s *Service) Handler() fila.Handler {
 					st = "accepted"
 					acertos++
 				} else if resp.StatusID() == 1 || resp.StatusID() == 2 {
-					// fila do judge0 estágegada: retente (o handler re-executa)
+					// fila do judge0 estagnada: retente (o handler re-executa)
 					return fmt.Errorf("correcao: judge0 em fila (tarefa %d)", tarefa.Ordem)
 				}
+				cpuVal := tempo(resp.CPUTime)
+				if cpuVal == 0 {
+					cpuVal = tempo(resp.Time)
+				}
 				r.Testes = append(r.Testes, testeCOR{
-					Ordem: i + 1, Status: st, Tempo: tempo(resp.Time),
-					Memoria: memoriaInt(resp.Memory), Privado: !te.Publico,
+					Ordem:         i + 1,
+					TesteAPIID:    te.TesteAPIID,
+					Status:        st,
+					Stdout:        resp.Stdout,
+					Stderr:        resp.Stderr,
+					CompileOutput: resp.CompileOutput,
+					Tempo:         tempo(resp.Time),
+					CPU:           cpuVal,
+					Memoria:       memoriaInt(resp.Memory),
+					Privado:       !te.Publico,
 				})
 			}
 			if total > 0 {
@@ -331,6 +382,9 @@ func (s *Service) Handler() fila.Handler {
 			return fmt.Errorf("correcao: gravando: %w", err)
 		}
 		slog.Info("correção concluída", "submissao_id", p.SubmissaoID, "nota", notaTotal)
+
+		// Envia o resultado completo da correção automática para a API principal.
+		s.notificarAPI(ctx, mid, aluno)
 		return nil
 	}
 }
@@ -390,12 +444,13 @@ func (s *Service) Reexecutar(ctx context.Context, mid string, aluno int64) error
 func (s *Service) Excluir(ctx context.Context, mid string, aluno int64) error {
 	var subID int64
 	var dados []byte
+	var comecouEm *time.Time
 	var entregueEm time.Time
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, dados, entregue_em
+		SELECT id, dados, comecou_em, entregue_em
 		FROM submissao
 		WHERE monitor_id = $1 AND aluno_api_id = $2
-		ORDER BY id DESC LIMIT 1`, mid, aluno).Scan(&subID, &dados, &entregueEm)
+		ORDER BY id DESC LIMIT 1`, mid, aluno).Scan(&subID, &dados, &comecouEm, &entregueEm)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errors.New("submissão não encontrada")
 	}
@@ -403,19 +458,29 @@ func (s *Service) Excluir(ctx context.Context, mid string, aluno int64) error {
 		return fmt.Errorf("submissoes: buscar submissao: %w", err)
 	}
 
+	inicioReal := entregueEm
+	if comecouEm != nil && !comecouEm.IsZero() {
+		inicioReal = *comecouEm
+	}
+
 	// Calcula datas para restaurar a tentativa
 	var duracaoSeg int64
 	var fimPrevisto *time.Time
 	_ = s.pool.QueryRow(ctx, `
-		SELECT (carga->'regras'->>'duracao_s')::bigint,
-		       (carga->'regras'->>'fim')::timestamptz
+		SELECT (carga->'janela'->>'duracao_seg')::bigint,
+		       (carga->'janela'->>'prazo')::timestamptz
 		FROM atividade WHERE monitor_id = $1`, mid).Scan(&duracaoSeg, &fimPrevisto)
 
-	fimReal := fimPrevisto
+	var fimReal time.Time
+	if fimPrevisto != nil {
+		fimReal = *fimPrevisto
+	} else {
+		fimReal = inicioReal.Add(24 * time.Hour)
+	}
 	if duracaoSeg > 0 {
-		t := entregueEm.Add(time.Duration(duracaoSeg) * time.Second)
-		if fimReal == nil || t.Before(*fimReal) {
-			fimReal = &t
+		t := inicioReal.Add(time.Duration(duracaoSeg) * time.Second)
+		if t.Before(fimReal) {
+			fimReal = t
 		}
 	}
 
@@ -430,8 +495,8 @@ func (s *Service) Excluir(ctx context.Context, mid string, aluno int64) error {
 		INSERT INTO tentativa (monitor_id, aluno_api_id, revisao, dados, aberta_em, fim_real)
 		VALUES ($1, $2, 1, $3::jsonb, $4, $5)
 		ON CONFLICT (monitor_id, aluno_api_id) DO UPDATE
-		SET dados = EXCLUDED.dados, revisao = 1`,
-		mid, aluno, string(dados), entregueEm, fimReal); err != nil {
+		SET dados = EXCLUDED.dados, revisao = 1, aberta_em = EXCLUDED.aberta_em, fim_real = EXCLUDED.fim_real`,
+		mid, aluno, string(dados), inicioReal, fimReal); err != nil {
 		return fmt.Errorf("submissoes: restaurar tentativa: %w", err)
 	}
 
@@ -480,12 +545,20 @@ func (s *Service) Coletar(ctx context.Context, mid string, aluno int64, agora ti
 
 	var subID int64
 	if err := tx.QueryRow(ctx, `INSERT INTO submissao
-	    (monitor_id, aluno_api_id, n_t, dados, entregue_em, atrasada)
-	    VALUES ($1, $2, $3, $4::jsonb, $5, true) RETURNING id`,
-		mid, aluno, nT, string(dados), agora).Scan(&subID); err != nil {
+	    (monitor_id, aluno_api_id, n_t, dados, comecou_em, entregue_em, atrasada)
+	    VALUES ($1, $2, $3, $4::jsonb, $5, $6, true) RETURNING id`,
+		mid, aluno, nT, string(dados), abertaEm, agora).Scan(&subID); err != nil {
 		return nil, fmt.Errorf("submissoes: gravando submissão: %w", err)
 	}
 
+	if _, err := tx.Exec(ctx, `DELETE FROM pre_avaliacao
+	    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno); err != nil {
+		return nil, fmt.Errorf("submissoes: limpando pre_avaliacao: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM execucao
+	    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno); err != nil {
+		return nil, fmt.Errorf("submissoes: limpando execucao: %w", err)
+	}
 	if _, err := tx.Exec(ctx, `DELETE FROM rascunho_ponto
 	    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno); err != nil {
 		return nil, fmt.Errorf("submissoes: rascunhos: %w", err)
@@ -503,6 +576,8 @@ func (s *Service) Coletar(ctx context.Context, mid string, aluno int64, agora ti
 		return nil, fmt.Errorf("submissoes: commit: %w", err)
 	}
 
+	s.notificarAPI(ctx, mid, aluno)
+
 	if _, err := fila.Agenda(ctx, s.pool, KindCorrecao, map[string]any{
 		"submissao_id": subID,
 	}, 5); err != nil {
@@ -511,46 +586,13 @@ func (s *Service) Coletar(ctx context.Context, mid string, aluno int64, agora ti
 	return &Entrega{Status: "entregue", NT: nT, Atrasada: true, SegundosAtraso: 0}, nil
 }
 
-// DetalhesSubmissao reúne todos os dados de uma entrega do aluno no Monitor para o professor.
-type DetalhesSubmissao struct {
-	Submissao *SubmissaoDetalhe `json:"submissao,omitempty"`
-	Correcao  *CorrecaoDetalhe  `json:"correcao,omitempty"`
-	Atividade AtividadeDetalhe  `json:"atividade"`
-}
-
-type SubmissaoDetalhe struct {
-	ID         int64             `json:"id"`
-	AlunoID    int64             `json:"aluno_id"`
-	NT         int               `json:"n_t"`
-	EntregueEm time.Time         `json:"entregue_em"`
-	Atrasada   bool              `json:"atrasada"`
-	Respostas  map[string]string `json:"respostas"`
-}
-
-type CorrecaoDetalhe struct {
-	Status      string          `json:"status"`
-	NotaAuto    *float64        `json:"nota_auto,omitempty"`
-	ConcluidaEm *time.Time      `json:"concluida_em,omitempty"`
-	Resultados  json.RawMessage `json:"resultados,omitempty"`
-}
-
-type AtividadeDetalhe struct {
-	Nome    string          `json:"nome"`
-	Tarefas []TarefaDetalhe `json:"tarefas"`
-}
-
-type TarefaDetalhe struct {
-	Ordem     int     `json:"ordem"`
-	Nome      string  `json:"nome"`
-	Enunciado string  `json:"enunciado"`
-	Linguagem string  `json:"linguagem"`
-	ValorPts  float64 `json:"valor_pts"`
-}
-
-// ObterDetalhes busca a submissão, correção e metadados das tarefas da atividade.
-func (s *Service) ObterDetalhes(ctx context.Context, mid string, aluno int64) (*DetalhesSubmissao, error) {
+// ObterDetalhes busca a submissão, correção e metadados das tarefas da atividade
+// no formato contract.PacoteSubmissaoMonitor (compatível tanto com a sincronização
+// para a API quanto com a visualização detalhada).
+func (s *Service) ObterDetalhes(ctx context.Context, mid string, aluno int64) (*contract.PacoteSubmissaoMonitor, error) {
+	var apiID *int64
 	var cargaJSON []byte
-	if err := s.pool.QueryRow(ctx, `SELECT carga FROM atividade WHERE monitor_id = $1`, mid).Scan(&cargaJSON); err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT api_id, carga FROM atividade WHERE monitor_id = $1`, mid).Scan(&apiID, &cargaJSON); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.New("atividade não encontrada no Monitor")
 		}
@@ -558,23 +600,34 @@ func (s *Service) ObterDetalhes(ctx context.Context, mid string, aluno int64) (*
 	}
 
 	var envelope struct {
+		APIID int64          `json:"api_id"`
 		Carga contract.Carga `json:"carga"`
 	}
 	_ = json.Unmarshal(cargaJSON, &envelope)
+	atribID := envelope.APIID
+	if atribID == 0 && apiID != nil {
+		atribID = *apiID
+	}
 
-	det := &DetalhesSubmissao{
-		Atividade: AtividadeDetalhe{
+	det := &contract.PacoteSubmissaoMonitor{
+		MonitorID:       mid,
+		AtribuicaoAPIID: atribID,
+		AlunoAPIID:      aluno,
+		Atividade: contract.AtividadeInfoMonitor{
 			Nome:    envelope.Carga.Atividade.Nome,
-			Tarefas: make([]TarefaDetalhe, 0, len(envelope.Carga.Tarefas)),
+			Tarefas: make([]contract.TarefaInfoMonitor, 0, len(envelope.Carga.Tarefas)),
 		},
 	}
+	ordemParaTarefaID := make(map[int]int64, len(envelope.Carga.Tarefas))
 	for _, t := range envelope.Carga.Tarefas {
-		det.Atividade.Tarefas = append(det.Atividade.Tarefas, TarefaDetalhe{
-			Ordem:     t.Ordem,
-			Nome:      t.Nome,
-			Enunciado: t.Enunciado,
-			Linguagem: t.Linguagem,
-			ValorPts:  t.ValorPts,
+		ordemParaTarefaID[t.Ordem] = t.TarefaAPIID
+		det.Atividade.Tarefas = append(det.Atividade.Tarefas, contract.TarefaInfoMonitor{
+			Ordem:       t.Ordem,
+			TarefaAPIID: t.TarefaAPIID,
+			Nome:        t.Nome,
+			Enunciado:   t.Enunciado,
+			Linguagem:   t.Linguagem,
+			ValorPts:    t.ValorPts,
 		})
 	}
 
@@ -582,14 +635,15 @@ func (s *Service) ObterDetalhes(ctx context.Context, mid string, aluno int64) (*
 		subID      int64
 		nT         int
 		dados      []byte
+		comecouEm  *time.Time
 		entregueEm time.Time
 		atrasada   bool
 	)
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, n_t, dados, entregue_em, atrasada
+		SELECT id, n_t, dados, comecou_em, entregue_em, atrasada
 		FROM submissao
 		WHERE monitor_id = $1 AND aluno_api_id = $2
-		ORDER BY n_t DESC LIMIT 1`, mid, aluno).Scan(&subID, &nT, &dados, &entregueEm, &atrasada)
+		ORDER BY n_t DESC LIMIT 1`, mid, aluno).Scan(&subID, &nT, &dados, &comecouEm, &entregueEm, &atrasada)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("obter submissao: %w", err)
 	}
@@ -606,11 +660,16 @@ func (s *Service) ObterDetalhes(ctx context.Context, mid string, aluno int64) (*
 				}
 			}
 		}
+		inicioSub := entregueEm
+		if comecouEm != nil && !comecouEm.IsZero() {
+			inicioSub = *comecouEm
+		}
 
-		det.Submissao = &SubmissaoDetalhe{
+		det.Submissao = &contract.SubmissaoMonitor{
 			ID:         subID,
 			AlunoID:    aluno,
 			NT:         nT,
+			ComecouEm:  inicioSub,
 			EntregueEm: entregueEm,
 			Atrasada:   atrasada,
 			Respostas:  respostas,
@@ -627,11 +686,23 @@ func (s *Service) ObterDetalhes(ctx context.Context, mid string, aluno int64) (*
 			FROM correcao
 			WHERE submissao_id = $1`, subID).Scan(&corStatus, &notaAuto, &concluidaEm, &resultados)
 		if errCor == nil {
-			det.Correcao = &CorrecaoDetalhe{
+			var parsed struct {
+				Tarefas []contract.TarefaCorrecaoMonitor `json:"tarefas"`
+			}
+			if len(resultados) > 0 {
+				_ = json.Unmarshal(resultados, &parsed)
+				for i := range parsed.Tarefas {
+					if parsed.Tarefas[i].TarefaAPIID == 0 {
+						parsed.Tarefas[i].TarefaAPIID = ordemParaTarefaID[parsed.Tarefas[i].Ordem]
+					}
+				}
+			}
+			det.Correcao = &contract.CorrecaoMonitor{
 				Status:      corStatus,
 				NotaAuto:    notaAuto,
 				ConcluidaEm: concluidaEm,
 				Resultados:  resultados,
+				Tarefas:     parsed.Tarefas,
 			}
 		}
 	} else {
@@ -650,7 +721,7 @@ func (s *Service) ObterDetalhes(ctx context.Context, mid string, aluno int64) (*
 					}
 				}
 			}
-			det.Submissao = &SubmissaoDetalhe{
+			det.Submissao = &contract.SubmissaoMonitor{
 				AlunoID:   aluno,
 				Respostas: respostas,
 			}
@@ -660,3 +731,38 @@ func (s *Service) ObterDetalhes(ctx context.Context, mid string, aluno int64) (*
 	return det, nil
 }
 
+// notificarAPI envia o pacote da submissão e correção para a API principal via HMAC
+// sempre que uma submissão é confirmada/coletada ou quando a correção automática termina.
+func (s *Service) notificarAPI(ctx context.Context, mid string, aluno int64) {
+	if s.apiURL == "" || len(s.secret) == 0 {
+		return
+	}
+	pacote, err := s.ObterDetalhes(ctx, mid, aluno)
+	if err != nil || pacote == nil || pacote.Submissao == nil || pacote.Submissao.ID == 0 {
+		return
+	}
+	corpo, err := json.Marshal(pacote)
+	if err != nil {
+		return
+	}
+	mac, ts := contract.AssinarMAC(s.secret, time.Now(), corpo)
+	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost,
+		s.apiURL+"/v1/interna/monitor/submissoes", bytes.NewReader(corpo))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(contract.HeaderMAC, mac)
+	req.Header.Set(contract.HeaderTime, ts)
+	resp, err := s.http.Do(req)
+	if err != nil {
+		slog.Warn("monitor: falha ao enviar submissão para a API (será sincronizada no polling)", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		slog.Warn("monitor: API rejeitou envio de submissão", "status", resp.StatusCode)
+	}
+}

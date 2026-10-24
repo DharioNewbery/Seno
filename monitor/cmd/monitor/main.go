@@ -84,7 +84,7 @@ func main() {
 		cfg.CallbackBase, cfg.Judge0Secret,
 		cfg.AlunoExecMaxPerMin, cfg.ExecucaoRetencao)
 	preAvaS := preavaliacao.New(pool, j0Cli, tentativaS, cfg.PreAvaTTL)
-	submissaoS := submissoes.New(pool, tentativaS, j0Cli)
+	submissaoS := submissoes.New(pool, tentativaS, j0Cli).WithAPIPush(cfg.APIURL, cfg.Secret)
 	estadoS := estado.New(pool)
 
 	// Retenção LGPD (§9.2): submissão e log por 2 anos (default); ciclo diário.

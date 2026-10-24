@@ -40,6 +40,9 @@ type Config struct {
 	// Base do web (BFF) vista pelo NAVEGADOR — usada na tela da prova para
 	// o link "ver entregas" do bloqueio final. Vazio = sem link.
 	WebURL string
+
+	// Base da API principal para envio imediato (push) de submissões e correções.
+	APIURL string
 }
 
 // LoadConfig lê o ambiente e devolve a configuração validada.
@@ -63,6 +66,7 @@ func LoadConfig() (*Config, error) {
 		Judge0Secret:       os.Getenv("SENO_JUDGE0_CALLBACK_SECRET"),
 		CallbackBase:       os.Getenv("SENO_MONITOR_CALLBACK_URL"),
 		WebURL:             strings.TrimSuffix(strings.TrimSpace(os.Getenv("SENO_WEB_URL")), "/"),
+		APIURL:             strings.TrimSuffix(strings.TrimSpace(os.Getenv("SENO_API_URL")), "/"),
 	}
 
 	c.DatabaseURL = os.Getenv("SENO_MONITOR_DSN")
