@@ -40,7 +40,7 @@
 
     <label>
       <span>Nome</span>
-      <input name="nome" required maxlength="128" placeholder="Prova 1 — questão 2" />
+      <input name="nome" required maxlength="128" placeholder="Sequência de Fibonacci" />
     </label>
 
     <label>
@@ -113,7 +113,7 @@
     </details>
 
     <fieldset>
-      <legend>Teste (stdin → saída esperada; comparação exata)</legend>
+      <legend>Testes Automáticos</legend>
       {#each testes as t, i (i)}
         <div class="teste">
           <textarea name="stdin" rows="2" bind:value={t.stdin}
@@ -129,7 +129,7 @@
           </button>
         </div>
       {:else}
-        <p class="dica">Sem testes = tarefa aberta (correção manual).</p>
+        <p class="dica">Nenhum teste automático cadastrado.</p>
       {/each}
       <button type="button" class="pequeno" onclick={addTeste}>+ Teste</button>
       <input type="hidden" name="testes" value={testesJSON} />
