@@ -39,7 +39,7 @@
 
 <style>
   .criacao {
-    max-width: 420px;
+    width: 100%;
   }
 
   .cartao {
@@ -56,7 +56,7 @@
     margin: 0;
   }
 
-    label {
+  label {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
@@ -68,14 +68,15 @@
     color: var(--seno-gray-700);
   }
 
-      button {
+  button {
     background: var(--seno-blue-600);
     color: var(--seno-white);
     border: none;
     border-radius: var(--raio-md);
-    padding: 0.65rem;
+    padding: 0.65rem 1.25rem;
     font-weight: 600;
     cursor: pointer;
+    width: fit-content;
   }
 
   button:hover {
