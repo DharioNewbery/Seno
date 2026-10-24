@@ -20,6 +20,7 @@ api/coverage.out
 # Web
 web/node_modules/
 web/.svelte-kit/
+web/**/.svelte-kit/
 web/build/
 web/vite.config.ts.timestamp-*
 
