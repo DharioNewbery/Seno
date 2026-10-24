@@ -99,10 +99,16 @@
 
   .corpo {
     flex: 1;
-    max-width: 960px;
     width: 100%;
+    max-width: var(--seno-largura-conteudo);
     margin: 0 auto;
-    padding: 2rem;
+    padding: 2rem 2rem 3rem;
+  }
+
+  @media (max-width: 900px) {
+    .corpo {
+      padding: 1.25rem 1rem 2.5rem;
+    }
   }
 
   .cartoes {

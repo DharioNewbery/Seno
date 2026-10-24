@@ -55,6 +55,9 @@
   --foco: 0 0 0 3px rgb(47 128 237 / 0.35);
   --sombra-flutuante: 0 12px 32px rgb(8 42 90 / 0.18);
 
+  /* Layout */
+  --seno-largura-conteudo: 72rem;
+
   /* Tipografia */
   --fonte:
     "IBM Plex Sans Variable", "Segoe UI", system-ui, -apple-system, "Helvetica Neue",

@@ -19,4 +19,8 @@ describe("tema da fundação", () => {
       expect(css).toContain(`--seno-blue-${tone}`);
     }
   });
+
+  it("declara a largura padrão do conteúdo", () => {
+    expect(css).toContain("--seno-largura-conteudo: 72rem");
+  });
 });

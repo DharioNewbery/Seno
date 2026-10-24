@@ -459,7 +459,8 @@
   }
 
   .pagina {
-    max-width: 74rem;
+    width: 100%;
+    max-width: var(--seno-largura-conteudo);
     margin: 0 auto;
     padding: 2rem 2rem 3rem;
   }
