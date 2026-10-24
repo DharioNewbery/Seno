@@ -54,7 +54,7 @@
 
 <style>
   .nova-turma {
-    max-width: 460px;
+    width: 100%;
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
@@ -71,7 +71,7 @@
   .cartao h2 {
     margin: 0;
   }
-    label {
+  label {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
@@ -81,14 +81,15 @@
     font-weight: 600;
     color: var(--seno-gray-700);
   }
-      button {
+  button {
     background: var(--seno-blue-600);
     color: var(--seno-white);
     border: none;
     border-radius: var(--raio-md);
-    padding: 0.65rem;
+    padding: 0.65rem 1.25rem;
     font-weight: 600;
     cursor: pointer;
+    width: fit-content;
   }
   button:hover {
     background: var(--seno-blue-700);

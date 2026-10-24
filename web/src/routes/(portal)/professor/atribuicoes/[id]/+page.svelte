@@ -91,7 +91,7 @@
 
 <style>
   .config {
-    max-width: 520px;
+    width: 100%;
     display: flex;
     flex-direction: column;
     gap: 0.8rem;

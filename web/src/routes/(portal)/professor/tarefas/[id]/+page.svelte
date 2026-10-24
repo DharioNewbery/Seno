@@ -194,10 +194,10 @@
 
 <style>
   .tarefa {
+    width: 100%;
     display: flex;
     flex-direction: column;
     gap: 0.9rem;
-    max-width: 760px;
   }
   .cabeca {
     display: flex;

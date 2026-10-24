@@ -89,7 +89,7 @@
 
 <style>
   .nova-atividade {
-    max-width: 760px;
+    width: 100%;
     display: flex;
     flex-direction: column;
     gap: 0.8rem;

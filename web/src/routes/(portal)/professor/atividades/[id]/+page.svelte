@@ -125,10 +125,10 @@
 
 <style>
   .atividade {
+    width: 100%;
     display: flex;
     flex-direction: column;
     gap: 0.9rem;
-    max-width: 780px;
   }
   .cabeca {
     display: flex;
