@@ -312,7 +312,7 @@ func (s *Service) Listar(ctx context.Context, actor domain.User, f FiltroTarefas
 	for _, row := range rows {
 		out = append(out, tarefaDe(gen.InsertTarefaRow{
 			ID: row.ID, ProfessorID: row.ProfessorID,
-			Nome: row.Nome,
+			Nome: row.Nome, Enunciado: row.Enunciado,
 			TempoCpuMs: row.TempoCpuMs, TempoTotalMs: row.TempoTotalMs,
 			MemoriaMb: row.MemoriaMb,
 			DeletedAt: row.DeletedAt, CreatedAt: row.CreatedAt,

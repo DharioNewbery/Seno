@@ -289,6 +289,7 @@ const listTarefas = `-- name: ListTarefas :many
 SELECT t.id,
        t.professor_id,
        t.nome,
+       t.enunciado,
        t.tempo_cpu_ms,
        t.tempo_total_ms,
        t.memoria_mb,
@@ -316,6 +317,7 @@ type ListTarefasRow struct {
 	ID             int64              `json:"id"`
 	ProfessorID    int64              `json:"professor_id"`
 	Nome           string             `json:"nome"`
+	Enunciado      string             `json:"enunciado"`
 	TempoCpuMs     int32              `json:"tempo_cpu_ms"`
 	TempoTotalMs   int32              `json:"tempo_total_ms"`
 	MemoriaMb      int32              `json:"memoria_mb"`
@@ -339,6 +341,7 @@ func (q *Queries) ListTarefas(ctx context.Context, arg ListTarefasParams) ([]Lis
 			&i.ID,
 			&i.ProfessorID,
 			&i.Nome,
+			&i.Enunciado,
 			&i.TempoCpuMs,
 			&i.TempoTotalMs,
 			&i.MemoriaMb,

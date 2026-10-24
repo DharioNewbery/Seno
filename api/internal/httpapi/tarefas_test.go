@@ -59,6 +59,12 @@ func TestTarefas(t *testing.T) {
 	if intOf(corpo["total"]) != 1 {
 		t.Errorf("lista do dono: %v", corpo["total"])
 	}
+	if lista, ok := corpo["tarefas"].([]any); ok && len(lista) > 0 {
+		tItem := lista[0].(map[string]any)
+		if en, _ := tItem["enunciado"].(string); en == "" {
+			t.Errorf("enunciado ausente na lista de tarefas: %v", tItem)
+		}
+	}
 	// Staff vê tudo.
 	w, corpo = chama(t, r, "GET", "/v1/tarefas", "", autenticado(tokSuper))
 	if intOf(corpo["total"]) != 1 {

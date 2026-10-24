@@ -59,6 +59,7 @@ WHERE t.id = $1;
 SELECT t.id,
        t.professor_id,
        t.nome,
+       t.enunciado,
        t.tempo_cpu_ms,
        t.tempo_total_ms,
        t.memoria_mb,
