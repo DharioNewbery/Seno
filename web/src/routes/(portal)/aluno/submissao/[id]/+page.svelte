@@ -123,10 +123,10 @@
 
 <style>
   .correcao {
+    width: 100%;
     display: flex;
     flex-direction: column;
     gap: 0.9rem;
-    max-width: 820px;
   }
   .cabeca {
     display: flex;
@@ -215,7 +215,7 @@
     font-size: 0.74rem;
   }
   .resultados pre {
-    max-width: 500px;
+    max-width: 100%;
     white-space: pre-wrap;
     font-size: 0.78rem;
     background: var(--seno-gray-100);

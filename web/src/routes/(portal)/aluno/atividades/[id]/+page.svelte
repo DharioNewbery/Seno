@@ -117,10 +117,10 @@
 
 <style>
   .pre {
+    width: 100%;
     display: flex;
     flex-direction: column;
     gap: 0.9rem;
-    max-width: 820px;
   }
   .cabeca {
     display: flex;

@@ -274,7 +274,7 @@
 
 <style>
   .atividade-aluno {
-    max-width: 820px;
+    width: 100%;
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -401,7 +401,7 @@
     font-size: 0.78rem;
   }
   .testes pre {
-    max-width: 480px;
+    max-width: 100%;
     white-space: pre-wrap;
     font-size: 0.78rem;
     background: var(--seno-white);
