@@ -14,6 +14,10 @@
 
   let testes = $state<Teste[]>([]);
   let testesJSON = $state("");
+  let tempoCpu = $state(2000);
+  let tempoTotal = $state(5000);
+  let memoria = $state(256);
+
   $effect(() => {
     testesJSON = JSON.stringify(testes);
   });
@@ -45,23 +49,68 @@
         placeholder="Descrição completa da tarefa para o aluno"></textarea>
     </label>
 
-    <fieldset>
-      <legend>Limites de execução (vazio = padrão global)</legend>
-      <div class="limites">
-        <label>
-          <span>Tempo de CPU (ms)</span>
-          <input type="number" name="tempo_cpu_ms" min="0" max="600000" />
-        </label>
-        <label>
-          <span>Tempo total (ms)</span>
-          <input type="number" name="tempo_total_ms" min="0" max="600000" />
-        </label>
-        <label>
-          <span>Memória (MB)</span>
-          <input type="number" name="memoria_mb" min="0" max="4096" />
-        </label>
+    <details class="secao-avancadas">
+      <summary class="btn-avancadas">
+        <svg
+          class="seta"
+          width="12"
+          height="12"
+          viewBox="0 0 12 12"
+          aria-hidden="true"
+        >
+          <path
+            d="M4 2l4 4-4 4"
+            stroke="currentColor"
+            stroke-width="1.6"
+            fill="none"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <span>Opções avançadas</span>
+      </summary>
+
+      <div class="painel-avancadas">
+        <fieldset>
+          <legend>Limites de execução (vazio ou 0 = padrão do executor)</legend>
+          <div class="limites">
+            <label>
+              <span>Tempo de CPU (ms)</span>
+              <input
+                type="number"
+                name="tempo_cpu_ms"
+                min="0"
+                max="600000"
+                placeholder="2000"
+                bind:value={tempoCpu}
+              />
+            </label>
+            <label>
+              <span>Tempo total (ms)</span>
+              <input
+                type="number"
+                name="tempo_total_ms"
+                min="0"
+                max="600000"
+                placeholder="5000"
+                bind:value={tempoTotal}
+              />
+            </label>
+            <label>
+              <span>Memória (MB)</span>
+              <input
+                type="number"
+                name="memoria_mb"
+                min="0"
+                max="4096"
+                placeholder="256"
+                bind:value={memoria}
+              />
+            </label>
+          </div>
+        </fieldset>
       </div>
-    </fieldset>
+    </details>
 
     <fieldset>
       <legend>Teste (stdin → saída esperada; comparação exata)</legend>
@@ -86,14 +135,14 @@
       <input type="hidden" name="testes" value={testesJSON} />
     </fieldset>
 
-    <button>Criar tarefa</button>
+    <button type="submit" class="btn-submeter">Criar tarefa</button>
   </form>
   <a class="voltar" href="/professor/tarefas">← Voltar ao banco</a>
 </section>
 
 <style>
   .nova-tarefa {
-    max-width: 720px;
+    width: 100%;
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
@@ -181,16 +230,58 @@
   .pequeno:hover {
     background: var(--seno-blue-700);
   }
-    .cartao > button {
+  details.secao-avancadas {
+    display: block;
+  }
+  summary.btn-avancadas {
+    list-style: none;
+    background: none;
+    border: none;
+    padding: 0.2rem 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--seno-blue-600);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    width: fit-content;
+    border-radius: var(--raio-sm);
+    transition: color 0.12s ease;
+    user-select: none;
+  }
+  summary.btn-avancadas::-webkit-details-marker {
+    display: none;
+  }
+  summary.btn-avancadas:hover {
+    color: var(--seno-blue-800);
+    text-decoration: underline;
+  }
+  summary.btn-avancadas:focus-visible {
+    outline: 2px solid var(--seno-blue-600);
+    outline-offset: 2px;
+  }
+  summary.btn-avancadas .seta {
+    transform-origin: center;
+    transition: transform 0.15s ease;
+  }
+  details[open] > summary.btn-avancadas .seta {
+    transform: rotate(90deg);
+  }
+  .painel-avancadas {
+    margin-top: 0.5rem;
+  }
+  .cartao > button.btn-submeter {
     background: var(--seno-blue-600);
     color: var(--seno-white);
     border: none;
     border-radius: var(--raio-md);
-    padding: 0.65rem;
+    padding: 0.65rem 1.25rem;
     font-weight: 600;
     cursor: pointer;
+    width: fit-content;
   }
-  .cartao > button:hover {
+  .cartao > button.btn-submeter:hover {
     background: var(--seno-blue-700);
   }
     </style>

@@ -251,6 +251,25 @@ export function listaDeTarefas(r: Resultado): Tarefa[] {
   return (r.body as { tarefas?: Tarefa[] } | null)?.tarefas ?? [];
 }
 
+/**
+ * Extrai e valida um limite de execução a partir do FormData.
+ * Se o campo não estiver presente (null), utiliza o valor padrão fornecido.
+ * Se o campo estiver vazio, não numérico ou menor/igual a zero, retorna undefined (padrão global).
+ */
+export function extrairLimite(
+  form: FormData,
+  campo: string,
+  padrao?: number,
+): number | undefined {
+  const bruto = form.get(campo);
+  if (bruto === null) return padrao;
+  if (String(bruto).trim() === "") return undefined;
+  const n = Number(bruto);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  const v = Math.floor(n);
+  return v > 0 ? v : undefined;
+}
+
 export async function criarTarefa(
   request: Request,
   token: string,

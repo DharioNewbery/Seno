@@ -1,7 +1,7 @@
-﻿import { fail, redirect, type Actions } from "@sveltejs/kit";
+import { fail, redirect, type Actions } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 
-import { criarTarefa, mensagemDaApi } from "#lib/server/ensino";
+import { criarTarefa, extrairLimite, mensagemDaApi } from "#lib/server/ensino";
 import { tokenDaSessao } from "#lib/server/sessao";
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -15,19 +15,10 @@ interface TesteForm {
   publico: boolean;
 }
 
-/** Parse dos limites opcionais do formulÃ¡rio (vazio/0 = padrÃ£o global). */
-function limiteMs(form: FormData, campo: string): number | undefined {
-  const bruto = form.get(campo);
-  if (bruto === null || String(bruto).trim() === "") return undefined;
-  const n = Number(bruto);
-  if (!Number.isFinite(n) || n <= 0) return undefined;
-  return Math.floor(n);
-}
-
 export const actions: Actions = {
   criar: async (evento) => {
     const token = tokenDaSessao(evento.cookies);
-    if (!token) return fail(401, { erro: "SessÃ£o encerrada." });
+    if (!token) return fail(401, { erro: "Sessão encerrada." });
     const form = await evento.request.formData();
     const nome = String(form.get("nome") ?? "").trim();
     const enunciado = String(form.get("enunciado") ?? "").trim();
@@ -48,21 +39,19 @@ export const actions: Actions = {
           );
         }
       } catch {
-        return fail(422, { erro: "NÃ£o entendi os testes: recarregue a pÃ¡gina." });
+        return fail(422, { erro: "Não entendi os testes: recarregue a página." });
       }
     }
+    const cpu = extrairLimite(form, "tempo_cpu_ms", 2000);
+    const total = extrairLimite(form, "tempo_total_ms", 5000);
+    const mem = extrairLimite(form, "memoria_mb", 256);
+
     const r = await criarTarefa(evento.request, token, {
       nome,
       enunciado,
-      ...(limiteMs(form, "tempo_cpu_ms") !== undefined
-        ? { tempo_cpu_ms: limiteMs(form, "tempo_cpu_ms") }
-        : {}),
-      ...(limiteMs(form, "tempo_total_ms") !== undefined
-        ? { tempo_total_ms: limiteMs(form, "tempo_total_ms") }
-        : {}),
-      ...(limiteMs(form, "memoria_mb") !== undefined
-        ? { memoria_mb: limiteMs(form, "memoria_mb") }
-        : {}),
+      ...(cpu !== undefined ? { tempo_cpu_ms: cpu } : {}),
+      ...(total !== undefined ? { tempo_total_ms: total } : {}),
+      ...(mem !== undefined ? { memoria_mb: mem } : {}),
       testes: testes.map((t) => ({
         stdin: t.stdin,
         stdout_esperado: t.stdout,
