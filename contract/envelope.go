@@ -1,6 +1,9 @@
 package contract
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // Transferencia é o envelope integral da publicação de atividade da API para
 // o Monitor (spec §2, POST /interna/v1/atividades). Congelado: ambos os
@@ -73,6 +76,7 @@ type Limites struct {
 }
 
 type TesteCarga struct {
+	TesteAPIID     int64  `json:"teste_api_id,omitempty"`
 	Stdin          string `json:"stdin"`
 	StdoutEsperado string `json:"stdout_esperado"`
 	Publico        bool   `json:"publico"`
@@ -107,4 +111,68 @@ type EstadoAluno struct {
 	PrazoEfetivo    *time.Time `json:"prazo_efetivo"`
 	NotaAuto        *float64   `json:"nota_auto"`
 	CorrecaoStatus  string     `json:"correcao_status"`
+}
+
+// PacoteSubmissaoMonitor transfere a submissão definitiva e o resultado da
+// correção automática do Monitor para a API (fonte única da verdade após entrega).
+type PacoteSubmissaoMonitor struct {
+	MonitorID       string               `json:"monitor_id"`
+	AtribuicaoAPIID int64                `json:"atribuicao_api_id"`
+	AlunoAPIID      int64                `json:"aluno_api_id"`
+	Submissao       *SubmissaoMonitor    `json:"submissao,omitempty"`
+	Correcao        *CorrecaoMonitor     `json:"correcao,omitempty"`
+	Atividade       AtividadeInfoMonitor `json:"atividade"`
+}
+
+type SubmissaoMonitor struct {
+	ID         int64             `json:"id"`
+	AlunoID    int64             `json:"aluno_id"`
+	NT         int               `json:"n_t"`
+	ComecouEm  time.Time         `json:"comecou_em"`
+	EntregueEm time.Time         `json:"entregue_em"`
+	Atrasada   bool              `json:"atrasada"`
+	Respostas  map[string]string `json:"respostas"` // ordem ("1", "2"...) -> código
+}
+
+type CorrecaoMonitor struct {
+	Status      string                  `json:"status"` // pendente | executando | concluida | erro
+	NotaAuto    *float64                `json:"nota_auto,omitempty"`
+	ConcluidaEm *time.Time              `json:"concluida_em,omitempty"`
+	Resultados  json.RawMessage         `json:"resultados,omitempty"`
+	Tarefas     []TarefaCorrecaoMonitor `json:"tarefas,omitempty"`
+}
+
+type TarefaCorrecaoMonitor struct {
+	Ordem       int                     `json:"ordem"`
+	TarefaAPIID int64                   `json:"tarefa_api_id"`
+	Veredito    string                  `json:"veredito"`
+	NotaAuto    *float64                `json:"nota_auto,omitempty"`
+	Testes      []ResultadoTesteMonitor `json:"testes"`
+}
+
+type ResultadoTesteMonitor struct {
+	Ordem         int     `json:"ordem"`
+	TesteAPIID    int64   `json:"teste_api_id"`
+	Status        string  `json:"status"`
+	Stdout        string  `json:"stdout,omitempty"`
+	Stderr        string  `json:"stderr,omitempty"`
+	CompileOutput string  `json:"compile_output,omitempty"`
+	Tempo         float64 `json:"tempo"`
+	CPU           float64 `json:"cpu"`
+	Memoria       int     `json:"memoria"`
+	Privado       bool    `json:"privado"`
+}
+
+type AtividadeInfoMonitor struct {
+	Nome    string              `json:"nome"`
+	Tarefas []TarefaInfoMonitor `json:"tarefas"`
+}
+
+type TarefaInfoMonitor struct {
+	Ordem       int     `json:"ordem"`
+	TarefaAPIID int64   `json:"tarefa_api_id"`
+	Nome        string  `json:"nome"`
+	Enunciado   string  `json:"enunciado"`
+	Linguagem   string  `json:"linguagem"`
+	ValorPts    float64 `json:"valor_pts"`
 }
