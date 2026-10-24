@@ -11,11 +11,19 @@ export default ts.config(
       "dist/*",
       "node_modules/*",
       "src/lib/generated/*",
+      "config/**",
     ],
   },
   js.configs.recommended,
   ...ts.configs.recommended,
   ...svelte.configs["flat/recommended"],
+  {
+    languageOptions: {
+      parserOptions: {
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
   {
     files: ["scripts/**/*.js"],
     languageOptions: {
@@ -38,6 +46,7 @@ export default ts.config(
         AbortController: "readonly",
         Blob: "readonly",
         CustomEvent: "readonly",
+        DragEvent: "readonly",
         Event: "readonly",
         EventTarget: "readonly",
         File: "readonly",
