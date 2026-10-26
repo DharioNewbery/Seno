@@ -1,8 +1,5 @@
-// app.js — tela de realização de atividades (Seno/Monitor).
-// Isolada da interface do sistema: só conversa com os endpoints /a do
-// Monitor, via cookie hm_sess. Sem frameworks, sem Monaco na v0
-// (shortcut: editor simples; Monaco entra como asset quando
-// necessidade for calibrada — PLANO_MONITOR Fase 8/§Front).
+// app.js — Tela aprimorada de realização de atividades (Seno / Monitor).
+// Isolada da interface do sistema: comunica-se apenas com /a via cookie hm_sess.
 'use strict';
 
 const MID = new URLSearchParams(location.search).get('anid') || '';
@@ -10,16 +7,23 @@ const WEB = new URLSearchParams(location.search).get('web') || '';
 const $ = (id) => document.getElementById(id);
 const conteudo = $('conteudo');
 const modal = $('modal');
+const barRodape = $('bar-rodape');
 
 const estado = {
-  carga: null,      // AtividadePublica sanitizada
-  regras: null,     // regras com autocomplete
+  carga: null,           // AtividadePublica sanitizada
+  regras: null,          // regras (autocomplete, etc.)
   revisao: 0,
-  restantes: null,  // segundos
-  respostas: {},    // ordem → código
-  preId: null,      // pré-avaliação viva (opcional)
+  restantes: null,       // segundos restantes
+  respostas: {},         // ordem (string/number) → código
+  preId: null,           // pré-avaliação ativa
   suja: false,
-  bloqueda: null,   // detail {correcao_url} do bloqueio final
+  bloqueada: null,       // detail de bloqueio
+  tarefaAtiva: 1,        // ordem da tarefa ativa
+  testeAtivo: 1,         // número/ordem do teste selecionado na aba do console
+  resultados: {},        // ordem -> { status: 'vazio'|'executando'|'pronto'|'erro', run_id, resultados: [...] }
+  instanciaEditor: null, // editor CodeMirror ativo
+  consoleMinimizado: false,
+  executandoTeste: false,
 };
 
 // -------------------------------------------------------- local autosave ----
@@ -56,7 +60,7 @@ async function salvarLocal(pendente) {
       pendente: Boolean(pendente),
     });
   } catch {
-    // silenciosamente ignora indisponibilidade de idb
+    // silenciosamente ignora indisponibilidade
   }
 }
 
@@ -74,7 +78,6 @@ async function obterLocal() {
     return null;
   }
 }
-
 
 // ---------------------------------------------------------------- api ----
 
@@ -98,93 +101,6 @@ async function api(metodo, caminho, corpo) {
 const detalhe = (r) => (r.json.erro && r.json.erro.detalhe) || {};
 const mensagem = (r, padrao) => (r.json.erro && r.json.erro.mensagem) || padrao;
 
-// ------------------------------------------------------------- telas ----
-
-function telaErro(titulo, msg, extraHTML = '') {
-  cronometroOff();
-  conteudo.innerHTML = `
-    <div class="tarja fim">
-      <h2>${esc(titulo)}</h2><p>${esc(msg)}</p>${extraHTML}
-      <p class="mudo">Feche esta tela e volte ao portal para retomar.</p>
-    </div>`;
-}
-
-function telaFinalizada(msg, det) {
-  cronometroOff();
-  const url = det && det.correcao_url ? linkExterno(det.correcao_url) : null;
-  conteudo.innerHTML = `
-    <div class="tarja fim">
-      <h2>Entrega finalizada</h2>
-      <p>${esc(msg || 'Sua atividade foi entregue e está fechada.')}</p>
-      ${url ? `<p><a href="${esc(url)}">Ver entregas e correções no portal →</a></p>` : ''}
-      <p class="mudo">Pode fechar esta tela.</p>
-    </div>`;
-}
-
-function linkExterno(caminho) {
-  // correcao_url é relativa ao /web: base vem da abertura servida (?web=)
-  if (WEB) {
-    return WEB.replace(/\/$/, '') + (caminho.startsWith('/') ? '' : '/') + caminho;
-  }
-  return null;
-}
-
-// ----------------------------------------------------------- abrir ------
-
-async function abrir() {
-  if (!MID) {
-    telaErro('Atividade não indicada', 'Abra a atividade pelo portal do aluno.');
-    return;
-  }
-  const r = await api('POST', '/abrir');
-  switch (r.status) {
-    case 200: {
-      const atv = r.json.atividade, tent = r.json.tentativa;
-      estado.carga = atv;
-      estado.regras = r.json.regras || {};
-      estado.revisao = tent.revisao;
-      estado.respostas = tent.respostas || {};
-      const local = await obterLocal();
-      if (local && local.pendente && local.revisao >= estado.revisao) {
-        estado.respostas = Object.assign({}, estado.respostas, local.respostas);
-        estado.revisao = local.revisao;
-      }
-      cronometroOn(tent.segundos_restantes);
-      renderProva(atv);
-      agendarAutosave();
-      return;
-    }
-    case 403:
-      telaFinalizada(mensagem(r, 'Atividade encerrada para você.'), detalhe(r));
-      return;
-    case 409:
-      telaErro('Avaliação ainda não abriu',
-        `A janela começa em ${detalhe(r).segundos_para_inicio ?? '?'} s.`);
-      return;
-    case 410:
-      telaEncerrada(mensagem(r, 'A janela da atividade está encerrada.'));
-      return;
-    case 401:
-      telaErro('Sessão inválida', 'Use o link do portal do aluno para entrar de novo.');
-      return;
-    default:
-      telaErro('Erro na abertura', mensagem(r, 'Falha inesperada no servidor.'));
-  }
-}
-
-function telaEncerrada(msg) {
-  cronometroOff();
-  conteudo.innerHTML = `
-    <div class="tarja fim">
-      <h2>Janela encerrada</h2>
-      <p>${esc(msg)}</p>
-      <p class="mudo">Seu rascunho está preservado: fale com o professor
-      (coleta manual ou nova janela).</p>
-    </div>`;
-}
-
-// ----------------------------------------------------------- prova ------
-
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -193,210 +109,194 @@ function esc(s) {
 
 function mmss(total) {
   const s = Math.max(0, Math.floor(total));
-  return `${String(Math.floor(s / 3600)).padStart(2, '0')}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const seg = s % 60;
+  if (h > 0) {
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(seg).padStart(2, '0')}`;
+  }
+  return `${String(m).padStart(2, '0')}:${String(seg).padStart(2, '0')}`;
 }
+
+function linkExterno(caminho) {
+  if (WEB) {
+    return WEB.replace(/\/$/, '') + (caminho.startsWith('/') ? '' : '/') + caminho;
+  }
+  return null;
+}
+
+// ------------------------------------------------------------- telas especiais ----
+
+function telaErro(titulo, msg, extraHTML = '') {
+  cronometroOff();
+  if (barRodape) barRodape.hidden = true;
+  conteudo.innerHTML = `
+    <div class="tarja-especial fim">
+      <h2>${esc(titulo)}</h2>
+      <p>${esc(msg)}</p>
+      ${extraHTML}
+      <p class="mudo">Feche esta tela e volte ao portal para retomar.</p>
+    </div>`;
+}
+
+function telaFinalizada(msg, det) {
+  cronometroOff();
+  if (barRodape) barRodape.hidden = true;
+  const url = det && det.correcao_url ? linkExterno(det.correcao_url) : null;
+  conteudo.innerHTML = `
+    <div class="tarja-especial">
+      <h2>Entrega Finalizada</h2>
+      <p>${esc(msg || 'Sua atividade foi entregue com sucesso e está encerrada.')}</p>
+      ${url ? `<p><a href="${esc(url)}" class="btn btn-primario">Ver entregas e correções no portal →</a></p>` : ''}
+      <p class="mudo">Você já pode fechar esta tela com segurança.</p>
+    </div>`;
+}
+
+function telaEncerrada(msg) {
+  cronometroOff();
+  if (barRodape) barRodape.hidden = true;
+  conteudo.innerHTML = `
+    <div class="tarja-especial fim">
+      <h2>Janela Encerrada</h2>
+      <p>${esc(msg)}</p>
+      <p class="mudo">Seu rascunho está preservado. Entre em contato com seu professor.</p>
+    </div>`;
+}
+
+// ----------------------------------------------------------- cronômetro ----
 
 let cronoTimer = null;
 function cronometroOn(segundos) {
   estado.restantes = segundos;
-  $('crono').hidden = false;
+  const el = $('crono');
+  if (!el) return;
+  el.hidden = false;
   clearInterval(cronoTimer);
+
+  const atualizaVisual = () => {
+    el.innerHTML = `<span aria-hidden="true">⏱</span> ${mmss(estado.restantes)}`;
+    el.classList.toggle('pouco', estado.restantes <= 180);
+  };
+
+  atualizaVisual();
   cronoTimer = setInterval(() => {
     if (estado.restantes === null) return;
     estado.restantes = Math.max(0, estado.restantes - 1);
-    const el = $('crono');
-    el.textContent = mmss(estado.restantes);
-    el.classList.toggle('pouco', estado.restantes <= 120);
+    atualizaVisual();
     if (estado.restantes === 0) {
       clearInterval(cronoTimer);
-      // Janela zerada: o servidor decide (atraso permitido ou não).
-      // A próxima gravação/pre-avaliação devolve 410 se nada mais vale.
-      $('salvo').textContent = 'prazo encerrado';
+      atualizarBadgeSalvo('aviso', 'prazo encerrado');
     }
   }, 1000);
 }
-function cronometroOff() { clearInterval(cronoTimer); $('crono').hidden = true; }
 
-// ------------------------------------------------- testes públicos (tela) ---
-
-// Tabela de testes públicos: sempre visível entre o campo de código e as
-// ações; "Testar" só preenche a última coluna (Resultado).
-function tabelaTestes(t) {
-  if (!t.testes || !t.testes.length) return '';
-  return `
-    <table class="tb-tes">
-      <thead><tr><th>#</th><th>Entrada</th><th>Saída esperada</th><th>Resultado</th></tr></thead>
-      <tbody>${t.testes.map((te) => `
-        <tr>
-          <td>${te.ordem}</td>
-          <td class="mono-cel"><pre>${esc(te.stdin)}</pre></td>
-          <td class="mono-cel"><pre>${esc(te.stdout_esperado)}</pre></td>
-          <td class="res" data-res="${te.ordem}">—</td>
-        </tr>`).join('')}
-      </tbody>
-    </table>`;
+function cronometroOff() {
+  clearInterval(cronoTimer);
+  const el = $('crono');
+  if (el) el.hidden = true;
 }
 
-// decodificaVeredito vira {cls, curto, texto} legível (o código crú do judge0
-// só existe no banco; nada disso aparece para o aluno).
+// ------------------------------------------------------------- status e vereditos ----
+
 function decodificaVeredito(v) {
-  if (v === 'accepted') return { cls: 'passou', curto: 'passou', texto: 'Passou' };
+  if (v === 'accepted') return { cls: 'passou', curto: 'Passou', texto: 'Passou (Correto)' };
   const m = /^judge0:(\d+)$/.exec(String(v));
   const n = m ? Number(m[1]) : 4;
   const T = {
-    4: ['Resposta errada', 'Resposta errada — o programa produziu saída diferente da esperada'],
-    5: ['Tempo esgotado', 'Tempo esgotado — o programa passou do limite de tempo'],
-    6: ['Não compilou', 'Erro de compilação — o código não compila (veja a mensagem do compilador)'],
-    7: ['Erro em execução', 'Erro em execução — acesso inválido à memória (SIGSEGV)'],
-    8: ['Erro em execução', 'Erro em execução — saída de arquivo acima do limite (SIGXFSZ)'],
-    9: ['Erro em execução', 'Erro em execução — o programa foi morto (SIGKILL; normalmente limite de memória)'],
-    10: ['Erro em execução', 'Erro em execução — o programa terminou com falha (erro de runtime)'],
-    11: ['Falha do judge', 'Falha interna do judge — tente de novo'],
-    12: ['Erro em execução', 'Erro em execução — executável com formato inválido'],
-    13: ['Falha do judge', 'Falha interna do judge — tente de novo'],
-    14: ['Erro em execução', 'Erro em execução — o programa terminou com falha'],
+    4: ['Resposta incorreta', 'Resposta incorreta — a saída obtida foi diferente da esperada'],
+    5: ['Tempo esgotado', 'Tempo esgotado — a execução ultrapassou o limite de CPU'],
+    6: ['Erro de compilação', 'Erro de compilação — o código não pôde ser compilado'],
+    7: ['Erro de execução', 'Erro de execução — Falha de segmentação (SIGSEGV)'],
+    8: ['Erro de execução', 'Erro de execução — Limite de arquivo excedido (SIGXFSZ)'],
+    9: ['Memória esgotada', 'Erro de execução — Limite de memória excedido (SIGKILL)'],
+    10: ['Erro de runtime', 'Erro de execução — O programa terminou com código de erro'],
+    11: ['Falha interna', 'Falha temporária no avaliador. Tente novamente.'],
+    12: ['Formato inválido', 'Erro de execução — Formato de executável inválido'],
+    13: ['Falha interna', 'Falha temporária no avaliador. Tente novamente.'],
+    14: ['Erro de runtime', 'Erro de execução — O programa abortou durante execução'],
   };
-  const [curto, texto] = T[n] || ['Executando', 'Aguardando execução…'];
+  const [curto, texto] = T[n] || ['Falhou', 'Falha na avaliação'];
   return { cls: 'falhou', curto, texto };
 }
 
-function celulaResultado(x) {
-  if (!x || !x.veredito) return '<span class="mudo">executando…</span>';
-  const d = decodificaVeredito(x.veredito);
-  let h = `<span class="${d.cls}">${esc(d.texto)}</span>
-      <span class="mudo min">${Number(x.tempo ?? 0).toFixed(2)}s · ${x.memoria ?? 0} KB</span>`;
-  const det = [];
-  if (x.compilacao) det.push(['Mensagem do compilador', x.compilacao]);
-  else {
-    if (x.stdout_obtido) det.push(['Saída obtida', x.stdout_obtido]);
-    if (x.stderr) det.push(['stderr do programa', x.stderr]);
+function atualizarBadgeSalvo(tipo, texto) {
+  const badge = $('salvo-badge');
+  const txt = $('salvo');
+  const icone = $('salvo-icone');
+  if (!badge || !txt) return;
+
+  badge.className = 'salvo-badge';
+  txt.textContent = texto;
+
+  if (tipo === 'salvando') {
+    badge.classList.add('salvando');
+    icone.textContent = '🔄';
+  } else if (tipo === 'sucesso') {
+    badge.classList.add('sucesso');
+    icone.textContent = '☁';
+  } else if (tipo === 'offline') {
+    badge.classList.add('offline');
+    icone.textContent = '🟡';
+  } else if (tipo === 'erro') {
+    badge.classList.add('erro');
+    icone.textContent = '⚠️';
+  } else {
+    icone.textContent = '☁';
   }
-  if (det.length) {
-    h += `<details><summary>detalhe da falha</summary>${
-      det.map(([rot, val]) => `<p class="detl"><b>${esc(rot)}:</b></p><pre>${esc(val)}</pre>`).join('')}</details>`;
-  }
-  return h;
 }
 
-function pintarResultados(ordem, resultados) {
-  const card = conteudo.querySelector(`.card[data-ordem="${ordem}"]`);
-  if (!card) return;
-  const porOrdem = Object.fromEntries((resultados || []).map((x) => [x.ordem, x]));
-  card.querySelectorAll('[data-res]').forEach((cel) => {
-    cel.innerHTML = celulaResultado(porOrdem[cel.dataset.res]);
-  });
-}
+// ----------------------------------------------------------- abertura ----
 
-// ------------------------------------------------ histórico de ensaios ----
-
-async function abrirHistorico(ordem) {
-  const r = await api('GET', '/testar');
-  if (r.status !== 200) {
-    aviso('Não foi possível carregar os ensaios anteriores.');
+async function abrir() {
+  if (!MID) {
+    telaErro('Atividade não informada', 'Abra a atividade a partir do portal do aluno.');
     return;
   }
-  const runs = (r.json.runs || []).filter((x) => x.ordem === Number(ordem));
-  modal.innerHTML = `<h2>Ensaios anteriores — tarefa ${ordem}</h2>` +
-    (runs.length ? runs.map((rh) => `
-      <div class="hist-run">
-        <p><b>${esc(new Date(rh.criada_em).toLocaleString('pt-BR'))}</b>
-           <span class="mudo">— ${rh.resultados.filter((x) => x.veredito === 'accepted').length}/${rh.resultados.length} passaram</span></p>
-        <table>${rh.resultados.map((x) => `<tr><td>#${x.ordem}</td>
-          <td class="${decodificaVeredito(x.veredito).cls}">${esc(decodificaVeredito(x.veredito).curto)}</td>
-          <td>${Number(x.tempo ?? 0).toFixed(2)}s</td><td>${x.memoria ?? 0} KB</td></tr>`).join('')}</table>
-        <pre>${esc(rh.codigo || '(código não registrado neste run)')}</pre>
-      </div>`).join('')
-    : '<p class="mudo">Nenhum ensaio anterior nesta tarefa.</p>') +
-    `<div class="aces"><button id="btn-hist-fechar" type="button">Fechar</button></div>`;
-  $('btn-hist-fechar').addEventListener('click', () => modal.close());
-  modal.showModal();
-}
+  const r = await api('POST', '/abrir');
+  switch (r.status) {
+    case 200: {
+      const atv = r.json.atividade;
+      const tent = r.json.tentativa;
+      estado.carga = atv;
+      estado.regras = r.json.regras || {};
+      estado.revisao = tent.revisao;
+      estado.respostas = tent.respostas || {};
 
-async function carregarHistorico() {
-  // Releva os botões "Ver ensaios anteriores" só onde há runs gravados.
-  const r = await api('GET', '/testar');
-  if (r.status !== 200) return;
-  const vistos = new Set((r.json.runs || []).map((x) => x.ordem));
-  conteudo.querySelectorAll('[data-hist]').forEach((b) => {
-    b.hidden = !vistos.has(Number(b.dataset.hist));
-  });
-}
+      const local = await obterLocal();
+      if (local && local.pendente && local.revisao >= estado.revisao) {
+        estado.respostas = Object.assign({}, estado.respostas, local.respostas);
+        estado.revisao = local.revisao;
+      }
 
-function renderProva(atv) {
-  $('titulo').textContent = atv.nome || 'Seno';
-  const cards = atv.tarefas.map((t) => {
-    return `
-      <section class="card" data-ordem="${t.ordem}">
-        <header>
-          <strong>${t.ordem}. ${esc(t.nome)}</strong>
-          <span class="pts">${t.valor_pts} pts</span>
-          <span class="ling">${esc(t.linguagem)}</span>
-        </header>
-        ${t.enunciado ? `<p class="enun">${esc(t.enunciado)}</p>` : ''}
-        <div class="editor-wrap" data-ordem="${t.ordem}"></div>
-        ${tabelaTestes(t)}
-        <div class="aces">
-          <button class="prim" data-testar="${t.ordem}" ${t.testes && t.testes.length ? '' : 'hidden'}>
-            Testar (${t.testes.length} teste${t.testes.length > 1 ? 's' : ''} público${t.testes.length > 1 ? 's' : ''})
-          </button>
-          <button class="tx" data-hist="${t.ordem}" hidden>Ver ensaios anteriores</button>
-        </div>
-        <div class="tst" data-tst="${t.ordem}"></div>
-      </section>`;
-  }).join('');
-  conteudo.innerHTML = `
-    ${atv.enunciado ? `<div class="tarja"><h2>${esc(atv.nome)}</h2><p class="enun">${esc(atv.enunciado)}</p></div>` : ''}
-    ${cards}
-    <div class="tarja">
-      <p class="mudo">Envio em duas etapas: pré-avaliação (relatório; nada
-      oficial ainda) e confirmação (fecha a entrega). Salvamento automático
-      a 20 s.</p>
-      <div class="aces">
-        <button id="btn-avaliar" class="prim">Pré-avaliar tudo</button>
-      </div>
-    </div>`;
+      if (atv.tarefas && atv.tarefas.length > 0) {
+        estado.tarefaAtiva = atv.tarefas[0].ordem;
+      }
 
-  conteudo.querySelectorAll('.editor-wrap').forEach((wrap) => {
-    const ordem = wrap.dataset.ordem;
-    const tarefa = atv.tarefas.find((x) => String(x.ordem) === ordem);
-    const lin = estado.respostas[ordem] ?? '';
-    const autocomplete = Boolean(estado.regras && estado.regras.autocomplete);
+      cronometroOn(tent.segundos_restantes);
+      atualizarBadgeSalvo('sucesso', 'conectado');
 
-    if (window.SenoEditor && window.SenoEditor.criar) {
-      window.SenoEditor.criar(wrap, {
-        valor: lin,
-        linguagem: tarefa ? tarefa.linguagem : '',
-        autocomplete,
-        onchange: (novoValor) => {
-          estado.respostas[ordem] = novoValor;
-          estado.suja = true;
-          salvarLocal(true);
-        },
-      });
-    } else {
-      const ta = document.createElement('textarea');
-      ta.className = 'campo';
-      ta.value = lin;
-      ta.autocomplete = 'off';
-      ta.spellcheck = false;
-      ta.placeholder = `Escreva seu código ${tarefa ? tarefa.linguagem : ''} aqui…`;
-      ta.addEventListener('input', () => {
-        estado.respostas[ordem] = ta.value;
-        estado.suja = true;
-        salvarLocal(true);
-      });
-      wrap.appendChild(ta);
+      if (barRodape) barRodape.hidden = false;
+      renderizarTudo();
+      agendarAutosave();
+      carregarHistoricoGlobal();
+      return;
     }
-  });
-
-  conteudo.querySelectorAll('[data-testar]').forEach((b) => {
-    b.addEventListener('click', () => testar(Number(b.dataset.testar)));
-  });
-  conteudo.querySelectorAll('[data-hist]').forEach((b) => {
-    b.addEventListener('click', () => abrirHistorico(Number(b.dataset.hist)));
-  });
-  $('btn-avaliar').addEventListener('click', preAvaliar);
-  carregarHistorico();
+    case 403:
+      telaFinalizada(mensagem(r, 'Atividade encerrada para você.'), detalhe(r));
+      return;
+    case 409:
+      telaErro('Avaliação ainda não iniciada',
+        `A janela de avaliação começa em ${detalhe(r).segundos_para_inicio ?? '?'} segundos.`);
+      return;
+    case 410:
+      telaEncerrada(mensagem(r, 'A janela desta atividade está encerrada.'));
+      return;
+    case 401:
+      telaErro('Sessão expirada ou inválida', 'Retorne ao portal do aluno para entrar novamente.');
+      return;
+    default:
+      telaErro('Erro ao carregar', mensagem(r, 'Falha inesperada no servidor.'));
+  }
 }
 
 // ---------------------------------------------------------- autosave ----
@@ -412,124 +312,653 @@ function agendarAutosave() {
 async function salvar() {
   if (!estado.suja) return;
   salvarLocal(true);
-  const r = await api('PUT', '/tentativa',
-    { revisao: estado.revisao, respostas: estado.respostas });
+  atualizarBadgeSalvo('salvando', 'salvando…');
+
+  const r = await api('PUT', '/tentativa', {
+    revisao: estado.revisao,
+    respostas: estado.respostas,
+  });
+
   if (r.status === 200) {
     estado.suja = false;
     estado.revisao = r.json.revisao;
     salvarLocal(false);
-    $('salvo').textContent = 'salvo ' + new Date().toLocaleTimeString('pt-BR');
+    atualizarBadgeSalvo('sucesso', `salvo às ${new Date().toLocaleTimeString('pt-BR')}`);
+    atualizarProgressoGlobal();
     return;
   }
   if (r.status === 0) {
-    // Offline
-    $('salvo').textContent = 'salvo localmente (offline)';
+    atualizarBadgeSalvo('offline', 'salvo localmente (offline)');
     return;
   }
   if (r.status === 409 && detalhe(r).revisao_atual !== undefined) {
-    // outra aba gravou antes: alinha com a revisão vigente e tenta de novo
     const atual = detalhe(r).revisao_atual;
-    const r2 = await api('PUT', '/tentativa',
-      { revisao: atual, respostas: estado.respostas });
+    const r2 = await api('PUT', '/tentativa', { revisao: atual, respostas: estado.respostas });
     if (r2.status === 200) {
       estado.suja = false;
       estado.revisao = r2.json.revisao;
       salvarLocal(false);
-      $('salvo').textContent = 'salvo (outra aba detectada)';
+      atualizarBadgeSalvo('sucesso', 'salvo (sincronizado)');
     } else {
       estado.suja = true;
-      $('salvo').textContent = 'conflito: outra aba salvou';
+      atualizarBadgeSalvo('erro', 'conflito entre abas');
     }
     return;
   }
   if (r.status >= 400) {
     estado.suja = true;
-    $('salvo').textContent = 'falhou o salvamento';
+    atualizarBadgeSalvo('erro', 'falha ao salvar');
     if (r.status === 410) { cronometroZerou(); }
-    if (r.status === 403) { telaFinalizada(mensagem(r, 'Encerrada.'), detalhe(r)); }
+    if (r.status === 403) { telaFinalizada(mensagem(r, 'Atividade encerrada.'), detalhe(r)); }
   }
 }
 
 function cronometroZerou() {
   cronometroOff();
-  telaEncerrada('O tempo acabou e a entrega não foi mais possível.');
+  telaEncerrada('O tempo limite encerrou e a submissão não está mais disponível.');
 }
 
-// ------------------------------------------------------------ ensaios ---
+// ---------------------------------------------------------- renderização ----
 
-async function testar(ordem) {
-  const t = estado.carga.tarefas.find((x) => x.ordem === ordem);
-  const card = conteudo.querySelector(`.card[data-ordem="${ordem}"]`);
-  const alvo = card.querySelector('.tst');
-  const codigo = estado.respostas[String(ordem)] ?? '';
-  const r = await api('POST', '/testar', { ordem, linguagem: t.linguagem, codigo });
-  if (r.status !== 202) {
-    if (r.status === 429) {
-      aviso(`Limite de ensaios por minuto. Aguarde.`, alvo);
-      return;
+function obterTarefaAtual() {
+  if (!estado.carga || !estado.carga.tarefas) return null;
+  return estado.carga.tarefas.find((t) => t.ordem === estado.tarefaAtiva) || estado.carga.tarefas[0];
+}
+
+function renderizarTudo() {
+  const atv = estado.carga;
+  if (!atv) return;
+
+  $('titulo').textContent = atv.nome || 'Seno';
+
+  // Renderiza a navegação de abas no header
+  renderizarAbasHeader();
+
+  // Renderiza a estrutura Split View dentro de #conteudo
+  conteudo.innerHTML = `
+    <div class="split-view">
+      <div id="painel-esquerdo" class="painel-esquerdo"></div>
+      <div id="painel-direito" class="painel-direito">
+        <div class="editor-container">
+          <div class="editor-barra-topo">
+            <span id="editor-ling-badge" class="editor-ling-badge"></span>
+            <button id="btn-historico" type="button" class="btn-link" title="Consultar testes já realizados nesta tarefa">
+              ↺ Ensaios anteriores
+            </button>
+          </div>
+          <div id="editor-wrap" class="editor-wrap"></div>
+        </div>
+        <div id="console-container" class="console-container">
+          <div class="console-topo">
+            <div id="console-abas" class="console-abas"></div>
+            <div class="console-direita">
+              <span id="console-status-resumo" class="console-status-resumo"></span>
+              <button id="btn-console-toggle" type="button" class="btn-icone-min" title="Minimizar / Expandir console">▾</button>
+            </div>
+          </div>
+          <div id="console-corpo" class="console-corpo"></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  $('btn-historico').addEventListener('click', () => abrirHistorico(estado.tarefaAtiva));
+  $('btn-console-toggle').addEventListener('click', toggleConsole);
+
+  // Botões do Rodapé
+  const btnTestar = $('btn-rodape-testar');
+  const btnAvaliar = $('btn-rodape-avaliar');
+  if (btnTestar) {
+    btnTestar.onclick = () => testar(estado.tarefaAtiva);
+  }
+  if (btnAvaliar) {
+    btnAvaliar.onclick = preAvaliar;
+  }
+
+  // Renderiza o conteúdo da tarefa atual
+  trocarParaTarefa(estado.tarefaAtiva);
+  atualizarProgressoGlobal();
+}
+
+function renderizarAbasHeader() {
+  const nav = $('tarefas-nav');
+  if (!nav || !estado.carga) return;
+
+  nav.innerHTML = estado.carga.tarefas.map((t) => {
+    const ativa = t.ordem === estado.tarefaAtiva ? ' ativa' : '';
+    const dotClass = obterClasseStatusDot(t.ordem);
+    return `
+      <button type="button" class="aba-tarefa${ativa}" data-tarefa="${t.ordem}" title="Ir para tarefa ${t.ordem}: ${esc(t.nome)}">
+        <span class="status-dot ${dotClass}"></span>
+        <span>${t.ordem}. ${esc(t.nome)}</span>
+      </button>
+    `;
+  }).join('');
+
+  nav.querySelectorAll('[data-tarefa]').forEach((btn) => {
+    btn.onclick = () => {
+      const ordem = Number(btn.dataset.tarefa);
+      if (ordem !== estado.tarefaAtiva) {
+        trocarParaTarefa(ordem);
+      }
+    };
+  });
+}
+
+function obterClasseStatusDot(ordem) {
+  const res = estado.resultados[ordem];
+  if (res && res.status === 'pronto') {
+    const total = res.resultados.length;
+    const acertos = res.resultados.filter((x) => x.veredito === 'accepted').length;
+    return acertos === total ? 'passou' : 'falhou';
+  }
+  const codigo = (estado.respostas[String(ordem)] || '').trim();
+  return codigo.length > 0 ? 'editando' : 'vazio';
+}
+
+function trocarParaTarefa(ordem) {
+  // Salva o código da tarefa anterior se o editor estiver montado
+  if (estado.instanciaEditor) {
+    estado.respostas[String(estado.tarefaAtiva)] = estado.instanciaEditor.getValor();
+    estado.instanciaEditor.destruir();
+    estado.instanciaEditor = null;
+  }
+
+  estado.tarefaAtiva = ordem;
+  const tarefa = obterTarefaAtual();
+  if (!tarefa) return;
+
+  // Atualiza abas no header
+  const nav = $('tarefas-nav');
+  if (nav) {
+    nav.querySelectorAll('.aba-tarefa').forEach((btn) => {
+      btn.classList.toggle('ativa', Number(btn.dataset.tarefa) === ordem);
+    });
+  }
+
+  // 1. Painel Esquerdo (Enunciado, Limites e Exemplos)
+  const painelEsq = $('painel-esquerdo');
+  if (painelEsq) {
+    const atv = estado.carga;
+    const cpu = tarefa.limites?.tempo_cpu_ms ? `${tarefa.limites.tempo_cpu_ms} ms CPU` : '2000 ms CPU';
+    const ram = tarefa.limites?.memoria_mb ? `${tarefa.limites.memoria_mb} MB RAM` : '256 MB RAM';
+
+    painelEsq.innerHTML = `
+      ${atv.enunciado ? `
+        <details class="card-instrucoes-gerais">
+          <summary>Instruções Gerais da Atividade</summary>
+          <div class="corpo-instrucoes">${esc(atv.enunciado)}</div>
+        </details>` : ''}
+      <div class="tarefa-cabecalho">
+        <h2 class="tarefa-titulo">${tarefa.ordem}. ${esc(tarefa.nome)}</h2>
+        <div class="tarefa-meta">
+          <span class="tag tag-pts">⭐ ${tarefa.valor_pts} pts</span>
+          <span class="tag tag-ling">🐍 ${esc(tarefa.linguagem)}</span>
+          <span class="tag">⏱ ${cpu}</span>
+          <span class="tag">💾 ${ram}</span>
+        </div>
+      </div>
+      <div class="enunciado-tarefa">${esc(tarefa.enunciado || 'Sem enunciado cadastrado.')}</div>
+      ${renderizarExemplos(tarefa)}
+    `;
+  }
+
+  // 2. Editor de Código
+  $('editor-ling-badge').textContent = tarefa.linguagem || 'Código';
+  const wrap = $('editor-wrap');
+  wrap.innerHTML = '';
+
+  const codigoSalvo = estado.respostas[String(ordem)] ?? '';
+  const autocomplete = Boolean(estado.regras && estado.regras.autocomplete);
+
+  if (window.SenoEditor && window.SenoEditor.criar) {
+    estado.instanciaEditor = window.SenoEditor.criar(wrap, {
+      valor: codigoSalvo,
+      linguagem: tarefa.linguagem,
+      autocomplete,
+      onchange: (novoValor) => {
+        estado.respostas[String(ordem)] = novoValor;
+        estado.suja = true;
+        salvarLocal(true);
+        atualizarProgressoGlobal();
+      },
+    });
+  } else {
+    const ta = document.createElement('textarea');
+    ta.className = 'campo-fallback';
+    ta.value = codigoSalvo;
+    ta.autocomplete = 'off';
+    ta.spellcheck = false;
+    ta.placeholder = `Escreva seu código ${tarefa.linguagem} aqui…`;
+    ta.addEventListener('input', () => {
+      estado.respostas[String(ordem)] = ta.value;
+      estado.suja = true;
+      salvarLocal(true);
+      atualizarProgressoGlobal();
+    });
+    wrap.appendChild(ta);
+    estado.instanciaEditor = {
+      getValor: () => ta.value,
+      setValor: (v) => { ta.value = v; },
+      destruir: () => {},
+    };
+  }
+
+  // 3. Reset da aba de teste ativo
+  if (tarefa.testes && tarefa.testes.length > 0) {
+    const existe = tarefa.testes.some((te) => te.ordem === estado.testeAtivo);
+    if (!existe) estado.testeAtivo = tarefa.testes[0].ordem;
+  }
+
+  // 4. Renderiza Console de Testes
+  renderizarConsoleTestes();
+}
+
+function renderizarExemplos(tarefa) {
+  if (!tarefa.testes || !tarefa.testes.length) return '';
+  return `
+    <div class="secao-testes-exemplos">
+      <h3 class="secao-titulo">Casos de Teste Públicos (Exemplos)</h3>
+      ${tarefa.testes.map((te) => `
+        <div class="exemplo-card">
+          <div class="exemplo-card-topo">Caso #${te.ordem}</div>
+          <div class="exemplo-grid">
+            <div class="exemplo-bloco">
+              <span class="exemplo-rotulo">Entrada</span>
+              <pre>${esc(te.stdin || '(vazio)')}</pre>
+            </div>
+            <div class="exemplo-bloco">
+              <span class="exemplo-rotulo">Saída esperada</span>
+              <pre>${esc(te.stdout_esperado || '(vazio)')}</pre>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ----------------------------------------------------- console de testes ----
+
+function toggleConsole() {
+  const c = $('console-container');
+  const btn = $('btn-console-toggle');
+  if (!c || !btn) return;
+  estado.consoleMinimizado = !estado.consoleMinimizado;
+  c.classList.toggle('minimizado', estado.consoleMinimizado);
+  btn.textContent = estado.consoleMinimizado ? '▴' : '▾';
+}
+
+function renderizarConsoleTestes() {
+  const tarefa = obterTarefaAtual();
+  const abasEl = $('console-abas');
+  const corpoEl = $('console-corpo');
+  const resumoEl = $('console-status-resumo');
+  if (!tarefa || !abasEl || !corpoEl) return;
+
+  const testes = tarefa.testes || [];
+  const dadosRun = estado.resultados[tarefa.ordem];
+
+  // Resumo
+  if (resumoEl) {
+    if (estado.executandoTeste && estado.tarefaAtiva === tarefa.ordem) {
+      resumoEl.innerHTML = `<span style="color:var(--primario)">Executando no Judge0…</span>`;
+    } else if (dadosRun && dadosRun.status === 'pronto') {
+      const acertos = dadosRun.resultados.filter((x) => x.veredito === 'accepted').length;
+      const total = dadosRun.resultados.length;
+      const cls = acertos === total ? 'passou' : 'falhou';
+      resumoEl.innerHTML = `<span class="${cls}">${acertos}/${total} passaram</span>`;
+    } else {
+      resumoEl.textContent = testes.length ? `${testes.length} teste(s) disponível(is)` : 'Sem testes';
     }
-    if (r.status >= 400) { aviso(mensagem(r, 'Não foi possível testar.'), alvo); }
+  }
+
+  // Abas de Casos de Teste
+  if (!testes.length) {
+    abasEl.innerHTML = '<span class="aba-teste ativa">Sem testes públicos</span>';
+    corpoEl.innerHTML = '<div class="resultado-vazio">Esta tarefa não possui testes públicos cadastrados.</div>';
     return;
   }
-  const run = r.json.run_id;
-  card.querySelectorAll('[data-res]').forEach((cel) => {
-    cel.innerHTML = '<span class="mudo">executando…</span>';
+
+  const resultadosPorOrdem = {};
+  if (dadosRun && dadosRun.resultados) {
+    dadosRun.resultados.forEach((r) => { resultadosPorOrdem[r.ordem] = r; });
+  }
+
+  abasEl.innerHTML = testes.map((te) => {
+    const ativa = te.ordem === estado.testeAtivo ? ' ativa' : '';
+    const r = resultadosPorOrdem[te.ordem];
+    let tag = '';
+    if (r) {
+      const d = decodificaVeredito(r.veredito);
+      tag = `<span class="aba-teste-tag ${d.cls}">${d.cls === 'passou' ? '✓' : '✗'}</span>`;
+    }
+    return `
+      <button type="button" class="aba-teste${ativa}" data-teste="${te.ordem}">
+        ${tag} Teste #${te.ordem}
+      </button>
+    `;
+  }).join('');
+
+  abasEl.querySelectorAll('[data-teste]').forEach((btn) => {
+    btn.onclick = () => {
+      estado.testeAtivo = Number(btn.dataset.teste);
+      renderizarConsoleTestes();
+    };
   });
-  aviso(`Run ${esc(run.slice(0, 8))}… executando`, alvo);
+
+  // Corpo do Teste Selecionado
+  const testeAtual = testes.find((t) => t.ordem === estado.testeAtivo) || testes[0];
+  const resultadoAtual = resultadosPorOrdem[testeAtual.ordem];
+
+  if (estado.executandoTeste && estado.tarefaAtiva === tarefa.ordem) {
+    corpoEl.innerHTML = `
+      <div class="resultado-executando">
+        <div class="spinner"></div>
+        <span>Compilando e executando testes no Judge0…</span>
+      </div>`;
+    return;
+  }
+
+  if (!resultadoAtual) {
+    corpoEl.innerHTML = `
+      <div class="comparador-grid">
+        <div class="comparador-bloco">
+          <span class="comparador-rotulo">Entrada (stdin)</span>
+          <pre class="comparador-pre">${esc(testeAtual.stdin || '(vazio)')}</pre>
+        </div>
+        <div class="comparador-bloco">
+          <span class="comparador-rotulo">Saída esperada (stdout)</span>
+          <pre class="comparador-pre">${esc(testeAtual.stdout_esperado || '(vazio)')}</pre>
+        </div>
+      </div>
+      <p class="mudo" style="margin-top:12px;font-size:12px;">Clique em "Testar Código" para avaliar seu algoritmo contra este caso.</p>
+    `;
+    return;
+  }
+
+  const d = decodificaVeredito(resultadoAtual.veredito);
+  const tempo = Number(resultadoAtual.tempo ?? 0).toFixed(2);
+  const mem = resultadoAtual.memoria ?? 0;
+
+  let detalheErroHTML = '';
+  if (resultadoAtual.compilacao) {
+    detalheErroHTML = `
+      <div class="compilador-aviso">
+        <b>Mensagem do Compilador:</b>
+        <pre>${esc(resultadoAtual.compilacao)}</pre>
+      </div>`;
+  } else if (resultadoAtual.stderr) {
+    detalheErroHTML = `
+      <div class="compilador-aviso">
+        <b>Saída de Erro (stderr):</b>
+        <pre>${esc(resultadoAtual.stderr)}</pre>
+      </div>`;
+  }
+
+  corpoEl.innerHTML = `
+    <div class="veredito-banner ${d.cls}">
+      <span>${d.cls === 'passou' ? '✓' : '✗'} ${esc(d.texto)}</span>
+      <span class="veredito-detalhes">${tempo}s · ${mem} KB</span>
+    </div>
+    <div class="comparador-grid">
+      <div class="comparador-bloco">
+        <span class="comparador-rotulo">Entrada</span>
+        <pre class="comparador-pre">${esc(testeAtual.stdin || '(vazio)')}</pre>
+      </div>
+      <div class="comparador-bloco">
+        <span class="comparador-rotulo">Saída esperada</span>
+        <pre class="comparador-pre">${esc(testeAtual.stdout_esperado || '(vazio)')}</pre>
+      </div>
+      <div class="comparador-bloco">
+        <span class="comparador-rotulo">Sua Saída</span>
+        <pre class="comparador-pre ${d.cls === 'falhou' ? 'erro-saida' : ''}">${esc(resultadoAtual.stdout_obtido || '(vazio)')}</pre>
+      </div>
+    </div>
+    ${detalheErroHTML}
+  `;
+}
+
+// ------------------------------------------------------------- ensaios ----
+
+async function testar(ordem) {
+  if (estado.executandoTeste) return;
+  const t = estado.carga.tarefas.find((x) => x.ordem === ordem);
+  if (!t) return;
+
+  // Garante que o editor salvou o valor recente no estado
+  if (estado.instanciaEditor && estado.tarefaAtiva === ordem) {
+    estado.respostas[String(ordem)] = estado.instanciaEditor.getValor();
+  }
+
+  const codigo = estado.respostas[String(ordem)] ?? '';
+  estado.executandoTeste = true;
+  const btnTestar = $('btn-rodape-testar');
+  if (btnTestar) {
+    btnTestar.disabled = true;
+    btnTestar.innerHTML = `<span class="spinner" style="width:14px;height:14px;border-width:2px;"></span> Executando…`;
+  }
+
+  // Abre o console se estiver minimizado
+  if (estado.consoleMinimizado) toggleConsole();
+  renderizarConsoleTestes();
+
+  const r = await api('POST', '/testar', { ordem, linguagem: t.linguagem, codigo });
+  if (r.status !== 202) {
+    estado.executandoTeste = false;
+    if (btnTestar) {
+      btnTestar.disabled = false;
+      btnTestar.innerHTML = `<span class="icone-btn">▶</span> Testar Código <kbd class="atalho-teclado">Ctrl+Enter</kbd>`;
+    }
+    const msg = r.status === 429
+      ? 'Limite de 5 ensaios por minuto atingido. Aguarde alguns segundos.'
+      : mensagem(r, 'Não foi possível enviar o ensaio.');
+    aviso(msg);
+    renderizarConsoleTestes();
+    return;
+  }
+
+  const run = r.json.run_id;
+
+  // Polling pelo resultado
   for (let seg = 0; seg < 60; seg++) {
-    await new Promise((res) => setTimeout(res, 1500));
+    await new Promise((res) => setTimeout(res, 1200));
     const q = await api('GET', `/testar/${encodeURIComponent(run)}`);
     if (q.status === 200) {
-      pintarResultados(ordem, q.json.resultados);
-      const ap = q.json.resultados.filter((x) => x.veredito === 'accepted').length;
-      aviso(`run ${esc(run.slice(0, 8))}…: ${ap}/${q.json.resultados.length} testes passaram`, alvo);
+      estado.executandoTeste = false;
+      if (btnTestar) {
+        btnTestar.disabled = false;
+        btnTestar.innerHTML = `<span class="icone-btn">▶</span> Testar Código <kbd class="atalho-teclado">Ctrl+Enter</kbd>`;
+      }
+      estado.resultados[ordem] = {
+        status: 'pronto',
+        run_id: run,
+        resultados: q.json.resultados,
+      };
+
+      // Foca automaticamente no primeiro teste com falha (se houver)
+      const primeiroErro = q.json.resultados.find((x) => x.veredito !== 'accepted');
+      if (primeiroErro) {
+        estado.testeAtivo = primeiroErro.ordem;
+      }
+
+      renderizarAbasHeader();
+      renderizarConsoleTestes();
+      atualizarProgressoGlobal();
       return;
     }
     if (q.status >= 400) {
-      alvo.innerHTML = `<span class="falhou">Run perdido. Tente de novo.</span>`;
+      estado.executandoTeste = false;
+      if (btnTestar) {
+        btnTestar.disabled = false;
+        btnTestar.innerHTML = `<span class="icone-btn">▶</span> Testar Código <kbd class="atalho-teclado">Ctrl+Enter</kbd>`;
+      }
+      aviso('Não foi possível obter o resultado do teste.');
+      renderizarConsoleTestes();
       return;
     }
   }
-  alvo.innerHTML = `<span class="mudo">Run atrasado; o resultado aparece no histórico recente tentando de novo.</span>`;
+
+  estado.executandoTeste = false;
+  if (btnTestar) {
+    btnTestar.disabled = false;
+    btnTestar.innerHTML = `<span class="icone-btn">▶</span> Testar Código <kbd class="atalho-teclado">Ctrl+Enter</kbd>`;
+  }
+  aviso('Execução demorada. O resultado aparecerá no histórico em instantes.');
+  renderizarConsoleTestes();
 }
 
-function aviso(msg, alvo) {
-  if (alvo) { alvo.innerHTML = `<span class="mudo">${msg}</span>`; return; }
-  $('salvo').textContent = msg;
+// ------------------------------------------------------------- histórico ----
+
+async function abrirHistorico(ordem) {
+  const r = await api('GET', '/testar');
+  if (r.status !== 200) {
+    aviso('Não foi possível carregar o histórico de ensaios.');
+    return;
+  }
+  const runs = (r.json.runs || []).filter((x) => x.ordem === Number(ordem));
+  modal.innerHTML = `
+    <h2>Ensaios Anteriores — Tarefa ${ordem}</h2>
+    ${runs.length ? runs.map((rh, idx) => {
+      const dataHora = new Date(rh.criada_em).toLocaleString('pt-BR');
+      const passados = rh.resultados.filter((x) => x.veredito === 'accepted').length;
+      const total = rh.resultados.length;
+      return `
+        <div class="hist-item">
+          <div class="hist-item-topo">
+            <b>${esc(dataHora)}</b>
+            <span class="${passados === total ? 'passou' : 'falhou'}">${passados}/${total} passaram</span>
+          </div>
+          <div class="modal-testes-chips">
+            ${rh.resultados.map((x) => `
+              <span class="chip-teste ${x.veredito === 'accepted' ? 'passou' : 'falhou'}">
+                #${x.ordem} ${esc(decodificaVeredito(x.veredito).curto)}
+              </span>
+            `).join('')}
+          </div>
+          <pre>${esc(rh.codigo || '(código vazio)')}</pre>
+          <div style="margin-top:8px;text-align:right;">
+            <button type="button" class="btn btn-secundario" data-restaurar="${idx}" style="font-size:11.5px;padding:4px 8px;">
+              Restaurar no editor
+            </button>
+          </div>
+        </div>`;
+    }).join('') : '<p class="mudo">Nenhum ensaio registrado para esta tarefa ainda.</p>'}
+    <div class="modal-acoes">
+      <button id="btn-hist-fechar" type="button" class="btn btn-secundario">Fechar</button>
+    </div>
+  `;
+
+  runs.forEach((rh, idx) => {
+    const btn = modal.querySelector(`[data-restaurar="${idx}"]`);
+    if (btn) {
+      btn.onclick = () => {
+        if (estado.instanciaEditor && estado.tarefaAtiva === ordem) {
+          estado.instanciaEditor.setValor(rh.codigo || '');
+          estado.respostas[String(ordem)] = rh.codigo || '';
+          estado.suja = true;
+          salvarLocal(true);
+          atualizarProgressoGlobal();
+        }
+        modal.close();
+      };
+    }
+  });
+
+  $('btn-hist-fechar').onclick = () => modal.close();
+  modal.showModal();
 }
 
-// --------------------------------------------------------- submissão ----
+async function carregarHistoricoGlobal() {
+  const r = await api('GET', '/testar');
+  if (r.status !== 200) return;
+  // Pré-alimenta o status com a última execução válida de cada tarefa
+  const porTarefa = {};
+  (r.json.runs || []).forEach((run) => {
+    if (!porTarefa[run.ordem] || new Date(run.criada_em) > new Date(porTarefa[run.ordem].criada_em)) {
+      porTarefa[run.ordem] = run;
+    }
+  });
+  Object.keys(porTarefa).forEach((ordemStr) => {
+    const ordem = Number(ordemStr);
+    if (!estado.resultados[ordem]) {
+      estado.resultados[ordem] = {
+        status: 'pronto',
+        run_id: porTarefa[ordem].run_id || '',
+        resultados: porTarefa[ordem].resultados,
+      };
+    }
+  });
+  renderizarAbasHeader();
+  renderizarConsoleTestes();
+}
+
+// ------------------------------------------------------------- submissão ----
 
 async function preAvaliar() {
+  if (estado.instanciaEditor) {
+    estado.respostas[String(estado.tarefaAtiva)] = estado.instanciaEditor.getValor();
+  }
   await salvar();
-  mudarBotao('btn-avaliar', true, 'Pré-avaliando…');
+
+  const btnAvaliar = $('btn-rodape-avaliar');
+  if (btnAvaliar) {
+    btnAvaliar.disabled = true;
+    btnAvaliar.textContent = 'Avaliando…';
+  }
+
   const r = await api('POST', '/submissao/avaliar');
-  mudarBotao('btn-avaliar', false, 'Pré-avaliar tudo');
+  if (btnAvaliar) {
+    btnAvaliar.disabled = false;
+    btnAvaliar.textContent = 'Pré-avaliar e Entregar';
+  }
+
   if (r.status !== 200) {
     if (r.status === 403) { telaFinalizada(mensagem(r, 'Encerrada.'), detalhe(r)); return; }
     if (r.status === 410) { telaEncerrada(mensagem(r, 'A janela está encerrada.')); return; }
     aviso(mensagem(r, 'Falha na pré-avaliação.'));
     return;
   }
+
   const rel = r.json;
   estado.preId = rel.pre_id;
   const ttlSeg = parseInt(String(rel.expira_em || '0'), 10);
+
   modal.innerHTML = `
-    <h2>Pré-avaliação</h2>
-    <p>Acertos: <b>${rel.resumo.acertos}</b> de <b>${rel.resumo.total}</b> testes públicos.
-       Válido por <span id="ttl">${mmss(ttlSeg)}</span>.</p>
-    ${rel.tarefas.map((t) => `
-      <p><b>Tarefa ${t.ordem}:</b>
-         ${t.veredito === 'accepted' ? '<span class="passou">todos os testes públicos passaram</span>' : ''}
-         ${(t.testes || []).map((x) => `<span class="${x.status === 'accepted' ? 'passou' : 'falhou'}">#${x.ordem} ${esc(decodificaVeredito(x.status).curto)}</span>`).join(' · ')}</p>
-    `).join('')}
-    <div class="aces">
-      <button id="btn-conf" class="prim">Confirmar envio</button>
-      <button id="btn-cancel">Cancelar e voltar a editar</button>
+    <h2>Relatório de Pré-Avaliação</h2>
+    <p>
+      Acertos: <b>${rel.resumo.acertos}</b> de <b>${rel.resumo.total}</b> testes públicos.
+      Válido por <span id="ttl" class="modal-ttl">${mmss(ttlSeg)}</span>
+    </p>
+    <div class="modal-tarefas-lista">
+      ${rel.tarefas.map((t) => `
+        <div class="modal-tarefa-card">
+          <div class="modal-tarefa-card-topo">
+            <span>Tarefa ${t.ordem}</span>
+            <span class="${t.veredito === 'accepted' ? 'passou' : 'falhou'}">
+              ${t.veredito === 'accepted' ? '✓ Todos os testes passaram' : '✗ Falhas encontradas'}
+            </span>
+          </div>
+          <div class="modal-testes-chips">
+            ${(t.testes || []).map((x) => `
+              <span class="chip-teste ${x.status === 'accepted' ? 'passou' : 'falhou'}">
+                #${x.ordem} ${esc(decodificaVeredito(x.status).curto)}
+              </span>
+            `).join('')}
+          </div>
+        </div>
+      `).join('')}
     </div>
-    <p class="mudo">A confirmação é definitiva (fecha a tentativa); a
-    pré-avaliação expira e pede reavaliação.</p>`;
+    <p class="mudo" style="font-size:12px;margin-bottom:0;">
+      Atenção: A confirmação encerra sua tentativa nesta atividade. Se desejar corrigir algo, clique em "Voltar e editar".
+    </p>
+    <div class="modal-acoes">
+      <button id="btn-cancel" type="button" class="btn btn-secundario">Voltar e editar</button>
+      <button id="btn-conf" type="button" class="btn btn-primario">Confirmar Envio Definitivo</button>
+    </div>
+  `;
   modal.showModal();
+
   let restTtl = ttlSeg;
   const ttlTimer = setInterval(() => {
     restTtl--;
@@ -538,69 +967,105 @@ async function preAvaliar() {
     if (restTtl <= 0) {
       clearInterval(ttlTimer);
       estado.preId = null;
-      aviso('Pré-avaliação expirou: avalie de novo.');
+      aviso('A pré-avaliação expirou. Avalie novamente antes de enviar.');
       modal.close();
     }
   }, 1000);
 
-  $('btn-cancel').addEventListener('click', async () => {
+  $('btn-cancel').onclick = async () => {
     clearInterval(ttlTimer);
     await api('POST', '/submissao/cancelar', { pre_id: estado.preId });
     estado.preId = null;
     modal.close();
-  });
-  $('btn-conf').addEventListener('click', () => confirmarPre(ttlTimer));
-}
+  };
 
-function mudarBotao(id, ativo, texto) {
-  const b = $(id);
-  if (!b) return;
-  b.disabled = ativo;
-  if (texto) b.textContent = texto;
+  $('btn-conf').onclick = () => confirmarPre(ttlTimer);
 }
 
 async function confirmarPre(ttlTimer) {
   clearInterval(ttlTimer);
-  mudarBotao('btn-conf', true, 'Enviando…');
+  const btnConf = $('btn-conf');
+  if (btnConf) {
+    btnConf.disabled = true;
+    btnConf.textContent = 'Enviando…';
+  }
+
   const r = await api('POST', '/submissao/confirmar', { pre_id: estado.preId });
   estado.preId = null;
   modal.close();
+
   if (r.status === 200) {
-    const e = r.json;
-    const msg = `entrega n_t=${e.n_t}${e.atrasada ? ' (ATRASADA)' : ''} registrada`;
-    // recarga: submissão múltipla reabre tentativa (transportando as respostas)
     const r2 = await api('POST', '/abrir');
     if (r2.status === 200) {
-      const atv = r2.json.atividade, tent = r2.json.tentativa;
+      const atv = r2.json.atividade;
+      const tent = r2.json.tentativa;
       estado.revisao = tent.revisao;
       estado.respostas = tent.respostas || {};
-      renderProva(atv);
-      $('salvo').textContent = msg;
+      renderizarTudo();
+      aviso('Entrega registrada com sucesso!');
       return;
     }
-    telaFinalizada(mensagem(r2, 'Sua entrega foi registrada.'), detalhe(r2));
+    telaFinalizada(mensagem(r2, 'Sua entrega foi confirmada com sucesso.'), detalhe(r2));
     return;
   }
+
   switch (r.status) {
     case 409:
       if (r.json.erro && r.json.erro.codigo === 'ATUALIZADA') {
-        aviso('As respostas mudaram desde a pré-avaliação: reavalie.');
+        aviso('Suas respostas mudaram desde a pré-avaliação. Avalie novamente.');
       } else {
-        aviso(mensagem(r, 'Pré-avaliação expirou: reavalie.'));
+        aviso(mensagem(r, 'Pré-avaliação expirou. Reavalie para confirmar.'));
       }
       return;
     case 410:
       cronometroOff();
-      telaEncerrada('A janela fechou antes da confirmação. Rascunho preservado.');
+      telaEncerrada('A janela fechou antes da confirmação. Seu rascunho foi salvo.');
       return;
     case 403:
       telaFinalizada(mensagem(r, 'Encerrada.'), detalhe(r));
       return;
     default:
-      aviso(mensagem(r, 'Falha ao confirmar.'));
+      aviso(mensagem(r, 'Falha ao confirmar envio.'));
   }
 }
 
-// ---------------------------------------------------------------- boot --
+// ------------------------------------------------------------- utilitários ----
+
+function atualizarProgressoGlobal() {
+  if (!estado.carga || !estado.carga.tarefas) return;
+  const tarefas = estado.carga.tarefas;
+  const total = tarefas.length;
+  const preenchidas = tarefas.filter((t) => (estado.respostas[String(t.ordem)] || '').trim().length > 0).length;
+
+  const txt = $('progresso-texto');
+  const bar = $('progresso-barra');
+  if (txt) txt.textContent = `Progresso: ${preenchidas} de ${total} tarefas`;
+  if (bar) {
+    const pct = total > 0 ? Math.round((preenchidas / total) * 100) : 0;
+    bar.style.width = `${pct}%`;
+  }
+  renderizarAbasHeader();
+}
+
+function aviso(msg) {
+  atualizarBadgeSalvo('aviso', msg);
+}
+
+// ------------------------------------------------------------ atalhos teclado ----
+
+window.addEventListener('keydown', (e) => {
+  // Ctrl+Enter ou Cmd+Enter para testar código da tarefa ativa
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    testar(estado.tarefaAtiva);
+  }
+  // Ctrl+S ou Cmd+S para forçar autosave
+  if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+    e.preventDefault();
+    salvar();
+  }
+});
+
+// ---------------------------------------------------------------- boot ----
 
 abrir();

@@ -3,16 +3,49 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Seno — realização de atividade</title>
+  <title>Seno — Realização de Atividade</title>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
   <header id="bar">
-    <strong id="titulo">Seno — realização</strong>
-    <span id="crono" class="crono" hidden></span>
-    <span id="salvo"></span>
+    <div class="bar-esquerda">
+      <span class="logo-seno" aria-hidden="true">SENO</span>
+      <strong id="titulo" class="titulo-atividade">Seno — realização</strong>
+      <nav id="tarefas-nav" class="tarefas-nav" aria-label="Navegação de tarefas"></nav>
+    </div>
+    <div class="bar-direita">
+      <span id="crono" class="crono" hidden></span>
+      <div id="salvo-badge" class="salvo-badge" title="Status de salvamento">
+        <span id="salvo-icone" class="salvo-icone" aria-hidden="true">☁</span>
+        <span id="salvo">conectando…</span>
+      </div>
+    </div>
   </header>
-  <main id="conteudo"><p class="mudo">carregando…</p></main>
+
+  <main id="conteudo" class="conteudo-principal">
+    <div class="estado-carregando">
+      <div class="spinner"></div>
+      <p class="mudo">Carregando atividade…</p>
+    </div>
+  </main>
+
+  <footer id="bar-rodape" class="bar-rodape" hidden>
+    <div class="rodape-esquerda">
+      <div id="progresso-texto" class="progresso-texto">0 de 0 tarefas preenchidas</div>
+      <div class="progresso-trilho">
+        <div id="progresso-barra" class="progresso-barra" style="width: 0%"></div>
+      </div>
+    </div>
+    <div class="rodape-direita">
+      <button id="btn-rodape-testar" type="button" class="btn btn-secundario" title="Atalho: Ctrl+Enter">
+        <span class="icone-btn">▶</span> Testar Código <kbd class="atalho-teclado">Ctrl+Enter</kbd>
+      </button>
+      <button id="btn-rodape-avaliar" type="button" class="btn btn-primario">
+        Pré-avaliar e Entregar
+      </button>
+    </div>
+  </footer>
+
   <dialog id="modal"></dialog>
   <script src="editor.js"></script>
   <script src="app.js"></script>
