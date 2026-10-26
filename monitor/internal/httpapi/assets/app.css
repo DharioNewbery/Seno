@@ -209,7 +209,40 @@ html, body {
 }
 
 .salvo-icone {
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Ícones SVG */
+.icone {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.icone-sm {
+  width: 12px;
+  height: 12px;
+}
+
+.icone-lg {
+  width: 16px;
+  height: 16px;
+}
+
+.icone-girar {
+  animation: girar 1s linear infinite;
+}
+
+.icone-ok {
+  color: var(--ok);
+}
+
+.icone-erro {
+  color: var(--erro);
 }
 
 /* -------------------------------------------------------- Split Layout ---- */

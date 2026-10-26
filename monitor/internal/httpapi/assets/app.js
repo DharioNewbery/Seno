@@ -9,6 +9,25 @@ const conteudo = $('conteudo');
 const modal = $('modal');
 const barRodape = $('bar-rodape');
 
+// Coleção de ícones SVG limpos e padronizados (sem emojis)
+const ICONES = {
+  relogio: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  nuvem: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>`,
+  sincronizar: `<svg class="icone icone-girar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>`,
+  offline: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 2 20 20"/><path d="M5.78 5.78A7 7 0 0 0 2 12a7 7 0 0 0 7 7h8.5a4.5 4.5 0 0 0 2.57-.8"/><path d="M22.5 14.5a4.5 4.5 0 0 0-3.92-4.44A7 7 0 0 0 12 5c-.7 0-1.37.1-2 .29"/></svg>`,
+  alerta: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+  play: `<svg class="icone" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>`,
+  historico: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`,
+  check: `<svg class="icone icone-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  x: `<svg class="icone icone-erro" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+  estrela: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+  codigo: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`,
+  cpu: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>`,
+  memoria: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 19v-3"/><path d="M10 19v-3"/><path d="M14 19v-3"/><path d="M18 19v-3"/><path d="M2 12V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v6"/><rect x="2" y="12" width="20" height="8" rx="2"/></svg>`,
+  chevronBaixo: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`,
+  chevronCima: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>`,
+};
+
 const estado = {
   carga: null,           // AtividadePublica sanitizada
   regras: null,          // regras (autocomplete, etc.)
@@ -174,7 +193,7 @@ function cronometroOn(segundos) {
   clearInterval(cronoTimer);
 
   const atualizaVisual = () => {
-    el.innerHTML = `<span aria-hidden="true">⏱</span> ${mmss(estado.restantes)}`;
+    el.innerHTML = `${ICONES.relogio} <span>${mmss(estado.restantes)}</span>`;
     el.classList.toggle('pouco', estado.restantes <= 180);
   };
 
@@ -230,18 +249,18 @@ function atualizarBadgeSalvo(tipo, texto) {
 
   if (tipo === 'salvando') {
     badge.classList.add('salvando');
-    icone.textContent = '🔄';
+    if (icone) icone.innerHTML = ICONES.sincronizar;
   } else if (tipo === 'sucesso') {
     badge.classList.add('sucesso');
-    icone.textContent = '☁';
+    if (icone) icone.innerHTML = ICONES.nuvem;
   } else if (tipo === 'offline') {
     badge.classList.add('offline');
-    icone.textContent = '🟡';
+    if (icone) icone.innerHTML = ICONES.offline;
   } else if (tipo === 'erro') {
     badge.classList.add('erro');
-    icone.textContent = '⚠️';
+    if (icone) icone.innerHTML = ICONES.alerta;
   } else {
-    icone.textContent = '☁';
+    if (icone) icone.innerHTML = ICONES.nuvem;
   }
 }
 
@@ -383,7 +402,7 @@ function renderizarTudo() {
           <div class="editor-barra-topo">
             <span id="editor-ling-badge" class="editor-ling-badge"></span>
             <button id="btn-historico" type="button" class="btn-link" title="Consultar testes já realizados nesta tarefa">
-              ↺ Ensaios anteriores
+              ${ICONES.historico} <span>Ensaios anteriores</span>
             </button>
           </div>
           <div id="editor-wrap" class="editor-wrap"></div>
@@ -393,7 +412,7 @@ function renderizarTudo() {
             <div id="console-abas" class="console-abas"></div>
             <div class="console-direita">
               <span id="console-status-resumo" class="console-status-resumo"></span>
-              <button id="btn-console-toggle" type="button" class="btn-icone-min" title="Minimizar / Expandir console">▾</button>
+              <button id="btn-console-toggle" type="button" class="btn-icone-min" title="Minimizar / Expandir console">${ICONES.chevronBaixo}</button>
             </div>
           </div>
           <div id="console-corpo" class="console-corpo"></div>
@@ -492,10 +511,10 @@ function trocarParaTarefa(ordem) {
       <div class="tarefa-cabecalho">
         <h2 class="tarefa-titulo">${tarefa.ordem}. ${esc(tarefa.nome)}</h2>
         <div class="tarefa-meta">
-          <span class="tag tag-pts">⭐ ${tarefa.valor_pts} pts</span>
-          <span class="tag tag-ling">🐍 ${esc(tarefa.linguagem)}</span>
-          <span class="tag">⏱ ${cpu}</span>
-          <span class="tag">💾 ${ram}</span>
+          <span class="tag tag-pts">${ICONES.estrela} ${tarefa.valor_pts} pts</span>
+          <span class="tag tag-ling">${ICONES.codigo} ${esc(tarefa.linguagem)}</span>
+          <span class="tag">${ICONES.cpu} ${cpu}</span>
+          <span class="tag">${ICONES.memoria} ${ram}</span>
         </div>
       </div>
       <div class="enunciado-tarefa">${esc(tarefa.enunciado || 'Sem enunciado cadastrado.')}</div>
@@ -586,7 +605,7 @@ function toggleConsole() {
   if (!c || !btn) return;
   estado.consoleMinimizado = !estado.consoleMinimizado;
   c.classList.toggle('minimizado', estado.consoleMinimizado);
-  btn.textContent = estado.consoleMinimizado ? '▴' : '▾';
+  btn.innerHTML = estado.consoleMinimizado ? ICONES.chevronCima : ICONES.chevronBaixo;
 }
 
 function renderizarConsoleTestes() {
@@ -631,7 +650,7 @@ function renderizarConsoleTestes() {
     let tag = '';
     if (r) {
       const d = decodificaVeredito(r.veredito);
-      tag = `<span class="aba-teste-tag ${d.cls}">${d.cls === 'passou' ? '✓' : '✗'}</span>`;
+      tag = `<span class="aba-teste-tag ${d.cls}">${d.cls === 'passou' ? ICONES.check : ICONES.x}</span>`;
     }
     return `
       <button type="button" class="aba-teste${ativa}" data-teste="${te.ordem}">
@@ -698,7 +717,10 @@ function renderizarConsoleTestes() {
 
   corpoEl.innerHTML = `
     <div class="veredito-banner ${d.cls}">
-      <span>${d.cls === 'passou' ? '✓' : '✗'} ${esc(d.texto)}</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;">
+        ${d.cls === 'passou' ? ICONES.check : ICONES.x}
+        <span>${esc(d.texto)}</span>
+      </span>
       <span class="veredito-detalhes">${tempo}s · ${mem} KB</span>
     </div>
     <div class="comparador-grid">
@@ -748,7 +770,7 @@ async function testar(ordem) {
     estado.executandoTeste = false;
     if (btnTestar) {
       btnTestar.disabled = false;
-      btnTestar.innerHTML = `<span class="icone-btn">▶</span> Testar Código <kbd class="atalho-teclado">Ctrl+Enter</kbd>`;
+      btnTestar.innerHTML = `${ICONES.play} <span>Testar Código</span> <kbd class="atalho-teclado">Ctrl+Enter</kbd>`;
     }
     const msg = r.status === 429
       ? 'Limite de 5 ensaios por minuto atingido. Aguarde alguns segundos.'
@@ -768,7 +790,7 @@ async function testar(ordem) {
       estado.executandoTeste = false;
       if (btnTestar) {
         btnTestar.disabled = false;
-        btnTestar.innerHTML = `<span class="icone-btn">▶</span> Testar Código <kbd class="atalho-teclado">Ctrl+Enter</kbd>`;
+        btnTestar.innerHTML = `${ICONES.play} <span>Testar Código</span> <kbd class="atalho-teclado">Ctrl+Enter</kbd>`;
       }
       estado.resultados[ordem] = {
         status: 'pronto',
@@ -791,7 +813,7 @@ async function testar(ordem) {
       estado.executandoTeste = false;
       if (btnTestar) {
         btnTestar.disabled = false;
-        btnTestar.innerHTML = `<span class="icone-btn">▶</span> Testar Código <kbd class="atalho-teclado">Ctrl+Enter</kbd>`;
+        btnTestar.innerHTML = `${ICONES.play} <span>Testar Código</span> <kbd class="atalho-teclado">Ctrl+Enter</kbd>`;
       }
       aviso('Não foi possível obter o resultado do teste.');
       renderizarConsoleTestes();
@@ -802,7 +824,7 @@ async function testar(ordem) {
   estado.executandoTeste = false;
   if (btnTestar) {
     btnTestar.disabled = false;
-    btnTestar.innerHTML = `<span class="icone-btn">▶</span> Testar Código <kbd class="atalho-teclado">Ctrl+Enter</kbd>`;
+    btnTestar.innerHTML = `${ICONES.play} <span>Testar Código</span> <kbd class="atalho-teclado">Ctrl+Enter</kbd>`;
   }
   aviso('Execução demorada. O resultado aparecerá no histórico em instantes.');
   renderizarConsoleTestes();
@@ -831,7 +853,8 @@ async function abrirHistorico(ordem) {
           </div>
           <div class="modal-testes-chips">
             ${rh.resultados.map((x) => `
-              <span class="chip-teste ${x.veredito === 'accepted' ? 'passou' : 'falhou'}">
+              <span class="chip-teste ${x.veredito === 'accepted' ? 'passou' : 'falhou'}" style="display:inline-flex;align-items:center;gap:4px;">
+                ${x.veredito === 'accepted' ? ICONES.check : ICONES.x}
                 #${x.ordem} ${esc(decodificaVeredito(x.veredito).curto)}
               </span>
             `).join('')}
@@ -904,19 +927,19 @@ async function preAvaliar() {
   const btnAvaliar = $('btn-rodape-avaliar');
   if (btnAvaliar) {
     btnAvaliar.disabled = true;
-    btnAvaliar.textContent = 'Avaliando…';
+    btnAvaliar.textContent = 'Entregando…';
   }
 
   const r = await api('POST', '/submissao/avaliar');
   if (btnAvaliar) {
     btnAvaliar.disabled = false;
-    btnAvaliar.textContent = 'Pré-avaliar e Entregar';
+    btnAvaliar.textContent = 'Entregar';
   }
 
   if (r.status !== 200) {
     if (r.status === 403) { telaFinalizada(mensagem(r, 'Encerrada.'), detalhe(r)); return; }
     if (r.status === 410) { telaEncerrada(mensagem(r, 'A janela está encerrada.')); return; }
-    aviso(mensagem(r, 'Falha na pré-avaliação.'));
+    aviso(mensagem(r, 'Falha na avaliação da entrega.'));
     return;
   }
 
@@ -925,7 +948,7 @@ async function preAvaliar() {
   const ttlSeg = parseInt(String(rel.expira_em || '0'), 10);
 
   modal.innerHTML = `
-    <h2>Relatório de Pré-Avaliação</h2>
+    <h2>Relatório de Entrega</h2>
     <p>
       Acertos: <b>${rel.resumo.acertos}</b> de <b>${rel.resumo.total}</b> testes públicos.
       Válido por <span id="ttl" class="modal-ttl">${mmss(ttlSeg)}</span>
@@ -935,13 +958,14 @@ async function preAvaliar() {
         <div class="modal-tarefa-card">
           <div class="modal-tarefa-card-topo">
             <span>Tarefa ${t.ordem}</span>
-            <span class="${t.veredito === 'accepted' ? 'passou' : 'falhou'}">
-              ${t.veredito === 'accepted' ? '✓ Todos os testes passaram' : '✗ Falhas encontradas'}
+            <span class="${t.veredito === 'accepted' ? 'passou' : 'falhou'}" style="display:inline-flex;align-items:center;gap:4px;">
+              ${t.veredito === 'accepted' ? `${ICONES.check} Todos os testes passaram` : `${ICONES.x} Falhas encontradas`}
             </span>
           </div>
           <div class="modal-testes-chips">
             ${(t.testes || []).map((x) => `
-              <span class="chip-teste ${x.status === 'accepted' ? 'passou' : 'falhou'}">
+              <span class="chip-teste ${x.status === 'accepted' ? 'passou' : 'falhou'}" style="display:inline-flex;align-items:center;gap:4px;">
+                ${x.status === 'accepted' ? ICONES.check : ICONES.x}
                 #${x.ordem} ${esc(decodificaVeredito(x.status).curto)}
               </span>
             `).join('')}
@@ -950,11 +974,11 @@ async function preAvaliar() {
       `).join('')}
     </div>
     <p class="mudo" style="font-size:12px;margin-bottom:0;">
-      Atenção: A confirmação encerra sua tentativa nesta atividade. Se desejar corrigir algo, clique em "Voltar e editar".
+      Atenção: A confirmação encerra sua tentativa nesta atividade. Se desejar corrigir algo antes de entregar, clique em "Voltar e editar".
     </p>
     <div class="modal-acoes">
       <button id="btn-cancel" type="button" class="btn btn-secundario">Voltar e editar</button>
-      <button id="btn-conf" type="button" class="btn btn-primario">Confirmar Envio Definitivo</button>
+      <button id="btn-conf" type="button" class="btn btn-primario">Confirmar Entrega</button>
     </div>
   `;
   modal.showModal();
@@ -967,7 +991,7 @@ async function preAvaliar() {
     if (restTtl <= 0) {
       clearInterval(ttlTimer);
       estado.preId = null;
-      aviso('A pré-avaliação expirou. Avalie novamente antes de enviar.');
+      aviso('A avaliação expirou. Clique em Entregar novamente para confirmar.');
       modal.close();
     }
   }, 1000);
@@ -987,7 +1011,7 @@ async function confirmarPre(ttlTimer) {
   const btnConf = $('btn-conf');
   if (btnConf) {
     btnConf.disabled = true;
-    btnConf.textContent = 'Enviando…';
+    btnConf.textContent = 'Confirmando…';
   }
 
   const r = await api('POST', '/submissao/confirmar', { pre_id: estado.preId });
@@ -1012,9 +1036,9 @@ async function confirmarPre(ttlTimer) {
   switch (r.status) {
     case 409:
       if (r.json.erro && r.json.erro.codigo === 'ATUALIZADA') {
-        aviso('Suas respostas mudaram desde a pré-avaliação. Avalie novamente.');
+        aviso('Suas respostas mudaram desde a avaliação. Clique em Entregar novamente.');
       } else {
-        aviso(mensagem(r, 'Pré-avaliação expirou. Reavalie para confirmar.'));
+        aviso(mensagem(r, 'Avaliação expirou. Clique em Entregar para confirmar.'));
       }
       return;
     case 410:
@@ -1025,7 +1049,7 @@ async function confirmarPre(ttlTimer) {
       telaFinalizada(mensagem(r, 'Encerrada.'), detalhe(r));
       return;
     default:
-      aviso(mensagem(r, 'Falha ao confirmar envio.'));
+      aviso(mensagem(r, 'Falha ao confirmar entrega.'));
   }
 }
 

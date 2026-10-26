@@ -16,7 +16,9 @@
     <div class="bar-direita">
       <span id="crono" class="crono" hidden></span>
       <div id="salvo-badge" class="salvo-badge" title="Status de salvamento">
-        <span id="salvo-icone" class="salvo-icone" aria-hidden="true">☁</span>
+        <span id="salvo-icone" class="salvo-icone" aria-hidden="true">
+          <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+        </span>
         <span id="salvo">conectando…</span>
       </div>
     </div>
@@ -38,10 +40,12 @@
     </div>
     <div class="rodape-direita">
       <button id="btn-rodape-testar" type="button" class="btn btn-secundario" title="Atalho: Ctrl+Enter">
-        <span class="icone-btn">▶</span> Testar Código <kbd class="atalho-teclado">Ctrl+Enter</kbd>
+        <svg class="icone" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+        <span>Testar Código</span>
+        <kbd class="atalho-teclado">Ctrl+Enter</kbd>
       </button>
       <button id="btn-rodape-avaliar" type="button" class="btn btn-primario">
-        Pré-avaliar e Entregar
+        Entregar
       </button>
     </div>
   </footer>
