@@ -15,14 +15,23 @@ type AtividadePublica struct {
 	Tarefas   []TarefaPublica `json:"tarefas"`
 }
 
+// TestePublica é o teste visível ao aluno: `ordem` é a posição do teste na
+// lista integral da carga (1-based), igual ao `teste_ordem` dos resultados
+// de ensaio — inclusive quando privados entrem no meio.
+type TestePublica struct {
+	Ordem          int    `json:"ordem"`
+	Stdin          string `json:"stdin"`
+	StdoutEsperado string `json:"stdout_esperado"`
+}
+
 type TarefaPublica struct {
-	Ordem     int                   `json:"ordem"`
-	Nome      string                `json:"nome"`
-	Enunciado string                `json:"enunciado"`
-	Linguagem string                `json:"linguagem"`
-	ValorPts  float64               `json:"valor_pts"`
-	Limites   *contract.Limites     `json:"limites"`
-	Testes    []contract.TesteCarga `json:"testes"`
+	Ordem     int               `json:"ordem"`
+	Nome      string            `json:"nome"`
+	Enunciado string            `json:"enunciado"`
+	Linguagem string            `json:"linguagem"`
+	ValorPts  float64           `json:"valor_pts"`
+	Limites   *contract.Limites `json:"limites"`
+	Testes    []TestePublica    `json:"testes"`
 }
 
 // Sanitizada converte a carga integral na versão pública: só testes publicos.
@@ -41,9 +50,11 @@ func Sanitizada(c contract.Carga) AtividadePublica {
 			ValorPts:  t.ValorPts,
 			Limites:   t.Limites,
 		}
-		for _, te := range t.Testes {
+		for i, te := range t.Testes {
 			if te.Publico {
-				p.Testes = append(p.Testes, te)
+				p.Testes = append(p.Testes, TestePublica{
+					Ordem: i + 1, Stdin: te.Stdin, StdoutEsperado: te.StdoutEsperado,
+				})
 			}
 		}
 		out.Tarefas = append(out.Tarefas, p)

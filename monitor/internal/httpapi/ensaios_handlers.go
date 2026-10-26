@@ -77,6 +77,22 @@ func (d *Dependencies) EnsaioResultado(c *gin.Context) {
 	c.JSON(status, estado)
 }
 
+// EnsaioHistorico — GET /a/atividade/:monitor_id/testar: ensaios anteriores
+// do aluno (código rodado + vereditos), para o botão "Ver ensaios anteriores".
+func (d *Dependencies) EnsaioHistorico(c *gin.Context) {
+	mid, aluno, ok := contextoAluno(c)
+	if !ok {
+		return
+	}
+	runs, err := d.EnsaiosS.Historico(c.Request.Context(), mid, aluno)
+	if err != nil {
+		respondErro(c, http.StatusInternalServerError, contract.CodeInternal,
+			"Erro interno do servidor.", nil)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"runs": runs})
+}
+
 // PreAvaliar — POST /a/atividade/:monitor_id/submissao/avaliar (spec §5.4):
 // síncrono; devolve o relatório (spec §5.4) com pre_id e expira_em.
 func (d *Dependencies) PreAvaliar(c *gin.Context) {

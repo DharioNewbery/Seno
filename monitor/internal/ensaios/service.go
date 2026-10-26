@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/seno-project/seno/contract"
@@ -143,16 +144,17 @@ func (s *Service) Agendar(ctx context.Context, mid string, aluno int64,
 	}
 
 	// run = random hex 16; execucao placeholders criadas ANTES
-	// (callback só faz UPDATE: sem INSERT arbitrário via fio).
+	// (callback só faz UPDATE: sem INSERT arbitrário via fio). codigo vai
+	// em toda linha do run: é o que o histórico (GET /testar) mostra depois.
 	run, err = runID()
 	if err != nil {
 		return "", fmt.Errorf("ensaios: run: %w", err)
 	}
 	for _, te := range testes {
 		if _, err := s.pool.Exec(ctx, `INSERT INTO execucao
-		    (run, monitor_id, aluno_api_id, tipo, tarefa_ordem, teste_ordem, publico, criada_em)
-		    VALUES ($1, $2, $3, 'ensaio', $4, $5, true, $6)`,
-			run, mid, aluno, ordem, te.Ordem, agora); err != nil {
+		    (run, monitor_id, aluno_api_id, tipo, tarefa_ordem, teste_ordem, publico, codigo, criada_em)
+		    VALUES ($1, $2, $3, 'ensaio', $4, $5, true, $6, $7)`,
+			run, mid, aluno, ordem, te.Ordem, codigo, agora); err != nil {
 			return "", fmt.Errorf("ensaios: placeholder: %w", err)
 		}
 	}
@@ -227,7 +229,7 @@ func (s *Service) Callback(ctx context.Context, run string, testeOrdem int,
 // lerEstado monta o EnsaioEstado a partir das linhas atuais do run.
 func (s *Service) lerEstado(ctx context.Context, mid string, aluno int64, run string) (*EnsaioEstado, error) {
 	rows, err := s.pool.Query(ctx, `SELECT teste_ordem, veredito, stdout_obtido,
-	    COALESCE(tempo_seg, 0), COALESCE(memoria_kb, 0)
+	    COALESCE(tempo_seg, 0), COALESCE(memoria_kb, 0), stderr, compilacao
 	    FROM execucao WHERE run = $1 AND monitor_id = $2 AND aluno_api_id = $3
 	    ORDER BY teste_ordem`, run, mid, aluno)
 	if err != nil {
@@ -236,21 +238,36 @@ func (s *Service) lerEstado(ctx context.Context, mid string, aluno int64, run st
 	defer rows.Close()
 	var e EnsaioEstado
 	for rows.Next() {
-		var r ResultadoEnsaio
-		var veredito, stdout *string
-		if err := rows.Scan(&r.TesteOrdem, &veredito, &stdout, &r.TempoSeg, &r.MemoriaKB); err != nil {
+		r, err := scanResultado(rows)
+		if err != nil {
 			return nil, fmt.Errorf("ensaios: consultar: %w", err)
 		}
-		if veredito == nil {
+		if r.Veredito == "" {
 			e.Pendentes++
 			continue
 		}
-		r.Veredito = *veredito
-		r.StdoutObtido = stdout
 		e.Resultados = append(e.Resultados, r)
 	}
 	e.Pronto = e.Pendentes == 0
 	return &e, rows.Err()
+}
+
+// scanResultado varre uma linha de execucao em ResultadoEnsaio (veredito
+// "" significa "ainda pendente": urbanização comum às duas consultas).
+func scanResultado(row pgx.Row) (ResultadoEnsaio, error) {
+	var r ResultadoEnsaio
+	var veredito, stdout, stderr, compilacao *string
+	if err := row.Scan(&r.TesteOrdem, &veredito, &stdout, &r.TempoSeg,
+		&r.MemoriaKB, &stderr, &compilacao); err != nil {
+		return r, err
+	}
+	if veredito != nil {
+		r.Veredito = *veredito
+	}
+	r.StdoutObtido = stdout
+	r.Stderr = stderr
+	r.Compilacao = compilacao
+	return r, nil
 }
 
 // registra aplica o veredito na linha do teste (callback OU polling).
@@ -261,6 +278,10 @@ func (s *Service) registra(ctx context.Context, run string, testeOrdem int, r ju
 		return nil
 	}
 	stdout := decodificaB64(r.Stdout)
+	// stderr e saída do compilador alimentam as mensagens de erro legíveis
+	// da tela (o aluno vê por que o teste falhou, não só o código do judge).
+	stderr := decodificaB64(r.Stderr)
+	compilacao := decodificaB64(r.CompileOutput)
 	if r.CompileOutput != "" {
 		stdout = "" // corpo de compilação não é stdout do programa
 	}
@@ -281,9 +302,10 @@ func (s *Service) registra(ctx context.Context, run string, testeOrdem int, r ju
 		veredito = "accepted"
 	}
 	ct, err := s.pool.Exec(ctx, `UPDATE execucao SET veredito = $3,
-	    stdout_obtido = $4, tempo_seg = $5, memoria_kb = $6
+	    stdout_obtido = $4, tempo_seg = $5, memoria_kb = $6,
+	    stderr = $7, compilacao = $8
 	    WHERE run = $1 AND teste_ordem = $2`,
-		run, testeOrdem, veredito, stdout, t, mem)
+		run, testeOrdem, veredito, stdout, t, mem, stderr, compilacao)
 	if err != nil {
 		return fmt.Errorf("ensaios: callback: %w", err)
 	}
@@ -303,8 +325,20 @@ type ResultadoEnsaio struct {
 	TesteOrdem   int     `json:"ordem"`
 	Veredito     string  `json:"veredito"`
 	StdoutObtido *string `json:"stdout_obtido,omitempty"`
-	TempoSeg     float64 `json:"tempo"`
-	MemoriaKB    int     `json:"memoria"`
+	// Detalhes para a mensagem de erro (vazios em accepted).
+	Stderr     *string `json:"stderr,omitempty"`
+	Compilacao *string `json:"compilacao,omitempty"`
+	TempoSeg   float64 `json:"tempo"`
+	MemoriaKB  int     `json:"memoria"`
+}
+
+// RunHistorico é um ensaio anterior: código rodado + vereditos dos testes.
+type RunHistorico struct {
+	RunID      string            `json:"run_id"`
+	Ordem      int               `json:"ordem"`
+	CriadaEm   time.Time         `json:"criada_em"`
+	Codigo     string            `json:"codigo"`
+	Resultados []ResultadoEnsaio `json:"resultados"`
 }
 
 // Consultar devolve o estado do run (ensaios até §5.3; rota GET).
@@ -312,7 +346,7 @@ type ResultadoEnsaio struct {
 // diretamente (fallback quando o callback não chegou).
 func (s *Service) Consultar(ctx context.Context, mid string, aluno int64, run string) (*EnsaioEstado, error) {
 	rows, err := s.pool.Query(ctx, `SELECT teste_ordem, veredito, stdout_obtido,
-	    COALESCE(tempo_seg, 0), COALESCE(memoria_kb, 0), token
+	    COALESCE(tempo_seg, 0), COALESCE(memoria_kb, 0), stderr, compilacao, token
 	    FROM execucao WHERE run = $1 AND monitor_id = $2 AND aluno_api_id = $3
 	    ORDER BY teste_ordem`, run, mid, aluno)
 	if err != nil {
@@ -327,9 +361,9 @@ func (s *Service) Consultar(ctx context.Context, mid string, aluno int64, run st
 	for rows.Next() {
 		var r ResultadoEnsaio
 		var veredito *string
-		var stdout *string
 		var token *string
-		if err := rows.Scan(&r.TesteOrdem, &veredito, &stdout, &r.TempoSeg, &r.MemoriaKB, &token); err != nil {
+		if err := rows.Scan(&r.TesteOrdem, &veredito, &r.StdoutObtido,
+			&r.TempoSeg, &r.MemoriaKB, &r.Stderr, &r.Compilacao, &token); err != nil {
 			return nil, fmt.Errorf("ensaios: consultar: %w", err)
 		}
 		if veredito == nil {
@@ -343,7 +377,6 @@ func (s *Service) Consultar(ctx context.Context, mid string, aluno int64, run st
 			continue
 		}
 		r.Veredito = *veredito
-		r.StdoutObtido = stdout
 		e.Resultados = append(e.Resultados, r)
 	}
 	if err := rows.Err(); err != nil {
@@ -368,6 +401,57 @@ func (s *Service) Consultar(ctx context.Context, mid string, aluno int64, run st
 	}
 	e.Pronto = e.Pendentes == 0
 	return &e, nil
+}
+
+// Historico devolve os últimos runs de ensaio do aluno nesta atividade
+// (teto de 20, já limitados pela retenção de execucao): vereditos e o
+// código antigo que rodou — alimenta o botão "Ver ensaios anteriores".
+func (s *Service) Historico(ctx context.Context, mid string, aluno int64) ([]RunHistorico, error) {
+	rows, err := s.pool.Query(ctx, `SELECT run, tarefa_ordem, criada_em,
+	    COALESCE(codigo, ''), COALESCE(teste_ordem, 0), veredito,
+	    COALESCE(tempo_seg, 0), COALESCE(memoria_kb, 0), stdout_obtido,
+	    stderr, compilacao
+	    FROM execucao
+	    WHERE monitor_id = $1 AND aluno_api_id = $2 AND tipo = 'ensaio'
+	      AND run IN (SELECT run FROM execucao
+	                  WHERE monitor_id = $1 AND aluno_api_id = $2 AND tipo = 'ensaio'
+	                  GROUP BY run ORDER BY max(criada_em) DESC LIMIT 20)
+	    ORDER BY criada_em DESC, teste_ordem`, mid, aluno)
+	if err != nil {
+		return nil, fmt.Errorf("ensaios: histórico: %w", err)
+	}
+	defer rows.Close()
+	var out []RunHistorico
+	indice := map[string]int{}
+	for rows.Next() {
+		var run string
+		var ordem int
+		var criada time.Time
+		var codigo string
+		var testeOrdem int
+		var veredito, stdout, stderr, compilacao *string
+		var tempo float64
+		var mem int
+		if err := rows.Scan(&run, &ordem, &criada, &codigo, &testeOrdem,
+			&veredito, &tempo, &mem, &stdout, &stderr, &compilacao); err != nil {
+			return nil, fmt.Errorf("ensaios: histórico: %w", err)
+		}
+		i, ok := indice[run]
+		if !ok {
+			i = len(out)
+			indice[run] = i
+			out = append(out, RunHistorico{RunID: run, Ordem: ordem,
+				CriadaEm: criada, Codigo: codigo})
+		}
+		if veredito == nil {
+			continue // teste pendente: fora da lista de resultados
+		}
+		out[i].Resultados = append(out[i].Resultados, ResultadoEnsaio{
+			TesteOrdem: testeOrdem, Veredito: *veredito, StdoutObtido: stdout,
+			Stderr: stderr, Compilacao: compilacao, TempoSeg: tempo, MemoriaKB: mem,
+		})
+	}
+	return out, rows.Err()
 }
 
 // -- Helpers ------------------------------------------------------------------

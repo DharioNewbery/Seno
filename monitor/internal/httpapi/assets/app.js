@@ -217,6 +217,111 @@ function cronometroOn(segundos) {
 }
 function cronometroOff() { clearInterval(cronoTimer); $('crono').hidden = true; }
 
+// ------------------------------------------------- testes públicos (tela) ---
+
+// Tabela de testes públicos: sempre visível entre o campo de código e as
+// ações; "Testar" só preenche a última coluna (Resultado).
+function tabelaTestes(t) {
+  if (!t.testes || !t.testes.length) return '';
+  return `
+    <table class="tb-tes">
+      <thead><tr><th>#</th><th>Entrada</th><th>Saída esperada</th><th>Resultado</th></tr></thead>
+      <tbody>${t.testes.map((te) => `
+        <tr>
+          <td>${te.ordem}</td>
+          <td class="mono-cel"><pre>${esc(te.stdin)}</pre></td>
+          <td class="mono-cel"><pre>${esc(te.stdout_esperado)}</pre></td>
+          <td class="res" data-res="${te.ordem}">—</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// decodificaVeredito vira {cls, curto, texto} legível (o código crú do judge0
+// só existe no banco; nada disso aparece para o aluno).
+function decodificaVeredito(v) {
+  if (v === 'accepted') return { cls: 'passou', curto: 'passou', texto: 'Passou' };
+  const m = /^judge0:(\d+)$/.exec(String(v));
+  const n = m ? Number(m[1]) : 4;
+  const T = {
+    4: ['Resposta errada', 'Resposta errada — o programa produziu saída diferente da esperada'],
+    5: ['Tempo esgotado', 'Tempo esgotado — o programa passou do limite de tempo'],
+    6: ['Não compilou', 'Erro de compilação — o código não compila (veja a mensagem do compilador)'],
+    7: ['Erro em execução', 'Erro em execução — acesso inválido à memória (SIGSEGV)'],
+    8: ['Erro em execução', 'Erro em execução — saída de arquivo acima do limite (SIGXFSZ)'],
+    9: ['Erro em execução', 'Erro em execução — o programa foi morto (SIGKILL; normalmente limite de memória)'],
+    10: ['Erro em execução', 'Erro em execução — o programa terminou com falha (erro de runtime)'],
+    11: ['Falha do judge', 'Falha interna do judge — tente de novo'],
+    12: ['Erro em execução', 'Erro em execução — executável com formato inválido'],
+    13: ['Falha do judge', 'Falha interna do judge — tente de novo'],
+    14: ['Erro em execução', 'Erro em execução — o programa terminou com falha'],
+  };
+  const [curto, texto] = T[n] || ['Executando', 'Aguardando execução…'];
+  return { cls: 'falhou', curto, texto };
+}
+
+function celulaResultado(x) {
+  if (!x || !x.veredito) return '<span class="mudo">executando…</span>';
+  const d = decodificaVeredito(x.veredito);
+  let h = `<span class="${d.cls}">${esc(d.texto)}</span>
+      <span class="mudo min">${Number(x.tempo ?? 0).toFixed(2)}s · ${x.memoria ?? 0} KB</span>`;
+  const det = [];
+  if (x.compilacao) det.push(['Mensagem do compilador', x.compilacao]);
+  else {
+    if (x.stdout_obtido) det.push(['Saída obtida', x.stdout_obtido]);
+    if (x.stderr) det.push(['stderr do programa', x.stderr]);
+  }
+  if (det.length) {
+    h += `<details><summary>detalhe da falha</summary>${
+      det.map(([rot, val]) => `<p class="detl"><b>${esc(rot)}:</b></p><pre>${esc(val)}</pre>`).join('')}</details>`;
+  }
+  return h;
+}
+
+function pintarResultados(ordem, resultados) {
+  const card = conteudo.querySelector(`.card[data-ordem="${ordem}"]`);
+  if (!card) return;
+  const porOrdem = Object.fromEntries((resultados || []).map((x) => [x.ordem, x]));
+  card.querySelectorAll('[data-res]').forEach((cel) => {
+    cel.innerHTML = celulaResultado(porOrdem[cel.dataset.res]);
+  });
+}
+
+// ------------------------------------------------ histórico de ensaios ----
+
+async function abrirHistorico(ordem) {
+  const r = await api('GET', '/testar');
+  if (r.status !== 200) {
+    aviso('Não foi possível carregar os ensaios anteriores.');
+    return;
+  }
+  const runs = (r.json.runs || []).filter((x) => x.ordem === Number(ordem));
+  modal.innerHTML = `<h2>Ensaios anteriores — tarefa ${ordem}</h2>` +
+    (runs.length ? runs.map((rh) => `
+      <div class="hist-run">
+        <p><b>${esc(new Date(rh.criada_em).toLocaleString('pt-BR'))}</b>
+           <span class="mudo">— ${rh.resultados.filter((x) => x.veredito === 'accepted').length}/${rh.resultados.length} passaram</span></p>
+        <table>${rh.resultados.map((x) => `<tr><td>#${x.ordem}</td>
+          <td class="${decodificaVeredito(x.veredito).cls}">${esc(decodificaVeredito(x.veredito).curto)}</td>
+          <td>${Number(x.tempo ?? 0).toFixed(2)}s</td><td>${x.memoria ?? 0} KB</td></tr>`).join('')}</table>
+        <pre>${esc(rh.codigo || '(código não registrado neste run)')}</pre>
+      </div>`).join('')
+    : '<p class="mudo">Nenhum ensaio anterior nesta tarefa.</p>') +
+    `<div class="aces"><button id="btn-hist-fechar" type="button">Fechar</button></div>`;
+  $('btn-hist-fechar').addEventListener('click', () => modal.close());
+  modal.showModal();
+}
+
+async function carregarHistorico() {
+  // Releva os botões "Ver ensaios anteriores" só onde há runs gravados.
+  const r = await api('GET', '/testar');
+  if (r.status !== 200) return;
+  const vistos = new Set((r.json.runs || []).map((x) => x.ordem));
+  conteudo.querySelectorAll('[data-hist]').forEach((b) => {
+    b.hidden = !vistos.has(Number(b.dataset.hist));
+  });
+}
+
 function renderProva(atv) {
   $('titulo').textContent = atv.nome || 'Seno';
   const cards = atv.tarefas.map((t) => {
@@ -229,10 +334,12 @@ function renderProva(atv) {
         </header>
         ${t.enunciado ? `<p class="enun">${esc(t.enunciado)}</p>` : ''}
         <div class="editor-wrap" data-ordem="${t.ordem}"></div>
+        ${tabelaTestes(t)}
         <div class="aces">
           <button class="prim" data-testar="${t.ordem}" ${t.testes && t.testes.length ? '' : 'hidden'}>
             Testar (${t.testes.length} teste${t.testes.length > 1 ? 's' : ''} público${t.testes.length > 1 ? 's' : ''})
           </button>
+          <button class="tx" data-hist="${t.ordem}" hidden>Ver ensaios anteriores</button>
         </div>
         <div class="tst" data-tst="${t.ordem}"></div>
       </section>`;
@@ -285,7 +392,11 @@ function renderProva(atv) {
   conteudo.querySelectorAll('[data-testar]').forEach((b) => {
     b.addEventListener('click', () => testar(Number(b.dataset.testar)));
   });
+  conteudo.querySelectorAll('[data-hist]').forEach((b) => {
+    b.addEventListener('click', () => abrirHistorico(Number(b.dataset.hist)));
+  });
   $('btn-avaliar').addEventListener('click', preAvaliar);
+  carregarHistorico();
 }
 
 // ---------------------------------------------------------- autosave ----
@@ -348,28 +459,30 @@ function cronometroZerou() {
 
 async function testar(ordem) {
   const t = estado.carga.tarefas.find((x) => x.ordem === ordem);
+  const card = conteudo.querySelector(`.card[data-ordem="${ordem}"]`);
+  const alvo = card.querySelector('.tst');
   const codigo = estado.respostas[String(ordem)] ?? '';
   const r = await api('POST', '/testar', { ordem, linguagem: t.linguagem, codigo });
   if (r.status !== 202) {
     if (r.status === 429) {
-      aviso(`Limite de ensaios por minuto. Aguarde.`);
+      aviso(`Limite de ensaios por minuto. Aguarde.`, alvo);
       return;
     }
-    if (r.status >= 400) { aviso(mensagem(r, 'Não foi possível testar.')); }
+    if (r.status >= 400) { aviso(mensagem(r, 'Não foi possível testar.'), alvo); }
     return;
   }
   const run = r.json.run_id;
-  const alvo = conteudo.querySelector(`[data-tst="${ordem}"]`);
+  card.querySelectorAll('[data-res]').forEach((cel) => {
+    cel.innerHTML = '<span class="mudo">executando…</span>';
+  });
   aviso(`Run ${esc(run.slice(0, 8))}… executando`, alvo);
   for (let seg = 0; seg < 60; seg++) {
     await new Promise((res) => setTimeout(res, 1500));
     const q = await api('GET', `/testar/${encodeURIComponent(run)}`);
     if (q.status === 200) {
-      const linhas = q.json.resultados.map((x) => `
-        <tr><td>#${x.ordem}</td>
-        <td class="${x.veredito === 'ok' ? 'passou' : 'falhou'}">${esc(x.veredito)}</td>
-        <td>${(x.tempo ?? 0).toFixed(2)}s</td><td>${x.memoria ?? 0} KB</td></tr>`).join('');
-      alvo.innerHTML = `<table>${linhas}</table>`;
+      pintarResultados(ordem, q.json.resultados);
+      const ap = q.json.resultados.filter((x) => x.veredito === 'accepted').length;
+      aviso(`run ${esc(run.slice(0, 8))}…: ${ap}/${q.json.resultados.length} testes passaram`, alvo);
       return;
     }
     if (q.status >= 400) {
@@ -407,8 +520,8 @@ async function preAvaliar() {
        Válido por <span id="ttl">${mmss(ttlSeg)}</span>.</p>
     ${rel.tarefas.map((t) => `
       <p><b>Tarefa ${t.ordem}:</b>
-         <span class="falhou">${esc(t.veredito)}</span>
-         ${(t.testes || []).map((x) => `<span class="${x.status === 'ok' ? 'passou' : 'falhou'}">#${x.ordem} ${esc(x.status)}</span>`).join(' · ')}</p>
+         ${t.veredito === 'accepted' ? '<span class="passou">todos os testes públicos passaram</span>' : ''}
+         ${(t.testes || []).map((x) => `<span class="${x.status === 'accepted' ? 'passou' : 'falhou'}">#${x.ordem} ${esc(decodificaVeredito(x.status).curto)}</span>`).join(' · ')}</p>
     `).join('')}
     <div class="aces">
       <button id="btn-conf" class="prim">Confirmar envio</button>

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -314,3 +315,42 @@ func TestEnsaioRateLimitE2E(t *testing.T) {
 		t.Fatalf("ensaio 3: %d, quero 429", w.Code)
 	}
 }
+
+// histórico: runs em ordem desc, resultados agrupados por run e código rodado.
+func TestEnsaioHistorico(t *testing.T) {
+	pool := testeDB(t)
+	deps, _ := montaMonitorJudge0(t, pool)
+	if err := semeiaAtividadeDB(pool, "ativa", int64(subTest)); err != nil {
+		t.Fatalf("semeia: %v", err)
+	}
+	ctx := context.Background()
+	for i := 0; i < 2; i++ {
+		agora := time.Now().UTC().Add(-time.Duration(1-i) * time.Minute) // run2 é o mais recente
+		for _, te := range []int{1, 2} {
+			if _, err := pool.Exec(ctx, `INSERT INTO execucao
+				(run, monitor_id, aluno_api_id, tipo, tarefa_ordem, teste_ordem, publico,
+				 codigo, veredito, criada_em)
+				VALUES ($1,$2,$3,'ensaio',1,$4,true,$5,$6,$7)`,
+				fmt.Sprintf("run%d", i), midTest, int64(subTest), te,
+				fmt.Sprintf("print(%d)", i), "accepted", agora); err != nil {
+				t.Fatalf("insert %d/%d: %v", i, te, err)
+			}
+		}
+	}
+	runs, err := deps.EnsaiosS.Historico(ctx, midTest, int64(subTest))
+	if err != nil {
+		t.Fatalf("historico: %v", err)
+	}
+	if len(runs) != 2 {
+		t.Fatalf("runs: %d, quero 2", len(runs))
+	}
+	novo := runs[0]
+	if novo.RunID != "run1" || novo.Codigo != "print(1)" || novo.Ordem != 1 {
+		t.Fatalf("run mais recente: %+v", novo)
+	}
+	if len(novo.Resultados) != 2 || novo.Resultados[0].TesteOrdem != 1 ||
+		novo.Resultados[1].TesteOrdem != 2 {
+		t.Fatalf("resultados do run: %+v", novo.Resultados)
+	}
+}
+

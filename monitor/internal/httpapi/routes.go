@@ -60,6 +60,7 @@ func RegisterRoutes(r *gin.Engine, d *Dependencies) {
 	a.POST("/atividade/:monitor_id/abrir", d.AbrirAtividade)
 	a.PUT("/atividade/:monitor_id/tentativa", d.SalvarTentativa)
 	a.POST("/atividade/:monitor_id/testar", d.Ensaio)
+	a.GET("/atividade/:monitor_id/testar", d.EnsaioHistorico)
 	a.GET("/atividade/:monitor_id/testar/:run_id", d.EnsaioResultado)
 	a.POST("/atividade/:monitor_id/submissao/avaliar", d.PreAvaliar)
 	a.POST("/atividade/:monitor_id/submissao/cancelar", d.CancelarSubmissao)

@@ -42,5 +42,29 @@ button:disabled { opacity: .5; cursor: default; }
 .passou { color: var(--ok); font-weight: 700; }
 .falhou { color: var(--erro); font-weight: 700; }
 
+/* Testes públicos sempre visíveis (tabela entre o código e as ações). */
+.tb-tes { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px; border: 1px solid var(--borda); border-radius: 6px; }
+.tb-tes th, .tb-tes td { padding: 5px 8px; border-bottom: 1px solid #e6e6e2; text-align: left; vertical-align: top; }
+.tb-tes th { font-size: 12.5px; color: #555; background: #fafaf8; }
+.tb-tes .res { min-width: 180px; }
+.tb-tes .res .min { display: block; font-size: 12px; font-weight: 400; }
+.tb-tes details { margin-top: 4px; font-size: 13px; font-weight: 400; }
+.tb-tes summary { cursor: pointer; color: #555; }
+.tb-tes .detl { margin: 6px 0 2px; font-size: 12.5px; }
+.mono-cel pre, .hist-run pre, .tb-tes .detl + pre, .tb-tes details pre {
+  margin: 0; font: 12.5px/1.4 ui-monospace, Consolas, monospace;
+  white-space: pre-wrap; word-break: break-all;
+}
+.tx { background: none; border: none; padding: 8px 4px; color: #1f2937;
+  text-decoration: underline; cursor: pointer; font-size: 14px; }
+
+/* Modal de ensaios anteriores. */
+#modal h2 { margin-top: 0; }
+.hist-run { margin: 14px 0; }
+.hist-run table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.hist-run td { padding: 3px 8px; border-bottom: 1px solid #eee; }
+.hist-run pre { background: #fafaf8; border: 1px solid var(--borda); border-radius: 6px;
+  padding: 8px; max-height: 260px; overflow: auto; tab-size: 4; }
+
 dialog::backdrop { background: rgba(0,0,0,.4); }
 #modal { max-width: 560px; padding: 20px; }
