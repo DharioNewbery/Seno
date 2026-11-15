@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { extrairLimite } from "#lib/server/ensino";
+import { formatarBytes } from "#lib/formato";
 
 describe("Criação de nova tarefa - extração de limites padrão", () => {
   it("usa valores padrão quando os campos não são enviados (null no FormData)", () => {
@@ -89,5 +90,12 @@ describe("Criação de nova tarefa - extração de limites padrão", () => {
 
     expect(extrairLimite(fd, "tempo_cpu_ms", 2000)).toBeUndefined();
     expect(extrairLimite(fd, "tempo_total_ms", 5000)).toBeUndefined();
+  });
+
+  it("formata bytes de arquivos submetidos corretamente (B, KB, MB)", () => {
+    expect(formatarBytes(0)).toBe("0 B");
+    expect(formatarBytes(512)).toBe("512 B");
+    expect(formatarBytes(2048)).toBe("2.0 KB");
+    expect(formatarBytes(10 * 1024 * 1024)).toBe("10.0 MB");
   });
 });

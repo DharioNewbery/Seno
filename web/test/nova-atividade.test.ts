@@ -222,6 +222,19 @@ describe("Lógica do Workspace de Tarefas e Drag-and-Drop", () => {
         { tarefa_id: 9, valor_pts: 10, linguagem: "c" },
       ]);
     });
+
+    it("preserva linguagem vazia ('') para tarefas de submissão de arquivo", () => {
+      const atv: AtributoAtividade[] = [
+        { tarefa_id: 1, valor_pts: 10, linguagem: "python" },
+        { tarefa_id: 2, valor_pts: 15, linguagem: "" },
+      ];
+
+      const json = serializarAtributos(atv);
+      expect(JSON.parse(json)).toEqual([
+        { tarefa_id: 1, valor_pts: 10, linguagem: "python" },
+        { tarefa_id: 2, valor_pts: 15, linguagem: "" },
+      ]);
+    });
   });
 
   describe("filtrarTarefas e paginar", () => {
