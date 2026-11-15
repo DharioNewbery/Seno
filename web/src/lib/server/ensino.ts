@@ -954,12 +954,16 @@ export interface ResultadoTeste {
   tempo?: string;
   memoria?: string;
   cpu?: string;
+  stdin?: string;
+  stdout_esperado?: string;
   publico: boolean;
 }
 
 export interface CorrecaoTarefa {
   id: number;
   tarefa_id: number;
+  ordem?: number;
+  linguagem?: string;
   tarefa_nome: string;
   tarefa_tipo?: TipoTarefa;
   config_arquivo?: ConfigTarefaArquivo | null;
@@ -1025,6 +1029,9 @@ export async function editarCorrecao(
 export interface VisaoCorrecaoAluno {
   publicada: boolean;
   publicada_em?: string;
+  confirmada?: boolean;
+  atribuicao_id?: number;
+  atividade_nome?: string;
   correcao: Correcao | null;
 }
 
