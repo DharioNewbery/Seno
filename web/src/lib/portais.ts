@@ -64,10 +64,6 @@ export const PORTAIS: Record<PortalId, PortalDef> = {
         rotulo: "Banco de tarefas",
         href: "/professor/tarefas",
         descricao: "Enunciados e testes que você reaproveita.",
-        sub: [
-          { rotulo: "Listar tarefas", href: "/professor/tarefas" },
-          { rotulo: "Criar tarefa e testes", href: "/professor/tarefas/nova" },
-        ],
       },
       {
         rotulo: "Banco de atividades",
