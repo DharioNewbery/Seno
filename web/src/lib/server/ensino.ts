@@ -50,6 +50,32 @@ export interface Aluno {
   first_name: string;
   last_name: string;
   status: string;
+  convite_expirado?: boolean;
+}
+
+export interface AlunoExistenteConferencia {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  status: string;
+  convite_expirado?: boolean;
+  ja_matriculado: boolean;
+  pode_matricular: boolean;
+  motivo_bloqueio?: string;
+}
+
+export interface AlunoNovoConferencia {
+  email: string;
+  first_name: string;
+  last_name: string;
+  pode_convidar: boolean;
+  motivo_pendencia?: string;
+}
+
+export interface ConferenciaMatriculas {
+  existentes: AlunoExistenteConferencia[];
+  novos: AlunoNovoConferencia[];
 }
 
 export interface Matricula {
@@ -193,6 +219,35 @@ export async function matricular(
     method: "POST",
     body: JSON.stringify(cad),
   });
+}
+
+export async function conferirMatriculas(
+  request: Request,
+  token: string,
+  turmaID: number,
+  alunos: { email: string; first_name?: string; last_name?: string }[],
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/turmas/${turmaID}/matriculas/conferir`, {
+    method: "POST",
+    body: JSON.stringify({ alunos }),
+  });
+}
+
+export async function reenviarConviteAluno(
+  request: Request,
+  token: string,
+  turmaID: number,
+  alunoID: number,
+): Promise<Resultado> {
+  return chamar(
+    request,
+    token,
+    `/v1/turmas/${turmaID}/alunos/${alunoID}/reenviar-convite`,
+    {
+      method: "POST",
+      body: "{}",
+    },
+  );
 }
 
 export async function encerrarMatricula(
