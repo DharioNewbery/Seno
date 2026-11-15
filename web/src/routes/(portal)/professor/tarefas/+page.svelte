@@ -71,6 +71,11 @@
               <polyline points="9 6 15 12 9 18" />
             </svg>
             <span class="nome">{t.nome}</span>
+            {#if t.tipo === "arquivo_submissao"}
+              <span class="badge-tipo arquivo">Submissão de arquivo</span>
+            {:else}
+              <span class="badge-tipo prog">Programação</span>
+            {/if}
           </div>
 
           <div
@@ -251,6 +256,23 @@
     font-size: 0.95rem;
     line-height: 1.35;
     word-break: break-word;
+  }
+  .badge-tipo {
+    font-size: 0.74rem;
+    font-weight: 600;
+    padding: 0.15rem 0.55rem;
+    border-radius: var(--raio-pill);
+    flex-shrink: 0;
+  }
+  .badge-tipo.prog {
+    background: var(--seno-blue-50);
+    color: var(--seno-blue-700);
+    border: 1px solid var(--seno-blue-100);
+  }
+  .badge-tipo.arquivo {
+    background: #faf5ff;
+    color: #7e22ce;
+    border: 1px solid #f3e8ff;
   }
 
   .acoes {

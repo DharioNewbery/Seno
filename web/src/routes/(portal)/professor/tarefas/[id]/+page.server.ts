@@ -53,8 +53,47 @@ export const actions: Actions = {
     const form = await evento.request.formData();
     const nome = String(form.get("nome") ?? "").trim();
     const enunciado = String(form.get("enunciado") ?? "").trim();
+    const tipoRaw = String(form.get("tipo") ?? "programacao").trim();
+    const tipo = tipoRaw === "arquivo_submissao" ? "arquivo_submissao" : "programacao";
     if (!nome || !enunciado) {
       return fail(422, { erro: "Informe nome e enunciado da tarefa." });
+    }
+    if (tipo === "arquivo_submissao") {
+      const extBruto = String(form.get("extensoes_permitidas") ?? "").trim();
+      const extensoes_permitidas = extBruto
+        ? extBruto
+            .split(",")
+            .map((s) => s.trim().toLowerCase())
+            .filter(Boolean)
+            .map((s) => (s.startsWith(".") ? s : `.${s}`))
+        : [".pdf", ".zip", ".txt", ".md", ".py", ".c", ".cpp", ".png", ".jpg"];
+      const maxMb = Number(form.get("max_mb") ?? 10);
+      const max_bytes =
+        Number.isFinite(maxMb) && maxMb > 0
+          ? Math.min(50 * 1024 * 1024, Math.round(maxMb * 1024 * 1024))
+          : 10 * 1024 * 1024;
+      const r = await editarTarefa(evento.request, token, id, {
+        nome,
+        enunciado,
+        tipo: "arquivo_submissao",
+        config_arquivo: {
+          extensoes_permitidas,
+          max_bytes,
+        },
+        testes: [],
+      });
+      if (r.status === 401) redirect(303, "/");
+      if (r.status === 409) {
+        return fail(409, {
+          erro:
+            mensagemDaApi(r.body) ??
+            "Tarefa em uso por atividade — duplique para editar.",
+        });
+      }
+      if (!r.ok) {
+        return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
+      }
+      return { ok: "Tarefa atualizada." };
     }
     let testes: Teste[] = [];
     const bruto = form.get("testes");
@@ -74,6 +113,7 @@ export const actions: Actions = {
     const r = await editarTarefa(evento.request, token, id, {
       nome,
       enunciado,
+      tipo: "programacao",
       testes: testes.map((t: Teste) => ({
         stdin: t.stdin,
         stdout_esperado: t.stdout,

@@ -14,6 +14,9 @@
   const tarefa = $derived(data.tarefa);
   let nome = $state("");
   let enunciado = $state("");
+  let tipo = $state<"programacao" | "arquivo_submissao">("programacao");
+  let extensoesPermitidas = $state(".pdf, .zip, .txt, .md, .py, .c, .cpp, .png, .jpg");
+  let maxMb = $state(10);
   let cpu = $state<number | undefined>(undefined);
   let total = $state<number | undefined>(undefined);
   let mem = $state<number | undefined>(undefined);
@@ -25,6 +28,15 @@
     if (carregado || !tarefa) return;
     nome = tarefa.nome;
     enunciado = tarefa.enunciado ?? "";
+    tipo = tarefa.tipo === "arquivo_submissao" ? "arquivo_submissao" : "programacao";
+    if (tarefa.config_arquivo) {
+      if (tarefa.config_arquivo.extensoes_permitidas?.length) {
+        extensoesPermitidas = tarefa.config_arquivo.extensoes_permitidas.join(", ");
+      }
+      if (tarefa.config_arquivo.max_bytes) {
+        maxMb = Math.max(1, Math.round(tarefa.config_arquivo.max_bytes / (1024 * 1024)));
+      }
+    }
     cpu = tarefa.tempo_cpu_ms || undefined;
     total = tarefa.tempo_total_ms || undefined;
     mem = tarefa.memoria_mb || undefined;
@@ -114,81 +126,122 @@
         <input name="nome" bind:value={nome} required maxlength="128" />
       </label>
       <label>
+        <span>Tipo de tarefa</span>
+        <select name="tipo" bind:value={tipo}>
+          <option value="programacao">Programação (editor de código e casos de teste)</option>
+          <option value="arquivo_submissao">Submissão de arquivo (upload com validação de tipo e tamanho)</option>
+        </select>
+      </label>
+      <label>
         <span>Enunciado</span>
         <textarea name="enunciado" rows="6" bind:value={enunciado} required></textarea>
       </label>
 
-      <div class="limites">
-        <label>
-          <span>Tempo de CPU (ms)</span>
-          <input type="number" name="tempo_cpu_ms" bind:value={cpu} min="0" max="600000" />
-        </label>
-        <label>
-          <span>Tempo total (ms)</span>
-          <input type="number" name="tempo_total_ms" bind:value={total} min="0" max="600000" />
-        </label>
-        <label>
-          <span>Memória (MB)</span>
-          <input type="number" name="memoria_mb" bind:value={mem} min="0" max="4096" />
-        </label>
-      </div>
-
-      <fieldset>
-        <legend>Testes (salvar substitui a lista inteira)</legend>
-        {#each testes as t, i (i)}
-          <div class="teste">
-            <textarea rows="2" bind:value={t.stdin} placeholder="stdin"></textarea>
-            <textarea rows="2" bind:value={t.stdout} placeholder="Saída esperada"></textarea>
-            <label class="linha-pequena">
-              <input type="checkbox" bind:checked={t.publico} />
-              <span>Público</span>
+      {#if tipo === "arquivo_submissao"}
+        <fieldset>
+          <legend>Restrições do Arquivo Submetido</legend>
+          <div class="limites">
+            <label style="flex: 2 1 260px;">
+              <span>Extensões permitidas (separadas por vírgula)</span>
+              <input
+                name="extensoes_permitidas"
+                bind:value={extensoesPermitidas}
+                placeholder=".pdf, .zip, .py, .png"
+                required
+              />
             </label>
-            <button type="button" class="peq vermelho" onclick={() => delTeste(i)}>
-              Remover
-            </button>
+            <label style="flex: 1 1 140px;">
+              <span>Tamanho máximo (MB, até 50 MB)</span>
+              <input
+                type="number"
+                name="max_mb"
+                min="1"
+                max="50"
+                step="1"
+                bind:value={maxMb}
+                required
+              />
+            </label>
           </div>
-        {:else}
-          <p class="dica">Sem testes = tarefa aberta (nota manual).</p>
-        {/each}
-        <button type="button" class="peq" onclick={addTeste}>+ Teste</button>
-        <input type="hidden" name="testes" value={testesJSON} />
-      </fieldset>
+          <p class="dica" style="margin:0;font-size:0.8rem;color:var(--seno-gray-600);">
+            Extensões aceitas pelo verificador de assinatura: <code>.pdf</code>, <code>.zip</code>, <code>.png</code>, <code>.jpg</code>, <code>.jpeg</code>, <code>.txt</code>, <code>.md</code>, <code>.py</code>, <code>.c</code>, <code>.cpp</code>, <code>.h</code>, <code>.hpp</code>, <code>.csv</code>, <code>.json</code>.
+          </p>
+        </fieldset>
+      {:else}
+        <div class="limites">
+          <label>
+            <span>Tempo de CPU (ms)</span>
+            <input type="number" name="tempo_cpu_ms" bind:value={cpu} min="0" max="600000" />
+          </label>
+          <label>
+            <span>Tempo total (ms)</span>
+            <input type="number" name="tempo_total_ms" bind:value={total} min="0" max="600000" />
+          </label>
+          <label>
+            <span>Memória (MB)</span>
+            <input type="number" name="memoria_mb" bind:value={mem} min="0" max="4096" />
+          </label>
+        </div>
+
+        <fieldset>
+          <legend>Testes (salvar substitui a lista inteira)</legend>
+          {#each testes as t, i (i)}
+            <div class="teste">
+              <textarea rows="2" bind:value={t.stdin} placeholder="stdin"></textarea>
+              <textarea rows="2" bind:value={t.stdout} placeholder="Saída esperada"></textarea>
+              <label class="linha-pequena">
+                <input type="checkbox" bind:checked={t.publico} />
+                <span>Público</span>
+              </label>
+              <button type="button" class="peq vermelho" onclick={() => delTeste(i)}>
+                Remover
+              </button>
+            </div>
+          {:else}
+            <p class="dica">Sem testes = tarefa aberta (nota manual).</p>
+          {/each}
+          <button type="button" class="peq" onclick={addTeste}>+ Teste</button>
+          <input type="hidden" name="testes" value={testesJSON} />
+        </fieldset>
+      {/if}
 
       <button>Salvar tarefa</button>
     </form>
 
-    <form method="POST" action="?/testar" class="cartao teste-banco">
-      <h3>Testar (professor)</h3>
-      <p class="dica">
-        Executa o código contra TODOS os testes (públicos e privados); não
-        vai para o histórico do aluno. Linguagem à escolha.
-      </p>
-      <label class="linha-pequena">
-        <span>Linguagem</span>
-        <select name="linguagem">
-          <option value="python">Python</option>
-          <option value="c">C</option>
-          <option value="cpp">C++</option>
-        </select>
-      </label>
-      <label>
-        <span>Código</span>
-        <textarea name="codigo_teste" rows="6" placeholder="print(1+2)"></textarea>
-      </label>
-      <button>Executar teste</button>
-      {#if typeof form?.testado !== "undefined" && form?.testado}
-        <ul class="resultados-banco">
-          {#each ((form?.resultados as { resultados?: Array<{ teste_id: number; status?: string; publico?: boolean; tempo?: string; memoria?: string }> })?.resultados ?? []) as res (res.teste_id)}
-            <li class:ok={res.status === "accepted"}>
-              <span class="veredito">{res.status ?? "—"}</span>
-              <span class="mono">teste #{res.teste_id} {res.publico ? "(público)" : "(privado)"}</span>
-              {#if res.tempo}<span class="mono">{res.tempo}s</span>{/if}
-              {#if res.memoria}<span class="mono">{res.memoria}KB</span>{/if}
-            </li>
-          {/each}
-        </ul>
-      {/if}
-    </form>
+    {#if tipo === "programacao"}
+      <form method="POST" action="?/testar" class="cartao teste-banco">
+        <h3>Testar (professor)</h3>
+        <p class="dica">
+          Executa o código contra TODOS os testes (públicos e privados); não
+          vai para o histórico do aluno. Linguagem à escolha.
+        </p>
+        <label class="linha-pequena">
+          <span>Linguagem</span>
+          <select name="linguagem">
+            <option value="python">Python</option>
+            <option value="c">C</option>
+            <option value="cpp">C++</option>
+          </select>
+        </label>
+        <label>
+          <span>Código</span>
+          <textarea name="codigo_teste" rows="6" placeholder="print(1+2)"></textarea>
+        </label>
+        <button>Executar teste</button>
+        {#if typeof form?.testado !== "undefined" && form?.testado}
+          <ul class="resultados-banco">
+            {#each ((form?.resultados as { resultados?: Array<{ teste_id: number; status?: string; publico?: boolean; tempo?: string; memoria?: string }> })?.resultados ?? []) as res (res.teste_id)}
+              <li class:ok={res.status === "accepted"}>
+                <span class="veredito">{res.status ?? "—"}</span>
+                <span class="mono">teste #{res.teste_id} {res.publico ? "(público)" : "(privado)"}</span>
+                {#if res.tempo}<span class="mono">{res.tempo}s</span>{/if}
+                {#if res.memoria}<span class="mono">{res.memoria}KB</span>{/if}
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </form>
+    {/if}
   {/if}
 </section>
 

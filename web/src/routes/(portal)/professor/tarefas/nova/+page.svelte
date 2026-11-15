@@ -12,6 +12,10 @@
     publico: boolean;
   }
 
+  let tipo = $state<"programacao" | "arquivo_submissao">("programacao");
+  let extensoesPermitidas = $state(".pdf, .zip, .txt, .md, .py, .c, .cpp, .png, .jpg");
+  let maxMb = $state(10);
+
   let testes = $state<Teste[]>([]);
   let testesJSON = $state("");
   let tempoCpu = $state(2000);
@@ -44,96 +48,136 @@
     </label>
 
     <label>
+      <span>Tipo de tarefa</span>
+      <select name="tipo" bind:value={tipo}>
+        <option value="programacao">Programação (editor de código e casos de teste)</option>
+        <option value="arquivo_submissao">Submissão de arquivo (upload com validação de tipo e tamanho)</option>
+      </select>
+    </label>
+
+    <label>
       <span>Enunciado</span>
       <textarea name="enunciado" rows="5" required
         placeholder="Descrição completa da tarefa para o aluno"></textarea>
     </label>
 
-    <details class="secao-avancadas">
-      <summary class="btn-avancadas">
-        <svg
-          class="seta"
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          aria-hidden="true"
-        >
-          <path
-            d="M4 2l4 4-4 4"
-            stroke="currentColor"
-            stroke-width="1.6"
-            fill="none"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-        <span>Opções avançadas</span>
-      </summary>
-
-      <div class="painel-avancadas">
-        <fieldset>
-          <legend>Limites de execução (vazio ou 0 = padrão do executor)</legend>
-          <div class="limites">
-            <label>
-              <span>Tempo de CPU (ms)</span>
-              <input
-                type="number"
-                name="tempo_cpu_ms"
-                min="0"
-                max="600000"
-                placeholder="2000"
-                bind:value={tempoCpu}
-              />
-            </label>
-            <label>
-              <span>Tempo total (ms)</span>
-              <input
-                type="number"
-                name="tempo_total_ms"
-                min="0"
-                max="600000"
-                placeholder="5000"
-                bind:value={tempoTotal}
-              />
-            </label>
-            <label>
-              <span>Memória (MB)</span>
-              <input
-                type="number"
-                name="memoria_mb"
-                min="0"
-                max="4096"
-                placeholder="256"
-                bind:value={memoria}
-              />
-            </label>
-          </div>
-        </fieldset>
-      </div>
-    </details>
-
-    <fieldset>
-      <legend>Testes Automáticos</legend>
-      {#each testes as t, i (i)}
-        <div class="teste">
-          <textarea name="stdin" rows="2" bind:value={t.stdin}
-            placeholder="stdin (entrada)"></textarea>
-          <textarea name="stdout" rows="2" bind:value={t.stdout}
-            placeholder="Saída esperada"></textarea>
-          <label class="linha-pequena">
-            <input type="checkbox" bind:checked={t.publico} />
-            <span>Público</span>
+    {#if tipo === "arquivo_submissao"}
+      <fieldset>
+        <legend>Restrições do Arquivo Submetido</legend>
+        <div class="limites">
+          <label style="flex: 2 1 260px;">
+            <span>Extensões permitidas (separadas por vírgula)</span>
+            <input
+              name="extensoes_permitidas"
+              bind:value={extensoesPermitidas}
+              placeholder=".pdf, .zip, .py, .png"
+              required
+            />
           </label>
-          <button type="button" class="pequeno vermelho" onclick={() => delTeste(i)}>
-            Remover
-          </button>
+          <label style="flex: 1 1 140px;">
+            <span>Tamanho máximo (MB, até 50 MB)</span>
+            <input
+              type="number"
+              name="max_mb"
+              min="1"
+              max="50"
+              step="1"
+              bind:value={maxMb}
+              required
+            />
+          </label>
         </div>
-      {:else}
-        <p class="dica">Nenhum teste automático cadastrado.</p>
-      {/each}
-      <button type="button" class="pequeno" onclick={addTeste}>+ Teste</button>
-      <input type="hidden" name="testes" value={testesJSON} />
-    </fieldset>
+        <p class="dica" style="margin:0;font-size:0.8rem;color:var(--seno-gray-600);">
+          Extensões aceitas pelo verificador de assinatura: <code>.pdf</code>, <code>.zip</code>, <code>.png</code>, <code>.jpg</code>, <code>.jpeg</code>, <code>.txt</code>, <code>.md</code>, <code>.py</code>, <code>.c</code>, <code>.cpp</code>, <code>.h</code>, <code>.hpp</code>, <code>.csv</code>, <code>.json</code>.
+        </p>
+      </fieldset>
+    {:else}
+      <details class="secao-avancadas">
+        <summary class="btn-avancadas">
+          <svg
+            class="seta"
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            aria-hidden="true"
+          >
+            <path
+              d="M4 2l4 4-4 4"
+              stroke="currentColor"
+              stroke-width="1.6"
+              fill="none"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <span>Opções avançadas</span>
+        </summary>
+
+        <div class="painel-avancadas">
+          <fieldset>
+            <legend>Limites de execução (vazio ou 0 = padrão do executor)</legend>
+            <div class="limites">
+              <label>
+                <span>Tempo de CPU (ms)</span>
+                <input
+                  type="number"
+                  name="tempo_cpu_ms"
+                  min="0"
+                  max="600000"
+                  placeholder="2000"
+                  bind:value={tempoCpu}
+                />
+              </label>
+              <label>
+                <span>Tempo total (ms)</span>
+                <input
+                  type="number"
+                  name="tempo_total_ms"
+                  min="0"
+                  max="600000"
+                  placeholder="5000"
+                  bind:value={tempoTotal}
+                />
+              </label>
+              <label>
+                <span>Memória (MB)</span>
+                <input
+                  type="number"
+                  name="memoria_mb"
+                  min="0"
+                  max="4096"
+                  placeholder="256"
+                  bind:value={memoria}
+                />
+              </label>
+            </div>
+          </fieldset>
+        </div>
+      </details>
+
+      <fieldset>
+        <legend>Testes Automáticos</legend>
+        {#each testes as t, i (i)}
+          <div class="teste">
+            <textarea name="stdin" rows="2" bind:value={t.stdin}
+              placeholder="stdin (entrada)"></textarea>
+            <textarea name="stdout" rows="2" bind:value={t.stdout}
+              placeholder="Saída esperada"></textarea>
+            <label class="linha-pequena">
+              <input type="checkbox" bind:checked={t.publico} />
+              <span>Público</span>
+            </label>
+            <button type="button" class="pequeno vermelho" onclick={() => delTeste(i)}>
+              Remover
+            </button>
+          </div>
+        {:else}
+          <p class="dica">Nenhum teste automático cadastrado.</p>
+        {/each}
+        <button type="button" class="pequeno" onclick={addTeste}>+ Teste</button>
+        <input type="hidden" name="testes" value={testesJSON} />
+      </fieldset>
+    {/if}
 
     <button type="submit" class="btn-submeter">Criar tarefa</button>
   </form>
