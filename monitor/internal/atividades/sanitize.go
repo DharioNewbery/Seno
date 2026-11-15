@@ -25,13 +25,15 @@ type TestePublica struct {
 }
 
 type TarefaPublica struct {
-	Ordem     int               `json:"ordem"`
-	Nome      string            `json:"nome"`
-	Enunciado string            `json:"enunciado"`
-	Linguagem string            `json:"linguagem"`
-	ValorPts  float64           `json:"valor_pts"`
-	Limites   *contract.Limites `json:"limites"`
-	Testes    []TestePublica    `json:"testes"`
+	Ordem         int                           `json:"ordem"`
+	Nome          string                        `json:"nome"`
+	Enunciado     string                        `json:"enunciado"`
+	Tipo          string                        `json:"tipo"`
+	ConfigArquivo *contract.ConfigTarefaArquivo `json:"config_arquivo,omitempty"`
+	Linguagem     string                        `json:"linguagem"`
+	ValorPts      float64                       `json:"valor_pts"`
+	Limites       *contract.Limites             `json:"limites"`
+	Testes        []TestePublica                `json:"testes"`
 }
 
 // Sanitizada converte a carga integral na versão pública: só testes publicos.
@@ -42,13 +44,26 @@ func Sanitizada(c contract.Carga) AtividadePublica {
 		Tarefas:   make([]TarefaPublica, 0, len(c.Tarefas)),
 	}
 	for _, t := range c.Tarefas {
+		tipo := contract.NormalizarTipoTarefa(t.Tipo)
+		var cfgArquivo *contract.ConfigTarefaArquivo
+		if tipo == contract.TipoTarefaArquivo {
+			var cfgIn contract.ConfigTarefaArquivo
+			if t.ConfigArquivo != nil {
+				cfgIn = *t.ConfigArquivo
+			}
+			if norm, err := contract.NormalizarConfigArquivo(cfgIn, contract.DefaultArquivoMaxBytes); err == nil {
+				cfgArquivo = &norm
+			}
+		}
 		p := TarefaPublica{
-			Ordem:     t.Ordem,
-			Nome:      t.Nome,
-			Enunciado: t.Enunciado,
-			Linguagem: t.Linguagem,
-			ValorPts:  t.ValorPts,
-			Limites:   t.Limites,
+			Ordem:         t.Ordem,
+			Nome:          t.Nome,
+			Enunciado:     t.Enunciado,
+			Tipo:          tipo,
+			ConfigArquivo: cfgArquivo,
+			Linguagem:     t.Linguagem,
+			ValorPts:      t.ValorPts,
+			Limites:       t.Limites,
 		}
 		for i, te := range t.Testes {
 			if te.Publico {

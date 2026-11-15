@@ -56,9 +56,10 @@ func New(pool *pgxpool.Pool, j0 *judge0.Client, janela *tentativas.Service,
 
 // Erros que o handler mapeia.
 var (
-	ErrLimite     = errors.New("limite de execuções por minuto")
-	ErrSemTarefa  = errors.New("tarefa não encontrada")
-	ErrSemPublico = errors.New("tarefa sem testes públicos")
+	ErrLimite           = errors.New("limite de execuções por minuto")
+	ErrSemTarefa        = errors.New("tarefa não encontrada")
+	ErrSemPublico       = errors.New("tarefa sem testes públicos")
+	ErrTipoNaoSuportado = errors.New("execução de teste disponível apenas para tarefas de programação")
 )
 
 type payloadEnsaio struct {
@@ -125,6 +126,9 @@ func (s *Service) Agendar(ctx context.Context, mid string, aluno int64,
 	}
 	if tarefa == nil {
 		return "", ErrSemTarefa
+	}
+	if contract.NormalizarTipoTarefa(tarefa.Tipo) != contract.TipoTarefaProgramacao {
+		return "", ErrTipoNaoSuportado
 	}
 	if _, ok := judge0.LinguagemDo(linguagem); !ok || linguagem != tarefa.Linguagem {
 		return "", fmt.Errorf("ensaios: linguagem %q differs da tarefa (%q)", linguagem, tarefa.Linguagem)

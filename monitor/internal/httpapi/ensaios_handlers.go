@@ -45,6 +45,9 @@ func (d *Dependencies) Ensaio(c *gin.Context) {
 	case errors.Is(err, ensaios.ErrSemPublico):
 		respondErro(c, http.StatusUnprocessableEntity, contract.CodeValidacao,
 			"Tarefa sem testes públicos.", nil)
+	case errors.Is(err, ensaios.ErrTipoNaoSuportado):
+		respondErro(c, http.StatusUnprocessableEntity, contract.CodeValidacao,
+			"Execução de código disponível apenas para tarefas de programação.", nil)
 	case errors.Is(err, tentativas.ErrSemTentativa):
 		respondErro(c, http.StatusConflict, contract.CodeConflito,
 			"Abra a atividade antes de ensaiar.", nil)

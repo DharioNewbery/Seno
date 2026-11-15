@@ -41,6 +41,9 @@ type Config struct {
 	// o link "ver entregas" do bloqueio final. Vazio = sem link.
 	WebURL string
 
+	// Limite global padrão para tarefas de submissão de arquivo.
+	ArquivoMaxBytes int64 // SENO_ARQUIVO_MAX_BYTES (default 10MB)
+
 	// Base da API principal para envio imediato (push) de submissões e correções.
 	APIURL string
 }
@@ -67,6 +70,7 @@ func LoadConfig() (*Config, error) {
 		CallbackBase:       os.Getenv("SENO_MONITOR_CALLBACK_URL"),
 		WebURL:             strings.TrimSuffix(strings.TrimSpace(os.Getenv("SENO_WEB_URL")), "/"),
 		APIURL:             strings.TrimSuffix(strings.TrimSpace(os.Getenv("SENO_API_URL")), "/"),
+		ArquivoMaxBytes:    int64(envInt("SENO_ARQUIVO_MAX_BYTES", 10*1024*1024)),
 	}
 
 	c.DatabaseURL = os.Getenv("SENO_MONITOR_DSN")
