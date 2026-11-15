@@ -7,13 +7,15 @@ import type {
 /**
  * Calcula a nota obtida e o total de pontos possíveis de uma lista de tarefas corrigidas.
  */
-export function calcularTotaisCorrecao(tarefas: CorrecaoTarefa[]): {
+export function calcularTotaisCorrecao(
+  tarefas: CorrecaoTarefa[] | null | undefined,
+): {
   notaObtida: number;
   valorTotal: number;
 } {
   let notaObtida = 0;
   let valorTotal = 0;
-  for (const t of tarefas) {
+  for (const t of tarefas ?? []) {
     notaObtida += t.nota_final ?? t.nota_auto ?? 0;
     valorTotal += t.valor_pts ?? 0;
   }

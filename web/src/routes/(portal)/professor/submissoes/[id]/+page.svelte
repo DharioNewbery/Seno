@@ -123,7 +123,7 @@
               </p>
             {:else}
               <ul class="resultados">
-                {#each t.resultados as res (res.teste_id)}
+                {#each t.resultados ?? [] as res (res.teste_id)}
                   <li class:ok={res.status === "accepted"}>
                     <div class="teste-cabeca">
                       <span class="veredito">{res.status ?? "—"}</span>

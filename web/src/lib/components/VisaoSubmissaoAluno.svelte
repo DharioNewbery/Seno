@@ -38,7 +38,7 @@
   }
 
   function contarAprovados(t: CorrecaoTarefa): number {
-    return t.resultados.filter((r) => r.status === "accepted").length;
+    return (t.resultados ?? []).filter((r) => r.status === "accepted").length;
   }
 
   function classeNotaTarefa(obtida: number, maximo: number): string {
@@ -121,12 +121,13 @@
     </div>
 
     <div class="lista-tarefas-corrigidas">
-      {#each cor.tarefas as t, idx (t.id)}
+      {#each cor.tarefas ?? [] as t, idx (t.id)}
         {@const notaTarefa = t.nota_final ?? t.nota_auto ?? 0}
         {@const codigoEnviado = extrairCodigoRespostaAluno(t, entrega)}
         {@const isArq = t.tarefa_tipo === "arquivo_submissao" || Boolean(t.arquivo)}
-        {@const idxRes = indiceAtualResultado(t.id, t.resultados.length)}
-        {@const resAtual = t.resultados[idxRes]}
+        {@const resultados = t.resultados ?? []}
+        {@const idxRes = indiceAtualResultado(t.id, resultados.length)}
+        {@const resAtual = resultados[idxRes]}
 
         <article class="cartao cartao-questao">
           <header class="questao-topo">
@@ -199,13 +200,13 @@
             </div>
           {/if}
 
-          {#if !isArq && t.resultados.length > 0 && resAtual}
+          {#if !isArq && resultados.length > 0 && resAtual}
             <div class="bloco-resultados">
               <div class="topo-resultados">
                 <div class="titulo-resultados">
                   <span class="subrotulo">Resultados dos casos de teste</span>
                   <span class="pill-aprovados">
-                    {contarAprovados(t)} / {t.resultados.length} aprovados
+                    {contarAprovados(t)} / {resultados.length} aprovados
                   </span>
                 </div>
 
@@ -213,7 +214,7 @@
                   <button
                     type="button"
                     class="btn-seta"
-                    onclick={() => navegarResultado(t.id, -1, t.resultados.length)}
+                    onclick={() => navegarResultado(t.id, -1, resultados.length)}
                     disabled={idxRes <= 0}
                     aria-label="Teste anterior"
                     title="Teste anterior"
@@ -221,13 +222,13 @@
                     ←
                   </button>
                   <span class="indicador-teste">
-                    Teste <strong>{idxRes + 1}</strong> de <strong>{t.resultados.length}</strong>
+                    Teste <strong>{idxRes + 1}</strong> de <strong>{resultados.length}</strong>
                   </span>
                   <button
                     type="button"
                     class="btn-seta"
-                    onclick={() => navegarResultado(t.id, 1, t.resultados.length)}
-                    disabled={idxRes >= t.resultados.length - 1}
+                    onclick={() => navegarResultado(t.id, 1, resultados.length)}
+                    disabled={idxRes >= resultados.length - 1}
                     aria-label="Próximo teste"
                     title="Próximo teste"
                   >
