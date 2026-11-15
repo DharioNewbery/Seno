@@ -361,9 +361,8 @@ graph LR
     gfeedback --> confirmar["confirmar correção"]
     confirmar --> pnotas["publicar notas"]
 
-    tarefas --> ctarefas["criar tarefa e testes"]
-    tarefas --> ttarefa["testar tarefa (escolhe a linguagem)"]
-    tarefas --> etarefa["editar tarefa (se não usada)"]
+    tarefas --> ctarefas["criar tarefa e testes (modal c/ visor unitário e modal de teste)"]
+    tarefas --> etarefa["inspecionar/editar tarefa (opções avançadas recolhidas e visor unitário)"]
     tarefas --> duptarefa["duplicar tarefa"]
     tarefas --> dtarefa["excluir tarefa"]
 
