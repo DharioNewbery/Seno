@@ -24,6 +24,7 @@ import (
 	"github.com/seno-project/seno/api/internal/domain"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
+	"github.com/seno-project/seno/contract"
 )
 
 // Service coordena as atribuições.
@@ -299,14 +300,16 @@ type AtividadeDoAluno struct {
 
 // TarefaDeAtividade é a tarefa na visão do aluno (enunciado + atributos).
 type TarefaDeAtividade struct {
-	ID         int64  `json:"id"`
-	Ordem      int    `json:"ordem"`
-	ValorPts   int    `json:"valor_pts"`
-	Linguagem  string `json:"linguagem"`
-	Nome       string `json:"nome"`
-	Enunciado  string `json:"enunciado"`
-	Excluida   bool   `json:"excluida"`
-	TestePublico bool `json:"teste_publico"`
+	ID            int64                         `json:"id"`
+	Ordem         int                           `json:"ordem"`
+	ValorPts      int                           `json:"valor_pts"`
+	Linguagem     string                        `json:"linguagem"`
+	Nome          string                        `json:"nome"`
+	Enunciado     string                        `json:"enunciado"`
+	Tipo          string                        `json:"tipo"`
+	ConfigArquivo *contract.ConfigTarefaArquivo `json:"config_arquivo,omitempty"`
+	Excluida      bool                          `json:"excluida"`
+	TestePublico  bool                          `json:"teste_publico"`
 }
 
 // TentativaDoAluno é o rascunho (escondido até abrir).
@@ -361,12 +364,24 @@ func (s *Service) VerParaAluno(ctx context.Context, aluno domain.User, id int64)
 	}
 	tarefas := make([]TarefaDeAtividade, 0, len(vinculos))
 	for _, vt := range vinculos {
-		tarefas = append(tarefas, TarefaDeAtividade{
+		tipo := contract.NormalizarTipoTarefa(vt.TarefaTipo)
+		item := TarefaDeAtividade{
 			ID: vt.TarefaID, Ordem: int(vt.Ordem), ValorPts: int(vt.ValorPts),
 			Linguagem: vt.Linguagem, Nome: vt.TarefaNome,
-			Enunciado: vt.TarefaEnunciado, Excluida: vt.TarefaDeletedAt.Valid,
+			Enunciado: vt.TarefaEnunciado, Tipo: tipo,
+			Excluida:     vt.TarefaDeletedAt.Valid,
 			TestePublico: temPublico[vt.TarefaID],
-		})
+		}
+		if tipo == contract.TipoTarefaArquivo {
+			var cfg contract.ConfigTarefaArquivo
+			if len(vt.TarefaConfig) > 0 {
+				_ = json.Unmarshal(vt.TarefaConfig, &cfg)
+			}
+			if norm, err := contract.NormalizarConfigArquivo(cfg, contract.DefaultArquivoMaxBytes); err == nil {
+				item.ConfigArquivo = &norm
+			}
+		}
+		tarefas = append(tarefas, item)
 	}
 
 	visao := VisaoAluno{

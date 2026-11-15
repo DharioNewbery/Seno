@@ -25,6 +25,7 @@ import (
 	"github.com/seno-project/seno/api/internal/judge0"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
+	"github.com/seno-project/seno/contract"
 )
 
 // Service coordena executões de teste.
@@ -158,7 +159,7 @@ func (s *Service) TestarTarefa(
 
 	// Tarefa é da atividade e tem testes públicos.
 	pertence := false
-	var linguagem string
+	var linguagem, tarefaTipo string
 	tarefas, err := s.store.Q.TarefasDaAtribuicao(ctx, atribuicaoID)
 	if err != nil {
 		return Execucao{}, err
@@ -167,6 +168,7 @@ func (s *Service) TestarTarefa(
 		if at.TarefaID == tarefaID {
 			pertence = true
 			linguagem = at.Linguagem
+			tarefaTipo = contract.NormalizarTipoTarefa(at.TarefaTipo)
 			break
 		}
 	}
@@ -174,6 +176,9 @@ func (s *Service) TestarTarefa(
 		return Execucao{}, platform.NewAPIError(
 			http.StatusNotFound, platform.CodeNotFound,
 			"Tarefa não está na atividade.")
+	}
+	if tarefaTipo != contract.TipoTarefaProgramacao {
+		return Execucao{}, s.errIndisponivel("Execução de código só está disponível para tarefas de programação.")
 	}
 	pub := false
 	testes, err := s.store.Q.ListTestesTarefa(ctx, tarefaID)
@@ -339,6 +344,9 @@ func (s *Service) TestarTarefaProfessor(
 		return nil, platform.NewAPIError(
 			http.StatusNotFound, platform.CodeNotFound,
 			"Tarefa não encontrada.")
+	}
+	if contract.NormalizarTipoTarefa(row.Tipo) != contract.TipoTarefaProgramacao {
+		return nil, s.errIndisponivel("Execução de código só está disponível para tarefas de programação.")
 	}
 	lingID, ok := s.cfg.LinguagemDo(strings.TrimSpace(cad.Linguagem))
 	if !ok {

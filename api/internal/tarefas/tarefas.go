@@ -6,6 +6,7 @@ package tarefas
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"github.com/seno-project/seno/api/internal/domain"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
+	"github.com/seno-project/seno/contract"
 )
 
 // Service coordena o banco de tarefas.
@@ -41,15 +43,18 @@ const (
 
 // Tarefa é a visão completa de uma tarefa do banco do professor.
 type Tarefa struct {
-	ID           int64      `json:"id"`
-	ProfessorID  int64      `json:"professor_id"`
-	Nome         string     `json:"nome"`
-	Enunciado    string     `json:"enunciado"`
-	TempoCPUMs   int32      `json:"tempo_cpu_ms,omitempty"`   // 0 = padrão global
-	TempoTotalMs int32      `json:"tempo_total_ms,omitempty"` // 0 = padrão global
-	MemoriaMB    int32      `json:"memoria_mb,omitempty"`     // 0 = padrão global
-	DeletedAt    *time.Time `json:"deleted_at,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
+	ID            int64                         `json:"id"`
+	ProfessorID   int64                         `json:"professor_id"`
+	Nome          string                        `json:"nome"`
+	Enunciado     string                        `json:"enunciado"`
+	Tipo          string                        `json:"tipo"`
+	Config        json.RawMessage               `json:"config,omitempty"`
+	ConfigArquivo *contract.ConfigTarefaArquivo `json:"config_arquivo,omitempty"`
+	TempoCPUMs    int32                         `json:"tempo_cpu_ms,omitempty"`   // 0 = padrão global
+	TempoTotalMs  int32                         `json:"tempo_total_ms,omitempty"` // 0 = padrão global
+	MemoriaMB     int32                         `json:"memoria_mb,omitempty"`     // 0 = padrão global
+	DeletedAt     *time.Time                    `json:"deleted_at,omitempty"`
+	CreatedAt     time.Time                     `json:"created_at"`
 }
 
 // Teste é um caso de teste (stdin → stdout esperado; comparação exata,
@@ -73,12 +78,15 @@ type CadastroTeste struct {
 // CadastroTarefa é o corpo da criação/edição. Em PATCH, testes não-nulos
 // substituem a lista inteira; nil preserva os testes existentes.
 type CadastroTarefa struct {
-	Nome         string          `json:"nome"`
-	Enunciado    string          `json:"enunciado"`
-	TempoCPUMs   *int32          `json:"tempo_cpu_ms,omitempty"`
-	TempoTotalMs *int32          `json:"tempo_total_ms,omitempty"`
-	MemoriaMB    *int32          `json:"memoria_mb,omitempty"`
-	Testes       []CadastroTeste `json:"testes,omitempty"`
+	Nome          string                        `json:"nome"`
+	Enunciado     string                        `json:"enunciado"`
+	Tipo          string                        `json:"tipo,omitempty"`
+	Config        json.RawMessage               `json:"config,omitempty"`
+	ConfigArquivo *contract.ConfigTarefaArquivo `json:"config_arquivo,omitempty"`
+	TempoCPUMs    *int32                        `json:"tempo_cpu_ms,omitempty"`
+	TempoTotalMs  *int32                        `json:"tempo_total_ms,omitempty"`
+	MemoriaMB     *int32                        `json:"memoria_mb,omitempty"`
+	Testes        []CadastroTeste               `json:"testes,omitempty"`
 }
 
 // FiltroTarefas parametriza a listagem (professor é forçado ao próprio id).
@@ -142,6 +150,105 @@ func validaNomeEnunciado(cad CadastroTarefa) (string, string, error) {
 	return nome, enunciado, nil
 }
 
+// resultadoValidacaoTipo encapsula os campos normalizados pelo validador
+// específico de cada tipo de tarefa. Novos tipos de tarefa devem registrar
+// sua estratégia em validadoresTipoTarefa.
+type resultadoValidacaoTipo struct {
+	Tipo         string
+	ConfigBytes  []byte
+	TempoCPUMs   int32
+	TempoTotalMs int32
+	MemoriaMB    int32
+}
+
+type validadorTipoFunc func(cad CadastroTarefa) (resultadoValidacaoTipo, error)
+
+var validadoresTipoTarefa = map[string]validadorTipoFunc{
+	contract.TipoTarefaProgramacao: validarTarefaProgramacao,
+	contract.TipoTarefaArquivo:     validarTarefaArquivo,
+}
+
+func validarPorTipo(cad CadastroTarefa, tipoPadrao string) (resultadoValidacaoTipo, error) {
+	rawTipo := strings.TrimSpace(cad.Tipo)
+	if rawTipo == "" {
+		if tipoPadrao != "" {
+			rawTipo = tipoPadrao
+		} else {
+			rawTipo = contract.TipoTarefaProgramacao
+		}
+	}
+	if !contract.TipoTarefaValido(rawTipo) {
+		return resultadoValidacaoTipo{}, platform.NewAPIError(
+			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+			"Tipo de tarefa inválido (use 'programacao' ou 'arquivo_submissao').")
+	}
+	tipo := contract.NormalizarTipoTarefa(rawTipo)
+	fn, ok := validadoresTipoTarefa[tipo]
+	if !ok {
+		return resultadoValidacaoTipo{}, platform.NewAPIError(
+			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+			"Tipo de tarefa não suportado.")
+	}
+	return fn(cad)
+}
+
+func validarTarefaProgramacao(cad CadastroTarefa) (resultadoValidacaoTipo, error) {
+	cpu, err := limiteMs(cad.TempoCPUMs)
+	if err != nil {
+		return resultadoValidacaoTipo{}, err
+	}
+	total, err := limiteMs(cad.TempoTotalMs)
+	if err != nil {
+		return resultadoValidacaoTipo{}, err
+	}
+	memoria, err := limiteMemoria(cad.MemoriaMB)
+	if err != nil {
+		return resultadoValidacaoTipo{}, err
+	}
+	return resultadoValidacaoTipo{
+		Tipo:         contract.TipoTarefaProgramacao,
+		ConfigBytes:  []byte("{}"),
+		TempoCPUMs:   cpu,
+		TempoTotalMs: total,
+		MemoriaMB:    memoria,
+	}, nil
+}
+
+func validarTarefaArquivo(cad CadastroTarefa) (resultadoValidacaoTipo, error) {
+	if len(cad.Testes) > 0 {
+		return resultadoValidacaoTipo{}, platform.NewAPIError(
+			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+			"Tarefas de submissão de arquivo não aceitam casos de teste de entrada/saída.")
+	}
+	var cfgIn contract.ConfigTarefaArquivo
+	if cad.ConfigArquivo != nil {
+		cfgIn = *cad.ConfigArquivo
+	} else if len(cad.Config) > 0 && string(cad.Config) != "null" && string(cad.Config) != "{}" {
+		if err := json.Unmarshal(cad.Config, &cfgIn); err != nil {
+			return resultadoValidacaoTipo{}, platform.NewAPIError(
+				http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+				"Configuração da tarefa de arquivo inválida.")
+		}
+	}
+	norm, err := contract.NormalizarConfigArquivo(cfgIn, contract.DefaultArquivoMaxBytes)
+	if err != nil {
+		return resultadoValidacaoTipo{}, platform.NewAPIError(
+			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+			err.Error())
+	}
+	rawCfg, err := json.Marshal(norm)
+	if err != nil {
+		return resultadoValidacaoTipo{}, err
+	}
+	return resultadoValidacaoTipo{
+		Tipo:         contract.TipoTarefaArquivo,
+		ConfigBytes:  rawCfg,
+		TempoCPUMs:   0,
+		TempoTotalMs: 0,
+		MemoriaMB:    0,
+	}, nil
+}
+
 func int8Ptr(id int64) pgtype.Int8 { return pgtype.Int8{Int64: id, Valid: true} }
 
 func horaDe(ts pgtype.Timestamptz) time.Time { return ts.Time }
@@ -155,13 +262,32 @@ func horaPtr(ts pgtype.Timestamptz) *time.Time {
 }
 
 func tarefaDe(row gen.InsertTarefaRow) Tarefa {
-	return Tarefa{
+	tipo := contract.NormalizarTipoTarefa(row.Tipo)
+	t := Tarefa{
 		ID: row.ID, ProfessorID: row.ProfessorID,
 		Nome: row.Nome, Enunciado: row.Enunciado,
-		TempoCPUMs: row.TempoCpuMs, TempoTotalMs: row.TempoTotalMs,
-		MemoriaMB: row.MemoriaMb,
-		DeletedAt: horaPtr(row.DeletedAt), CreatedAt: horaDe(row.CreatedAt),
+		Tipo:         tipo,
+		TempoCPUMs:   row.TempoCpuMs,
+		TempoTotalMs: row.TempoTotalMs,
+		MemoriaMB:    row.MemoriaMb,
+		DeletedAt:    horaPtr(row.DeletedAt),
+		CreatedAt:    horaDe(row.CreatedAt),
 	}
+	if tipo == contract.TipoTarefaArquivo {
+		var cfg contract.ConfigTarefaArquivo
+		if len(row.Config) > 0 {
+			_ = json.Unmarshal(row.Config, &cfg)
+		}
+		if norm, err := contract.NormalizarConfigArquivo(cfg, contract.DefaultArquivoMaxBytes); err == nil {
+			t.ConfigArquivo = &norm
+			if raw, err := json.Marshal(norm); err == nil {
+				t.Config = raw
+			}
+		}
+	} else if len(row.Config) > 0 && string(row.Config) != "{}" && string(row.Config) != "null" {
+		t.Config = json.RawMessage(row.Config)
+	}
+	return t
 }
 
 // Criar registra a tarefa (com testes opcionais); dono = ator; cargo
@@ -176,15 +302,7 @@ func (s *Service) Criar(ctx context.Context, actor domain.User, cad CadastroTare
 	if err != nil {
 		return Tarefa{}, err
 	}
-	cpu, err := limiteMs(cad.TempoCPUMs)
-	if err != nil {
-		return Tarefa{}, err
-	}
-	total, err := limiteMs(cad.TempoTotalMs)
-	if err != nil {
-		return Tarefa{}, err
-	}
-	memoria, err := limiteMemoria(cad.MemoriaMB)
+	val, err := validarPorTipo(cad, contract.TipoTarefaProgramacao)
 	if err != nil {
 		return Tarefa{}, err
 	}
@@ -195,9 +313,11 @@ func (s *Service) Criar(ctx context.Context, actor domain.User, cad CadastroTare
 			ProfessorID:  actor.ID,
 			Nome:         nome,
 			Enunciado:    enunciado,
-			TempoCpuMs:   cpu,
-			TempoTotalMs: total,
-			MemoriaMb:    memoria,
+			Tipo:         val.Tipo,
+			Config:       val.ConfigBytes,
+			TempoCpuMs:   val.TempoCPUMs,
+			TempoTotalMs: val.TempoTotalMs,
+			MemoriaMb:    val.MemoriaMB,
 			CreatedBy:    int8Ptr(actor.ID),
 		})
 		if err != nil {
@@ -223,7 +343,7 @@ func (s *Service) Criar(ctx context.Context, actor domain.User, cad CadastroTare
 	s.audit.Record(ctx, platform.LogEntry{
 		ActorID: &actor.ID, Actor: actor.Email,
 		Kind:   LogKindTarefaCreate,
-		Detail: fmt.Sprintf("tarefa=%d testes=%d", nova.ID, len(cad.Testes)),
+		Detail: fmt.Sprintf("tarefa=%d tipo=%s testes=%d", nova.ID, nova.Tipo, len(cad.Testes)),
 	})
 	return nova, nil
 }
@@ -272,6 +392,7 @@ func (s *Service) Ver(ctx context.Context, actor domain.User, id int64) (Tarefa,
 	return tarefaDe(gen.InsertTarefaRow{
 		ID: row.ID, ProfessorID: row.ProfessorID,
 		Nome: row.Nome, Enunciado: row.Enunciado,
+		Tipo: row.Tipo, Config: row.Config,
 		TempoCpuMs: row.TempoCpuMs, TempoTotalMs: row.TempoTotalMs,
 		MemoriaMb: row.MemoriaMb,
 		DeletedAt: row.DeletedAt, CreatedAt: row.CreatedAt,
@@ -313,6 +434,7 @@ func (s *Service) Listar(ctx context.Context, actor domain.User, f FiltroTarefas
 		out = append(out, tarefaDe(gen.InsertTarefaRow{
 			ID: row.ID, ProfessorID: row.ProfessorID,
 			Nome: row.Nome, Enunciado: row.Enunciado,
+			Tipo: row.Tipo, Config: row.Config,
 			TempoCpuMs: row.TempoCpuMs, TempoTotalMs: row.TempoTotalMs,
 			MemoriaMb: row.MemoriaMb,
 			DeletedAt: row.DeletedAt, CreatedAt: row.CreatedAt,
@@ -340,7 +462,7 @@ func tarefaEmUso() error {
 // Editar muda nome/enunciado/limites e (opcional) substitui os testes.
 // Tarefa usada por atividade → 409 (duplicar para obter editável).
 func (s *Service) Editar(ctx context.Context, actor domain.User, id int64, cad CadastroTarefa) (Tarefa, []Teste, error) {
-	_, testes, err := s.Ver(ctx, actor, id)
+	atual, testes, err := s.Ver(ctx, actor, id)
 	if err != nil {
 		return Tarefa{}, nil, err
 	}
@@ -355,28 +477,32 @@ func (s *Service) Editar(ctx context.Context, actor domain.User, id int64, cad C
 	if err != nil {
 		return Tarefa{}, nil, err
 	}
-	cpu, err := limiteMs(cad.TempoCPUMs)
-	if err != nil {
-		return Tarefa{}, nil, err
+	// Se estiver mantendo tipo arquivo_submissao e não enviou config no PATCH, preserva a atual.
+	if (cad.Tipo == "" || cad.Tipo == contract.TipoTarefaArquivo) &&
+		atual.Tipo == contract.TipoTarefaArquivo &&
+		cad.ConfigArquivo == nil && len(cad.Config) == 0 && atual.ConfigArquivo != nil {
+		cad.ConfigArquivo = atual.ConfigArquivo
 	}
-	total, err := limiteMs(cad.TempoTotalMs)
-	if err != nil {
-		return Tarefa{}, nil, err
-	}
-	memoria, err := limiteMemoria(cad.MemoriaMB)
+	val, err := validarPorTipo(cad, atual.Tipo)
 	if err != nil {
 		return Tarefa{}, nil, err
 	}
 	if _, err := s.store.Q.UpdateTarefa(ctx, gen.UpdateTarefaParams{
 		ID: id, Nome: nome, Enunciado: enunciado,
-		TempoCpuMs: cpu, TempoTotalMs: total, MemoriaMb: memoria,
+		Tipo: val.Tipo, Config: val.ConfigBytes,
+		TempoCpuMs: val.TempoCPUMs, TempoTotalMs: val.TempoTotalMs, MemoriaMb: val.MemoriaMB,
 	}); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Tarefa{}, nil, tarefaNaoEncontrada()
 		}
 		return Tarefa{}, nil, err
 	}
-	if cad.Testes != nil {
+	if val.Tipo == contract.TipoTarefaArquivo {
+		// Garante que tarefas de arquivo não retenham testes antigos.
+		if _, err := s.store.Q.ReplaceTestesTarefa(ctx, id); err != nil {
+			return Tarefa{}, nil, err
+		}
+	} else if cad.Testes != nil {
 		if _, err := s.store.Q.ReplaceTestesTarefa(ctx, id); err != nil {
 			return Tarefa{}, nil, err
 		}
@@ -394,8 +520,8 @@ func (s *Service) Editar(ctx context.Context, actor domain.User, id int64, cad C
 	}
 	s.audit.Record(ctx, platform.LogEntry{
 		ActorID: &actor.ID, Actor: actor.Email,
-		Kind: LogKindTarefaUpdate,
-		Detail: fmt.Sprintf("tarefa=%d testes=%d", id, lenOrKeep(cad.Testes, testes)),
+		Kind:    LogKindTarefaUpdate,
+		Detail:  fmt.Sprintf("tarefa=%d tipo=%s testes=%d", id, val.Tipo, lenOrKeep(cad.Testes, testes)),
 	})
 	return s.Ver(ctx, actor, id)
 }
@@ -425,13 +551,14 @@ func (s *Service) Duplicar(ctx context.Context, actor domain.User, id int64) (Ta
 		}); err != nil {
 			return err
 		}
-		copia = Tarefa{
+		copia = tarefaDe(gen.InsertTarefaRow{
 			ID: row.ID, ProfessorID: row.ProfessorID,
 			Nome: row.Nome, Enunciado: row.Enunciado,
-			TempoCPUMs: row.TempoCpuMs, TempoTotalMs: row.TempoTotalMs,
-			MemoriaMB: row.MemoriaMb,
-			DeletedAt: horaPtr(row.DeletedAt), CreatedAt: horaDe(row.CreatedAt),
-		}
+			Tipo: row.Tipo, Config: row.Config,
+			TempoCpuMs: row.TempoCpuMs, TempoTotalMs: row.TempoTotalMs,
+			MemoriaMb: row.MemoriaMb,
+			DeletedAt: row.DeletedAt, CreatedAt: row.CreatedAt,
+		})
 		return nil
 	})
 	if err != nil {
@@ -439,8 +566,8 @@ func (s *Service) Duplicar(ctx context.Context, actor domain.User, id int64) (Ta
 	}
 	s.audit.Record(ctx, platform.LogEntry{
 		ActorID: &actor.ID, Actor: actor.Email,
-		Kind:   LogKindTarefaDuplicar,
-		Detail: fmt.Sprintf("tarefa=%d → %d", id, copia.ID),
+		Kind:    LogKindTarefaDuplicar,
+		Detail:  fmt.Sprintf("tarefa=%d → %d", id, copia.ID),
 	})
 	return copia, nil
 }
@@ -466,8 +593,8 @@ func (s *Service) Excluir(ctx context.Context, actor domain.User, id int64) erro
 		}
 		s.audit.Record(ctx, platform.LogEntry{
 			ActorID: &actor.ID, Actor: actor.Email,
-			Kind:   LogKindTarefaDelete,
-			Detail: fmt.Sprintf("tarefa=%d (soft: usada por atividade)", id),
+			Kind:    LogKindTarefaDelete,
+			Detail:  fmt.Sprintf("tarefa=%d (soft: usada por atividade)", id),
 		})
 		return nil
 	}
@@ -480,8 +607,8 @@ func (s *Service) Excluir(ctx context.Context, actor domain.User, id int64) erro
 	}
 	s.audit.Record(ctx, platform.LogEntry{
 		ActorID: &actor.ID, Actor: actor.Email,
-		Kind:   LogKindTarefaDelete,
-		Detail: fmt.Sprintf("tarefa=%d", id),
+		Kind:    LogKindTarefaDelete,
+		Detail:  fmt.Sprintf("tarefa=%d", id),
 	})
 	return nil
 }

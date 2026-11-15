@@ -21,6 +21,7 @@ import (
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
 	"github.com/seno-project/seno/api/internal/tarefas"
+	"github.com/seno-project/seno/contract"
 )
 
 // Service coordena o banco de atividades.
@@ -58,13 +59,16 @@ type TarefaAtributo struct {
 // DetalheTarefa é a visão da tarefa dentro de uma atividade (dados da
 // tarefa + os atributos da atividade).
 type DetalheTarefa struct {
-	TarefaID        int64      `json:"tarefa_id"`
-	Ordem           int        `json:"ordem"`
-	ValorPts        int        `json:"valor_pts"`
-	Linguagem       string     `json:"linguagem"`
-	TarefaNome      string     `json:"tarefa_nome"`
-	TarefaEnunciado string     `json:"tarefa_enunciado"`
-	TarefaExcluida  *time.Time `json:"tarefa_excluida,omitempty"`
+	TarefaID            int64                         `json:"tarefa_id"`
+	Ordem               int                           `json:"ordem"`
+	ValorPts            int                           `json:"valor_pts"`
+	Linguagem           string                        `json:"linguagem"`
+	TarefaNome          string                        `json:"tarefa_nome"`
+	TarefaEnunciado     string                        `json:"tarefa_enunciado"`
+	TarefaTipo          string                        `json:"tarefa_tipo"`
+	TarefaConfig        json.RawMessage               `json:"tarefa_config,omitempty"`
+	TarefaConfigArquivo *contract.ConfigTarefaArquivo `json:"tarefa_config_arquivo,omitempty"`
+	TarefaExcluida      *time.Time                    `json:"tarefa_excluida,omitempty"`
 }
 
 // Atividade é a visão completa da atividade.
@@ -81,10 +85,10 @@ type Atividade struct {
 // ListaAtividades é o resultado paginado (atividades são listadas sem
 // tarefas; Ver traz o detalhe).
 type ListaAtividades struct {
-	Total      int64        `json:"total"`
-	Pagina     int          `json:"pagina"`
-	Por        int          `json:"por"`
-	Atividades []Atividade  `json:"atividades"`
+	Total      int64       `json:"total"`
+	Pagina     int         `json:"pagina"`
+	Por        int         `json:"por"`
+	Atividades []Atividade `json:"atividades"`
 }
 
 // CadastroAtividade é o corpo da criação/edição. Em PATCH, tarefas
@@ -144,7 +148,10 @@ func validaTarefas(atribuicoes []TarefaAtributo) ([]TarefaAtributo, error) {
 				http.StatusUnprocessableEntity, platform.CodeUnprocessable,
 				"Pontuação não pode ser negativa.")
 		}
-		if !linguagens[t.Linguagem] {
+		// Se uma linguagem não vazia foi informada, valida imediatamente que é suportada.
+		// A obrigatoriedade de linguagem para tarefas de programação (e limpeza para
+		// arquivo_submissao) é validada contra o tipo da tarefa em donoDasTarefas.
+		if t.Linguagem != "" && !linguagens[t.Linguagem] {
 			return nil, platform.NewAPIError(
 				http.StatusUnprocessableEntity, platform.CodeUnprocessable,
 				"Linguagem inválida (python, c ou cpp).")
@@ -252,18 +259,21 @@ func (s *Service) Criar(ctx context.Context, actor domain.User, cad CadastroAtiv
 	}
 	s.audit.Record(ctx, platform.LogEntry{
 		ActorID: &actor.ID, Actor: actor.Email,
-		Kind:   LogKindAtividadeCreate,
-		Detail: fmt.Sprintf("atividade=%d tarefas=%d", nova.ID, len(lista)),
+		Kind:    LogKindAtividadeCreate,
+		Detail:  fmt.Sprintf("atividade=%d tarefas=%d", nova.ID, len(lista)),
 	})
 	return nova, nil
 }
 
 // donoDasTarefas: todas as tarefas referenciadas devem existir e ser do
 // ator (professor) — atividade é envelope do banco do próprio professor.
+// Também valida e normaliza o vínculo (ex.: linguagem obrigatória apenas em
+// tarefas de programação e vazia em tarefas de submissão de arquivo).
 func (s *Service) donoDasTarefas(
 	ctx context.Context, actor domain.User, lista []TarefaAtributo,
 ) error {
-	for _, t := range lista {
+	for i := range lista {
+		t := &lista[i]
 		row, err := s.store.Q.GetTarefa(ctx, t.TarefaID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -279,6 +289,17 @@ func (s *Service) donoDasTarefas(
 			return platform.NewAPIError(
 				http.StatusNotFound, platform.CodeNotFound,
 				"Tarefa "+fmt.Sprintf("%d", t.TarefaID)+" não encontrada.")
+		}
+		tipo := contract.NormalizarTipoTarefa(row.Tipo)
+		switch tipo {
+		case contract.TipoTarefaArquivo:
+			t.Linguagem = ""
+		default:
+			if !linguagens[t.Linguagem] {
+				return platform.NewAPIError(
+					http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+					"Linguagem inválida (python, c ou cpp).")
+			}
 		}
 	}
 	return nil
@@ -325,15 +346,32 @@ func (s *Service) Ver(ctx context.Context, actor domain.User, id int64) (Ativida
 	}
 	detalhes := make([]DetalheTarefa, 0, len(vinculos))
 	for _, vt := range vinculos {
-		detalhes = append(detalhes, DetalheTarefa{
+		tipo := contract.NormalizarTipoTarefa(vt.TarefaTipo)
+		dt := DetalheTarefa{
 			TarefaID:        vt.TarefaID,
 			Ordem:           int(vt.Ordem),
 			ValorPts:        int(vt.ValorPts),
 			Linguagem:       vt.Linguagem,
 			TarefaNome:      vt.TarefaNome,
 			TarefaEnunciado: vt.TarefaEnunciado,
+			TarefaTipo:      tipo,
 			TarefaExcluida:  horaPtr(vt.TarefaDeletedAt),
-		})
+		}
+		if tipo == contract.TipoTarefaArquivo {
+			var cfg contract.ConfigTarefaArquivo
+			if len(vt.TarefaConfig) > 0 {
+				_ = json.Unmarshal(vt.TarefaConfig, &cfg)
+			}
+			if norm, err := contract.NormalizarConfigArquivo(cfg, contract.DefaultArquivoMaxBytes); err == nil {
+				dt.TarefaConfigArquivo = &norm
+				if raw, err := json.Marshal(norm); err == nil {
+					dt.TarefaConfig = raw
+				}
+			}
+		} else if len(vt.TarefaConfig) > 0 && string(vt.TarefaConfig) != "{}" && string(vt.TarefaConfig) != "null" {
+			dt.TarefaConfig = json.RawMessage(vt.TarefaConfig)
+		}
+		detalhes = append(detalhes, dt)
 	}
 	return Atividade{
 		ID: row.ID, ProfessorID: row.ProfessorID, Nome: row.Nome,
@@ -412,8 +450,8 @@ func (s *Service) Editar(ctx context.Context, actor domain.User, id int64, cad C
 	}
 	s.audit.Record(ctx, platform.LogEntry{
 		ActorID: &actor.ID, Actor: actor.Email,
-		Kind:   LogKindAtividadeUpdate,
-		Detail: fmt.Sprintf("atividade=%d tarefas=%d", id, len(lista)),
+		Kind:    LogKindAtividadeUpdate,
+		Detail:  fmt.Sprintf("atividade=%d tarefas=%d", id, len(lista)),
 	})
 	return s.Ver(ctx, actor, id)
 }
@@ -454,8 +492,8 @@ func (s *Service) Duplicar(ctx context.Context, actor domain.User, id int64) (At
 	}
 	s.audit.Record(ctx, platform.LogEntry{
 		ActorID: &actor.ID, Actor: actor.Email,
-		Kind:   LogKindAtividadeDuplicar,
-		Detail: fmt.Sprintf("atividade=%d → %d", id, copia.ID),
+		Kind:    LogKindAtividadeDuplicar,
+		Detail:  fmt.Sprintf("atividade=%d → %d", id, copia.ID),
 	})
 	return copia, nil
 }
@@ -475,8 +513,8 @@ func (s *Service) Excluir(ctx context.Context, actor domain.User, id int64) erro
 	}
 	s.audit.Record(ctx, platform.LogEntry{
 		ActorID: &actor.ID, Actor: actor.Email,
-		Kind:   LogKindAtividadeDelete,
-		Detail: fmt.Sprintf("atividade=%d", id),
+		Kind:    LogKindAtividadeDelete,
+		Detail:  fmt.Sprintf("atividade=%d", id),
 	})
 	return nil
 }

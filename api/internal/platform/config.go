@@ -44,6 +44,9 @@ type Config struct {
 
 	// Retenção LGPD (ARQUITETURA §9.2): submissões, monitor_estado_aluno e log_entries
 	DadosRetencao time.Duration // SENO_RETENCAO_DADOS_D (default 730 dias)
+
+	// Limite global padrão para tarefas de submissão de arquivo.
+	ArquivoMaxBytes int64 // SENO_ARQUIVO_MAX_BYTES (default 10MB)
 }
 
 // LoadConfig lê o ambiente e devolve a configuração validada.
@@ -69,8 +72,9 @@ func LoadConfig() (*Config, error) {
 		MonitorURL:       strings.TrimSuffix(strings.TrimSpace(os.Getenv("SENO_MONITOR_URL")), "/"),
 		MonitorPublicURL: strings.TrimSuffix(strings.TrimSpace(os.Getenv("SENO_MONITOR_PUBLIC_URL")), "/"),
 		MonitorSecret:    os.Getenv("SENO_MONITOR_SECRET"),
-		PollEstado:       envDuration("SENO_POLL_ESTADO_S", 30*time.Second),
-		DadosRetencao:    envDurationDays("SENO_RETENCAO_DADOS_D", 730),
+		PollEstado:        envDuration("SENO_POLL_ESTADO_S", 30*time.Second),
+		DadosRetencao:     envDurationDays("SENO_RETENCAO_DADOS_D", 730),
+		ArquivoMaxBytes:   int64(envInt("SENO_ARQUIVO_MAX_BYTES", int(contract.DefaultArquivoMaxBytes))),
 	}
 
 	c.DatabaseURL = os.Getenv("SENO_DATABASE_URL")
