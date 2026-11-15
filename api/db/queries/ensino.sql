@@ -192,10 +192,27 @@ SELECT mt.id,
        u.email        AS aluno_email,
        u.status       AS aluno_status,
        p.first_name   AS aluno_first_name,
-       p.last_name    AS aluno_last_name
+       p.last_name    AS aluno_last_name,
+       (u.status = 'pending' AND NOT EXISTS (
+         SELECT 1
+         FROM one_time_tokens ott
+         WHERE ott.user_id = u.id
+           AND ott.kind = 'invite'
+           AND ott.used_at IS NULL
+           AND ott.expires_at > now()
+       )) AS convite_expirado
 FROM matriculas mt
 JOIN users u ON u.id = mt.aluno_id
 JOIN persons p ON p.id = u.person_id
 WHERE mt.turma_id = $1
   AND (mt.saida_em IS NULL OR $2::boolean)
 ORDER BY (mt.saida_em IS NULL) DESC, mt.entrada_em, mt.id;
+
+-- name: HasMatriculaAtiva :one
+SELECT EXISTS (
+  SELECT 1
+  FROM matriculas
+  WHERE turma_id = $1
+    AND aluno_id = $2
+    AND saida_em IS NULL
+);

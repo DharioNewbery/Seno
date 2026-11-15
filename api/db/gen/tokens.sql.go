@@ -54,6 +54,24 @@ func (q *Queries) FindTokenUser(ctx context.Context, arg FindTokenUserParams) (i
 	return user_id, err
 }
 
+const hasActiveInviteToken = `-- name: HasActiveInviteToken :one
+SELECT EXISTS (
+  SELECT 1
+  FROM one_time_tokens
+  WHERE user_id = $1
+    AND kind = 'invite'
+    AND used_at IS NULL
+    AND expires_at > now()
+)
+`
+
+func (q *Queries) HasActiveInviteToken(ctx context.Context, userID int64) (bool, error) {
+	row := q.db.QueryRow(ctx, hasActiveInviteToken, userID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const insertOneTimeToken = `-- name: InsertOneTimeToken :exec
 
 INSERT INTO one_time_tokens (user_id, kind, token_hash, expires_at, created_by)

@@ -438,7 +438,15 @@ SELECT mt.id,
        u.email        AS aluno_email,
        u.status       AS aluno_status,
        p.first_name   AS aluno_first_name,
-       p.last_name    AS aluno_last_name
+       p.last_name    AS aluno_last_name,
+       (u.status = 'pending' AND NOT EXISTS (
+         SELECT 1
+         FROM one_time_tokens ott
+         WHERE ott.user_id = u.id
+           AND ott.kind = 'invite'
+           AND ott.used_at IS NULL
+           AND ott.expires_at > now()
+       )) AS convite_expirado
 FROM matriculas mt
 JOIN users u ON u.id = mt.aluno_id
 JOIN persons p ON p.id = u.person_id
@@ -453,14 +461,15 @@ type ListMatriculasParams struct {
 }
 
 type ListMatriculasRow struct {
-	ID             int64              `json:"id"`
-	AlunoID        int64              `json:"aluno_id"`
-	EntradaEm      pgtype.Timestamptz `json:"entrada_em"`
-	SaidaEm        pgtype.Timestamptz `json:"saida_em"`
-	AlunoEmail     string             `json:"aluno_email"`
-	AlunoStatus    string             `json:"aluno_status"`
-	AlunoFirstName string             `json:"aluno_first_name"`
-	AlunoLastName  string             `json:"aluno_last_name"`
+	ID              int64              `json:"id"`
+	AlunoID         int64              `json:"aluno_id"`
+	EntradaEm       pgtype.Timestamptz `json:"entrada_em"`
+	SaidaEm         pgtype.Timestamptz `json:"saida_em"`
+	AlunoEmail      string             `json:"aluno_email"`
+	AlunoStatus     string             `json:"aluno_status"`
+	AlunoFirstName  string             `json:"aluno_first_name"`
+	AlunoLastName   string             `json:"aluno_last_name"`
+	ConviteExpirado bool               `json:"convite_expirado"`
 }
 
 func (q *Queries) ListMatriculas(ctx context.Context, arg ListMatriculasParams) ([]ListMatriculasRow, error) {
@@ -481,6 +490,7 @@ func (q *Queries) ListMatriculas(ctx context.Context, arg ListMatriculasParams) 
 			&i.AlunoStatus,
 			&i.AlunoFirstName,
 			&i.AlunoLastName,
+			&i.ConviteExpirado,
 		); err != nil {
 			return nil, err
 		}
@@ -490,6 +500,28 @@ func (q *Queries) ListMatriculas(ctx context.Context, arg ListMatriculasParams) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const hasMatriculaAtiva = `-- name: HasMatriculaAtiva :one
+SELECT EXISTS (
+  SELECT 1
+  FROM matriculas
+  WHERE turma_id = $1
+    AND aluno_id = $2
+    AND saida_em IS NULL
+)
+`
+
+type HasMatriculaAtivaParams struct {
+	TurmaID int64 `json:"turma_id"`
+	AlunoID int64 `json:"aluno_id"`
+}
+
+func (q *Queries) HasMatriculaAtiva(ctx context.Context, arg HasMatriculaAtivaParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasMatriculaAtiva, arg.TurmaID, arg.AlunoID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const listPeriodos = `-- name: ListPeriodos :many

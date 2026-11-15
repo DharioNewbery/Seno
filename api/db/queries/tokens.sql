@@ -27,3 +27,13 @@ WHERE token_hash = $1
   AND kind = $2
   AND used_at IS NULL
   AND expires_at > now();
+
+-- name: HasActiveInviteToken :one
+SELECT EXISTS (
+  SELECT 1
+  FROM one_time_tokens
+  WHERE user_id = $1
+    AND kind = 'invite'
+    AND used_at IS NULL
+    AND expires_at > now()
+);
