@@ -248,13 +248,15 @@ func (s *Service) montarCarga(ctx context.Context, atividadeID int64) ([]contrac
 		Linguagem string
 		Nome      string
 		Enunciado string
+		Tipo      string
+		Config    []byte
 		CPUMs     *int32
 		TotalMs   *int32
 		MemoriaMB *int32
 	}
 	rows, err := s.st.Pool.Query(ctx, `
 		SELECT at.tarefa_id, at.ordem, at.valor_pts, at.linguagem,
-		       t.nome, t.enunciado, t.tempo_cpu_ms, t.tempo_total_ms, t.memoria_mb
+		       t.nome, t.enunciado, t.tipo, t.config, t.tempo_cpu_ms, t.tempo_total_ms, t.memoria_mb
 		FROM atividade_tarefas at
 		JOIN tarefas t ON t.id = at.tarefa_id
 		WHERE at.atividade_id = $1 AND t.deleted_at IS NULL
@@ -267,13 +269,24 @@ func (s *Service) montarCarga(ctx context.Context, atividadeID int64) ([]contrac
 	for rows.Next() {
 		var v vinc
 		if err := rows.Scan(&v.TarefaID, &v.Ordem, &v.ValorPts, &v.Linguagem,
-			&v.Nome, &v.Enunciado, &v.CPUMs, &v.TotalMs, &v.MemoriaMB); err != nil {
+			&v.Nome, &v.Enunciado, &v.Tipo, &v.Config, &v.CPUMs, &v.TotalMs, &v.MemoriaMB); err != nil {
 			return nil, fmt.Errorf("monitor_transferir: tarefa: %w", err)
 		}
 		vincs = append(vincs, v)
 	}
 	out := make([]contract.TarefaCarga, 0, len(vincs))
 	for _, v := range vincs {
+		tipo := contract.NormalizarTipoTarefa(v.Tipo)
+		var cfgArquivo *contract.ConfigTarefaArquivo
+		if tipo == contract.TipoTarefaArquivo {
+			var cfg contract.ConfigTarefaArquivo
+			if len(v.Config) > 0 {
+				_ = json.Unmarshal(v.Config, &cfg)
+			}
+			if norm, err := contract.NormalizarConfigArquivo(cfg, contract.DefaultArquivoMaxBytes); err == nil {
+				cfgArquivo = &norm
+			}
+		}
 		testes, err := s.st.Q.ListTestesTarefa(ctx, v.TarefaID)
 		if err != nil {
 			return nil, fmt.Errorf("monitor_transferir: testes da tarefa %d: %w", v.TarefaID, err)
@@ -288,7 +301,7 @@ func (s *Service) montarCarga(ctx context.Context, atividadeID int64) ([]contrac
 			})
 		}
 		var limites *contract.Limites
-		if v.CPUMs != nil { // limites definidos na tarefa; senão padrão global do Monitor
+		if tipo == contract.TipoTarefaProgramacao && v.CPUMs != nil { // limites definidos na tarefa; senão padrão global do Monitor
 			limites = &contract.Limites{
 				TempoCPUMs: int(*v.CPUMs), TempoTotalMs: int(derefC(v.TotalMs)),
 				MemoriaMB: int(derefC(v.MemoriaMB)),
@@ -297,6 +310,7 @@ func (s *Service) montarCarga(ctx context.Context, atividadeID int64) ([]contrac
 		out = append(out, contract.TarefaCarga{
 			Ordem: int(v.Ordem), TarefaAPIID: v.TarefaID, Nome: v.Nome,
 			ValorPts: float64(v.ValorPts), Enunciado: v.Enunciado,
+			Tipo: tipo, ConfigArquivo: cfgArquivo,
 			Linguagem: v.Linguagem, Limites: limites, Testes: tes,
 		})
 	}
@@ -676,12 +690,13 @@ type DetalhesSubmissao struct {
 }
 
 type SubmissaoDetalhe struct {
-	ID         int64             `json:"id"`
-	AlunoID    int64             `json:"aluno_id"`
-	NT         int               `json:"n_t"`
-	EntregueEm time.Time         `json:"entregue_em"`
-	Atrasada   bool              `json:"atrasada"`
-	Respostas  map[string]string `json:"respostas"`
+	ID         int64                                     `json:"id"`
+	AlunoID    int64                                     `json:"aluno_id"`
+	NT         int                                       `json:"n_t"`
+	EntregueEm time.Time                                 `json:"entregue_em"`
+	Atrasada   bool                                      `json:"atrasada"`
+	Respostas  map[string]string                         `json:"respostas"`
+	Arquivos   map[string]contract.ArquivoSubmetidoMonitor `json:"arquivos,omitempty"`
 }
 
 type CorrecaoDetalhe struct {
@@ -697,11 +712,14 @@ type AtividadeDetalhe struct {
 }
 
 type TarefaDetalhe struct {
-	Ordem     int     `json:"ordem"`
-	Nome      string  `json:"nome"`
-	Enunciado string  `json:"enunciado"`
-	Linguagem string  `json:"linguagem"`
-	ValorPts  float64 `json:"valor_pts"`
+	Ordem         int                           `json:"ordem"`
+	TarefaAPIID   int64                         `json:"tarefa_api_id,omitempty"`
+	Nome          string                        `json:"nome"`
+	Enunciado     string                        `json:"enunciado"`
+	Tipo          string                        `json:"tipo,omitempty"`
+	ConfigArquivo *contract.ConfigTarefaArquivo `json:"config_arquivo,omitempty"`
+	Linguagem     string                        `json:"linguagem"`
+	ValorPts      float64                       `json:"valor_pts"`
 }
 
 // ObterSubmissao busca os detalhes da submissão no Monitor via rota interna HMAC.
@@ -820,9 +838,11 @@ func (s *Service) IngerirSubmissao(ctx context.Context, p *contract.PacoteSubmis
 		Tasks []snapItem `json:"tasks"`
 	}
 	ordemParaTarefa := make(map[int]int64, len(tarefasAtrib))
+	tarefaPorID := make(map[int64]gen.TarefasDaAtribuicaoRow, len(tarefasAtrib))
 	snap := snapDoc{Tasks: make([]snapItem, 0, len(tarefasAtrib))}
 	for _, ta := range tarefasAtrib {
 		ordemParaTarefa[int(ta.Ordem)] = ta.TarefaID
+		tarefaPorID[ta.TarefaID] = ta
 		code := ""
 		if p.Submissao.Respostas != nil {
 			if c, ok := p.Submissao.Respostas[strconv.Itoa(int(ta.Ordem))]; ok {
@@ -885,6 +905,53 @@ func (s *Service) IngerirSubmissao(ctx context.Context, p *contract.PacoteSubmis
 	).Scan(&submissaoID)
 	if err != nil {
 		return 0, fmt.Errorf("monitor: upsert submissoes: %w", err)
+	}
+
+	if len(p.Submissao.Arquivos) > 0 {
+		for key, arq := range p.Submissao.Arquivos {
+			if len(arq.Conteudo) == 0 {
+				continue
+			}
+			tarefaID := arq.TarefaAPIID
+			if tarefaID == 0 && arq.TarefaOrdem > 0 {
+				tarefaID = ordemParaTarefa[arq.TarefaOrdem]
+			}
+			if tarefaID == 0 {
+				if ord, errConv := strconv.Atoi(key); errConv == nil {
+					if tid, ok := ordemParaTarefa[ord]; ok {
+						tarefaID = tid
+					} else if _, ok := tarefaPorID[int64(ord)]; ok {
+						tarefaID = int64(ord)
+					}
+				}
+			}
+			ta, ok := tarefaPorID[tarefaID]
+			if !ok || contract.NormalizarTipoTarefa(ta.TarefaTipo) != contract.TipoTarefaArquivo {
+				continue
+			}
+			var cfg contract.ConfigTarefaArquivo
+			if len(ta.TarefaConfig) > 0 {
+				_ = json.Unmarshal(ta.TarefaConfig, &cfg)
+			}
+			meta, errVal := contract.ValidarArquivo(arq.NomeArquivo, arq.Conteudo, cfg, contract.DefaultArquivoMaxBytes)
+			if errVal != nil {
+				return 0, fmt.Errorf("monitor: arquivo inválido na tarefa %d: %w", tarefaID, errVal)
+			}
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO submissao_arquivos (submissao_id, tarefa_id, nome_arquivo, mime_type, tamanho_bytes, sha256, conteudo)
+				VALUES ($1, $2, $3, $4, $5, $6, $7)
+				ON CONFLICT (submissao_id, tarefa_id) DO UPDATE SET
+					nome_arquivo = EXCLUDED.nome_arquivo,
+					mime_type = EXCLUDED.mime_type,
+					tamanho_bytes = EXCLUDED.tamanho_bytes,
+					sha256 = EXCLUDED.sha256,
+					conteudo = EXCLUDED.conteudo,
+					criado_em = now()`,
+				submissaoID, tarefaID, meta.NomeSanitizado, meta.MimeType, meta.TamanhoBytes, meta.Sha256, arq.Conteudo,
+			); err != nil {
+				return 0, fmt.Errorf("monitor: upsert submissao_arquivos: %w", err)
+			}
+		}
 	}
 
 	var correcaoID int64

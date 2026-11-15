@@ -25,6 +25,7 @@ import (
 	"github.com/seno-project/seno/api/internal/judge0"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
+	"github.com/seno-project/seno/contract"
 )
 
 // Service coordena as correções.
@@ -69,18 +70,30 @@ type Correcao struct {
 	Tarefas      []Tarefa   `json:"tarefas"`
 }
 
+// ArquivoMeta descreve o arquivo anexado numa tarefa de submissão de arquivo.
+type ArquivoMeta struct {
+	NomeArquivo  string    `json:"nome_arquivo"`
+	MimeType     string    `json:"mime_type"`
+	TamanhoBytes int64     `json:"tamanho_bytes"`
+	Sha256       string    `json:"sha256"`
+	CriadoEm     time.Time `json:"criado_em"`
+}
+
 // Tarefa é a correção de tarefa (nota automática/final + resultados).
 type Tarefa struct {
-	ID         int64       `json:"id"`
-	TarefaID   int64       `json:"tarefa_id"`
-	TarefaNome string      `json:"tarefa_nome"`
-	Enunciado  string      `json:"enunciado,omitempty"`
-	Codigo     string      `json:"codigo,omitempty"`
-	ValorPts   int32       `json:"valor_pts"`
-	NotaAuto   *int32      `json:"nota_auto,omitempty"`
-	NotaFinal  *int32      `json:"nota_final,omitempty"`
-	Feedback   *string     `json:"feedback,omitempty"`
-	Resultados []Resultado `json:"resultados"`
+	ID            int64                         `json:"id"`
+	TarefaID      int64                         `json:"tarefa_id"`
+	TarefaNome    string                        `json:"tarefa_nome"`
+	TarefaTipo    string                        `json:"tarefa_tipo"`
+	ConfigArquivo *contract.ConfigTarefaArquivo `json:"config_arquivo,omitempty"`
+	Enunciado     string                        `json:"enunciado,omitempty"`
+	Codigo        string                        `json:"codigo,omitempty"`
+	Arquivo       *ArquivoMeta                  `json:"arquivo,omitempty"`
+	ValorPts      int32                         `json:"valor_pts"`
+	NotaAuto      *int32                        `json:"nota_auto,omitempty"`
+	NotaFinal     *int32                        `json:"nota_final,omitempty"`
+	Feedback      *string                       `json:"feedback,omitempty"`
+	Resultados    []Resultado                   `json:"resultados"`
 }
 
 // Resultado é a execução de um teste (veredito Judge0).
@@ -229,17 +242,42 @@ func (s *Service) montarDeRow(
 			}
 		}
 	}
+	arquivosPorTarefa := map[int64]*ArquivoMeta{}
+	if arqs, err := s.store.Q.ListSubmissaoArquivosMeta(ctx, row.SubmissaoID); err == nil {
+		for _, a := range arqs {
+			arquivosPorTarefa[a.TarefaID] = &ArquivoMeta{
+				NomeArquivo:  a.NomeArquivo,
+				MimeType:     a.MimeType,
+				TamanhoBytes: a.TamanhoBytes,
+				Sha256:       a.Sha256,
+				CriadoEm:     a.CriadoEm.Time,
+			}
+		}
+	}
 	tarefas := make([]Tarefa, 0, len(cts))
 	for _, ct := range cts {
-		tarefas = append(tarefas, Tarefa{
+		tipo := contract.NormalizarTipoTarefa(ct.TarefaTipo)
+		item := Tarefa{
 			ID: ct.ID, TarefaID: ct.TarefaID, TarefaNome: ct.TarefaNome,
+			TarefaTipo: tipo,
 			Enunciado:  ct.TarefaEnunciado,
 			Codigo:     codigosPorTarefa[ct.TarefaID],
+			Arquivo:    arquivosPorTarefa[ct.TarefaID],
 			ValorPts:   ct.ValorPts,
 			NotaAuto:   notaPtr(ct.NotaAuto), NotaFinal: notaPtr(ct.NotaFinal),
 			Feedback:   textoPtr(ct.Feedback),
 			Resultados: porCT[ct.ID],
-		})
+		}
+		if tipo == contract.TipoTarefaArquivo {
+			var cfg contract.ConfigTarefaArquivo
+			if len(ct.TarefaConfig) > 0 {
+				_ = json.Unmarshal(ct.TarefaConfig, &cfg)
+			}
+			if norm, err := contract.NormalizarConfigArquivo(cfg, contract.DefaultArquivoMaxBytes); err == nil {
+				item.ConfigArquivo = &norm
+			}
+		}
+		tarefas = append(tarefas, item)
 	}
 	return &Correcao{
 		ID: row.ID, SubmissaoID: row.SubmissaoID, Status: row.Status,
@@ -314,6 +352,9 @@ func (s *Service) despachar(
 		ctID, err := s.criarCT(ctx, correcaoID, at.TarefaID, at.ValorPts)
 		if err != nil {
 			return err
+		}
+		if contract.NormalizarTipoTarefa(at.TarefaTipo) != contract.TipoTarefaProgramacao {
+			continue
 		}
 		if !s.cfg.Ligada() {
 			continue
@@ -625,6 +666,12 @@ func (s *Service) Confirmar(
 		SET nota_final = nota_auto
 		WHERE correcao_id = $1 AND nota_final IS NULL AND nota_auto IS NOT NULL`, cor.ID)
 
+	if cor.Status == StatusPendente {
+		_ = s.store.Q.UpdateStatusCorrecao(ctx, gen.UpdateStatusCorrecaoParams{
+			ID: cor.ID, Status: StatusConcluida,
+		})
+	}
+
 	if _, err := s.store.Q.ConfirmarCorrecao(ctx, gen.ConfirmarCorrecaoParams{
 		ID: cor.ID, ConfirmadaPor: int8Ptr(actor.ID),
 	}); err != nil {
@@ -717,6 +764,38 @@ func (s *Service) VerAluno(
 		visao.Correcao = cor
 	}
 	return visao, nil
+}
+
+// ObterArquivoSubmissao devolve o arquivo anexado a uma tarefa da submissão.
+// Autorizado para: dono da turma (professor), staff (admin/super) ou o próprio aluno dono da submissão.
+func (s *Service) ObterArquivoSubmissao(
+	ctx context.Context, actor domain.User, submissaoID, tarefaID int64,
+) (gen.SubmissaoArquivo, error) {
+	esc, err := s.store.Q.GetSubmissaoEscopo(ctx, submissaoID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return gen.SubmissaoArquivo{}, jaNaoEncontrada()
+		}
+		return gen.SubmissaoArquivo{}, err
+	}
+	autorizado := actor.IsStaff() ||
+		actor.ID == esc.TurmaProfessorID ||
+		(domain.HasAnyRole(actor.Roles, domain.RoleStudent) && actor.ID == esc.AlunoID)
+	if !autorizado {
+		return gen.SubmissaoArquivo{}, jaNaoEncontrada()
+	}
+	arq, err := s.store.Q.GetSubmissaoArquivo(ctx, gen.GetSubmissaoArquivoParams{
+		SubmissaoID: submissaoID,
+		TarefaID:    tarefaID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return gen.SubmissaoArquivo{}, platform.NewAPIError(
+				http.StatusNotFound, platform.CodeNotFound, "Arquivo não encontrado para esta tarefa.")
+		}
+		return gen.SubmissaoArquivo{}, err
+	}
+	return arq, nil
 }
 
 // ------------------------------------------------------------ helpers

@@ -162,6 +162,7 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	sub.POST("/monitor/alunos/:aluno_id/reexecutar", deps.MonitorReexecutar)
 	sub.DELETE("/monitor/alunos/:aluno_id/submissao", deps.MonitorExcluir)
 	sub.GET("/monitor/alunos/:aluno_id/submissao", deps.MonitorObterSubmissao)
+	sub.GET("/monitor/alunos/:aluno_id/tarefas/:ordem/arquivo", deps.MonitorBaixarArquivo)
 
 
 	// Correção: professor dono|staff no serviço (§5.4); aluno vê o
@@ -176,6 +177,7 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	submissoesCorrecao.POST("/correcao/publicar", deps.publicarCorrecao)
 	submissoesCorrecao.POST("/correcao/reexecutar", deps.reexecutarCorrecao)
 	submissoesCorrecao.GET("/minha", deps.minhaCorrecao)
+	submissoesCorrecao.GET("/tarefas/:tarefa_id/arquivo", deps.baixarArquivoSubmissao)
 
 
 	// Callback do Judge0 (rede interna; chave compartilhada validada no

@@ -247,7 +247,50 @@ func (d *Dependencies) MonitorObterSubmissao(c *gin.Context) {
 		platform.ErrorBody(c, err)
 		return
 	}
+	if det != nil && det.Submissao != nil && len(det.Submissao.Arquivos) > 0 {
+		for k, arq := range det.Submissao.Arquivos {
+			arq.Conteudo = nil
+			det.Submissao.Arquivos[k] = arq
+		}
+	}
 	c.JSON(http.StatusOK, det)
+}
+
+// MonitorBaixarArquivo: GET /v1/atribuicoes/:id/monitor/alunos/:aluno_id/tarefas/:ordem/arquivo
+func (d *Dependencies) MonitorBaixarArquivo(c *gin.Context) {
+	atribuicaoID, ok := idDaRota(c)
+	if !ok {
+		return
+	}
+	alunoID, err := strconv.ParseInt(c.Param("aluno_id"), 10, 64)
+	if err != nil || alunoID < 1 {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"erro": gin.H{"codigo": "VALIDACAO", "mensagem": "aluno_id inválido."}})
+		return
+	}
+	ordemStr := strings.TrimSpace(c.Param("ordem"))
+	if ordemStr == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"erro": gin.H{"codigo": "VALIDACAO", "mensagem": "ordem inválida."}})
+		return
+	}
+	mid, ok := d.obterMonitorAtribuicao(c, atribuicaoID)
+	if !ok {
+		return
+	}
+	det, err := d.Monitor.ObterSubmissao(c.Request.Context(), mid, alunoID)
+	if err != nil {
+		platform.ErrorBody(c, err)
+		return
+	}
+	if det == nil || det.Submissao == nil || len(det.Submissao.Arquivos) == 0 {
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"erro": gin.H{"codigo": "NAO_ENCONTRADO", "mensagem": "Arquivo não encontrado."}})
+		return
+	}
+	arq, existe := det.Submissao.Arquivos[ordemStr]
+	if !existe || len(arq.Conteudo) == 0 {
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"erro": gin.H{"codigo": "NAO_ENCONTRADO", "mensagem": "Arquivo não encontrado."}})
+		return
+	}
+	enviarArquivoDownload(c, arq.NomeArquivo, arq.MimeType, arq.Conteudo)
 }
 
 // ingerirSubmissaoMonitor: POST /v1/interna/monitor/submissoes — ingestão assíncrona/direta do Monitor.
@@ -258,7 +301,11 @@ func (d *Dependencies) ingerirSubmissaoMonitor(c *gin.Context) {
 	}
 	mac := c.GetHeader(contract.HeaderMAC)
 	ts := c.GetHeader(contract.HeaderTime)
-	corpo, err := io.ReadAll(io.LimitReader(c.Request.Body, 10<<20))
+	maxBody := int64(64 << 20)
+	if d.Cfg != nil && d.Cfg.ArquivoMaxBytes*3 > maxBody {
+		maxBody = d.Cfg.ArquivoMaxBytes * 3
+	}
+	corpo, err := io.ReadAll(io.LimitReader(c.Request.Body, maxBody))
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"erro": gin.H{"codigo": "CORPO_INVALIDO", "mensagem": "Falha ao ler corpo da requisição."}})
 		return

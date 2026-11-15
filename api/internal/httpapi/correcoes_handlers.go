@@ -3,8 +3,10 @@ package httpapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/seno-project/seno/api/internal/correcoes"
 	"github.com/seno-project/seno/api/internal/judge0"
 	"github.com/seno-project/seno/api/internal/platform"
+	"github.com/seno-project/seno/contract"
 )
 
 // verCorrecao: GET /v1/submissoes/:id/correcao — visão completa do
@@ -127,6 +130,43 @@ func (d *Dependencies) minhaCorrecao(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, visao)
+}
+
+// baixarArquivoSubmissao: GET /v1/submissoes/:id/tarefas/:tarefa_id/arquivo —
+// devolve o arquivo anexado numa tarefa de submissão de arquivo.
+func (d *Dependencies) baixarArquivoSubmissao(c *gin.Context) {
+	user, _ := currentUser(c)
+	id, ok := idDaRota(c)
+	if !ok {
+		return
+	}
+	tarefaID, err := strconv.ParseInt(c.Param("tarefa_id"), 10, 64)
+	if err != nil || tarefaID < 1 {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+			"erro": gin.H{"codigo": "VALIDACAO", "mensagem": "ID de tarefa inválido."},
+		})
+		return
+	}
+	arq, err := d.CorrecaoS.ObterArquivoSubmissao(c.Request.Context(), user, id, tarefaID)
+	if err != nil {
+		platform.ErrorBody(c, err)
+		return
+	}
+	enviarArquivoDownload(c, arq.NomeArquivo, arq.MimeType, arq.Conteudo)
+}
+
+func enviarArquivoDownload(c *gin.Context, nomeArquivo, mimeType string, conteudo []byte) {
+	nome, _ := contract.SanitizarNomeArquivo(nomeArquivo)
+	if nome == "" {
+		nome = "submissao.bin"
+	}
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename=%q; filename*=UTF-8''%s`, nome, url.PathEscape(nome)))
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Header("Content-Length", strconv.Itoa(len(conteudo)))
+	c.Data(http.StatusOK, mimeType, conteudo)
 }
 
 // callbackJudge0: POST /v1/judge0/callback?key&par=ct:te — Judge0 envia
