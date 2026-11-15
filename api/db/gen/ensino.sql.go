@@ -240,7 +240,11 @@ SELECT t.id,
        p.ano       AS periodo_ano,
        up.first_name AS prof_first_name,
        up.last_name  AS prof_last_name,
-       uu.email       AS prof_email
+       uu.email       AS prof_email,
+       (SELECT count(*)
+        FROM matriculas mt
+        WHERE mt.turma_id = t.id
+          AND mt.saida_em IS NULL) AS total_alunos
 FROM turmas t
 JOIN materias m ON m.id = t.materia_id
 JOIN periodos_letivos p ON p.id = t.periodo_id
@@ -264,6 +268,7 @@ type GetTurmaRow struct {
 	ProfFirstName    string             `json:"prof_first_name"`
 	ProfLastName     string             `json:"prof_last_name"`
 	ProfEmail        string             `json:"prof_email"`
+	TotalAlunos      int64              `json:"total_alunos"`
 }
 
 func (q *Queries) GetTurma(ctx context.Context, id int64) (GetTurmaRow, error) {
@@ -284,6 +289,7 @@ func (q *Queries) GetTurma(ctx context.Context, id int64) (GetTurmaRow, error) {
 		&i.ProfFirstName,
 		&i.ProfLastName,
 		&i.ProfEmail,
+		&i.TotalAlunos,
 	)
 	return i, err
 }
@@ -531,7 +537,11 @@ SELECT t.id,
        p.ano       AS periodo_ano,
        up.first_name AS prof_first_name,
        up.last_name  AS prof_last_name,
-       uu.email       AS prof_email
+       uu.email       AS prof_email,
+       (SELECT count(*)
+        FROM matriculas mt
+        WHERE mt.turma_id = t.id
+          AND mt.saida_em IS NULL) AS total_alunos
 FROM turmas t
 JOIN materias m ON m.id = t.materia_id
 JOIN periodos_letivos p ON p.id = t.periodo_id
@@ -545,7 +555,7 @@ WHERE ($1::bigint IS NULL OR t.professor_id = $1::bigint)
     OR ($4::text = 'only' AND t.encerrado_em IS NOT NULL)
     OR ($4::text = 'all')
   )
-ORDER BY t.created_at DESC, t.id DESC
+ORDER BY (t.encerrado_em IS NULL) DESC, t.created_at DESC, t.id DESC
 LIMIT $6 OFFSET $5
 `
 
@@ -573,6 +583,7 @@ type ListTurmasRow struct {
 	ProfFirstName    string             `json:"prof_first_name"`
 	ProfLastName     string             `json:"prof_last_name"`
 	ProfEmail        string             `json:"prof_email"`
+	TotalAlunos      int64              `json:"total_alunos"`
 }
 
 func (q *Queries) ListTurmas(ctx context.Context, arg ListTurmasParams) ([]ListTurmasRow, error) {
@@ -606,6 +617,7 @@ func (q *Queries) ListTurmas(ctx context.Context, arg ListTurmasParams) ([]ListT
 			&i.ProfFirstName,
 			&i.ProfLastName,
 			&i.ProfEmail,
+			&i.TotalAlunos,
 		); err != nil {
 			return nil, err
 		}

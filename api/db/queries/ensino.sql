@@ -78,7 +78,11 @@ SELECT t.id,
        p.ano       AS periodo_ano,
        up.first_name AS prof_first_name,
        up.last_name  AS prof_last_name,
-       uu.email       AS prof_email
+       uu.email       AS prof_email,
+       (SELECT count(*)
+        FROM matriculas mt
+        WHERE mt.turma_id = t.id
+          AND mt.saida_em IS NULL) AS total_alunos
 FROM turmas t
 JOIN materias m ON m.id = t.materia_id
 JOIN periodos_letivos p ON p.id = t.periodo_id
@@ -100,7 +104,11 @@ SELECT t.id,
        p.ano       AS periodo_ano,
        up.first_name AS prof_first_name,
        up.last_name  AS prof_last_name,
-       uu.email       AS prof_email
+       uu.email       AS prof_email,
+       (SELECT count(*)
+        FROM matriculas mt
+        WHERE mt.turma_id = t.id
+          AND mt.saida_em IS NULL) AS total_alunos
 FROM turmas t
 JOIN materias m ON m.id = t.materia_id
 JOIN periodos_letivos p ON p.id = t.periodo_id
@@ -114,7 +122,7 @@ WHERE (sqlc.narg('professor')::bigint IS NULL OR t.professor_id = sqlc.narg('pro
     OR (sqlc.narg('encerradas')::text = 'only' AND t.encerrado_em IS NOT NULL)
     OR (sqlc.narg('encerradas')::text = 'all')
   )
-ORDER BY t.created_at DESC, t.id DESC
+ORDER BY (t.encerrado_em IS NULL) DESC, t.created_at DESC, t.id DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CountTurmas :one

@@ -84,9 +84,10 @@ func turmaDe(row gen.ListTurmasRow) Turma {
 			Codigo: row.MateriaCodigo,
 			Nome:   row.MateriaNome,
 		},
-		Trimestre: row.PeriodoTrimestre,
-		Ano:       row.PeriodoAno,
-		Titulo:    titulo,
+		Trimestre:   row.PeriodoTrimestre,
+		Ano:         row.PeriodoAno,
+		Titulo:      titulo,
+		TotalAlunos: row.TotalAlunos,
 		Professor: Professor{
 			ID:        row.ProfessorID,
 			Email:     row.ProfEmail,
@@ -114,6 +115,7 @@ func turmaDeGet(row gen.GetTurmaRow) Turma {
 		ProfFirstName:    row.ProfFirstName,
 		ProfLastName:     row.ProfLastName,
 		ProfEmail:        row.ProfEmail,
+		TotalAlunos:      row.TotalAlunos,
 	})
 }
 

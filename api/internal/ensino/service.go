@@ -81,6 +81,7 @@ type Turma struct {
 	Trimestre   int16      `json:"trimestre"`
 	Ano         int16      `json:"ano"`
 	Titulo      string     `json:"titulo,omitempty"`
+	TotalAlunos int64      `json:"total_alunos"`
 	Professor   Professor  `json:"professor"`
 	EncerradoEm *time.Time `json:"encerrado_em,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
