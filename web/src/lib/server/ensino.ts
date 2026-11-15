@@ -31,6 +31,7 @@ export interface Turma {
   trimestre: number;
   ano: number;
   titulo?: string;
+  total_alunos?: number;
   professor: Professor;
   encerrado_em?: string | null;
   created_at: string;

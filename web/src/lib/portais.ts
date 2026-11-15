@@ -56,13 +56,9 @@ export const PORTAIS: Record<PortalId, PortalDef> = {
     nav: [
       { rotulo: "Início", href: "/professor" },
       {
-        rotulo: "Minhas turmas",
+        rotulo: "Turmas",
         href: "/professor/turmas",
         descricao: "Painel, alunos e análises de cada turma.",
-        sub: [
-          { rotulo: "Listar turmas", href: "/professor/turmas" },
-          { rotulo: "Criar turma", href: "/professor/turmas/nova" },
-        ],
       },
       {
         rotulo: "Banco de tarefas",
