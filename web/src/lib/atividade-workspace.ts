@@ -8,6 +8,7 @@ export interface AtributoAtividade {
 export interface TarefaSimples {
   id: number;
   nome: string;
+  tipo?: "programacao" | "arquivo_submissao";
 }
 
 /**
@@ -139,7 +140,7 @@ export function serializarAtributos(atributos: AtributoAtividade[]): string {
       const numPts = Number(a.valor_pts);
       const safePts =
         Number.isFinite(numPts) && numPts >= 0 ? Math.floor(numPts) : 10;
-      const safeLing = ["python", "c", "cpp"].includes(a.linguagem)
+      const safeLing = ["python", "c", "cpp", ""].includes(a.linguagem)
         ? a.linguagem
         : "python";
       return {

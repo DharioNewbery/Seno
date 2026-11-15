@@ -220,11 +220,29 @@ export async function listarAlunos(
 
 // --------------------------- tarefas -----------------------------------
 
+export type TipoTarefa = "programacao" | "arquivo_submissao";
+
+export interface ConfigTarefaArquivo {
+  extensoes_permitidas: string[];
+  max_bytes: number;
+}
+
+export interface ArquivoSubmissaoMeta {
+  tarefa_ordem?: number;
+  nome_arquivo: string;
+  mime_type: string;
+  tamanho_bytes: number;
+  sha256: string;
+  enviado_em?: string;
+}
+
 export interface Tarefa {
   id: number;
   professor_id?: number;
   nome: string;
   enunciado?: string;
+  tipo?: TipoTarefa;
+  config_arquivo?: ConfigTarefaArquivo | null;
   tempo_cpu_ms?: number;
   tempo_total_ms?: number;
   memoria_mb?: number;
@@ -276,6 +294,8 @@ export async function criarTarefa(
   cad: {
     nome: string;
     enunciado: string;
+    tipo?: TipoTarefa;
+    config_arquivo?: ConfigTarefaArquivo;
     tempo_cpu_ms?: number;
     tempo_total_ms?: number;
     memoria_mb?: number;
@@ -319,6 +339,8 @@ export async function editarTarefa(
   cad: {
     nome: string;
     enunciado: string;
+    tipo?: TipoTarefa;
+    config_arquivo?: ConfigTarefaArquivo;
     tempo_cpu_ms?: number;
     tempo_total_ms?: number;
     memoria_mb?: number;
@@ -371,6 +393,8 @@ export interface TarefaAtividade {
   linguagem: string;
   tarefa_nome?: string;
   tarefa_enunciado?: string;
+  tarefa_tipo?: TipoTarefa;
+  config_arquivo?: ConfigTarefaArquivo | null;
   tarefa_excluida?: string;
 }
 
@@ -810,6 +834,7 @@ export interface DetalhesSubmissaoMonitor {
     entregue_em: string;
     atrasada: boolean;
     respostas: Record<string, string>;
+    arquivos?: ArquivoSubmissaoMeta[];
   };
   correcao?: {
     status: string;
@@ -838,6 +863,8 @@ export interface DetalhesSubmissaoMonitor {
     tarefas: {
       ordem: number;
       nome: string;
+      tipo?: TipoTarefa;
+      config_arquivo?: ConfigTarefaArquivo | null;
       enunciado: string;
       linguagem: string;
       valor_pts: number;
@@ -878,8 +905,11 @@ export interface CorrecaoTarefa {
   id: number;
   tarefa_id: number;
   tarefa_nome: string;
+  tarefa_tipo?: TipoTarefa;
+  config_arquivo?: ConfigTarefaArquivo | null;
   enunciado?: string;
   codigo?: string;
+  arquivo?: ArquivoSubmissaoMeta | null;
   valor_pts: number;
   nota_auto?: number;
   nota_final?: number;

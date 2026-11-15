@@ -66,3 +66,12 @@ export function prazoRelativo(
   const tom: TomPrazo = !futuro ? "vencido" : ms < 48 * 3_600_000 ? "breve" : "folga";
   return { rotulo, tom };
 }
+
+/** Formata tamanho em bytes (B, KB, MB). */
+export function formatarBytes(bytes: number | null | undefined): string {
+  const n = Number(bytes ?? 0);
+  if (!Number.isFinite(n) || n <= 0) return "0 B";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
