@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { extrairLimite } from "#lib/server/ensino";
 import { formatarBytes } from "#lib/formato";
+import {
+  adicionarTesteNaLista,
+  ajustarIndiceTeste,
+  atualizarTesteNaLista,
+  navegarIndiceTeste,
+  removerTesteDaLista,
+  type TesteFormulario,
+} from "#lib/tarefas-testes";
 
 describe("Criação de nova tarefa - extração de limites padrão", () => {
   it("usa valores padrão quando os campos não são enviados (null no FormData)", () => {
@@ -97,5 +105,63 @@ describe("Criação de nova tarefa - extração de limites padrão", () => {
     expect(formatarBytes(512)).toBe("512 B");
     expect(formatarBytes(2048)).toBe("2.0 KB");
     expect(formatarBytes(10 * 1024 * 1024)).toBe("10.0 MB");
+  });
+});
+
+describe("Visualização unitária e edição de testes (tarefas-testes)", () => {
+  const base: TesteFormulario[] = [
+    { stdin: "1\n2", stdout: "3", publico: true },
+    { stdin: "5\n5", stdout: "10", publico: false },
+    { stdin: "10\n20", stdout: "30", publico: true },
+  ];
+
+  it("navega com setas esquerda/direita respeitando os limites", () => {
+    expect(navegarIndiceTeste(0, -1, 3)).toBe(0);
+    expect(navegarIndiceTeste(0, 1, 3)).toBe(1);
+    expect(navegarIndiceTeste(1, 1, 3)).toBe(2);
+    expect(navegarIndiceTeste(2, 1, 3)).toBe(2);
+    expect(navegarIndiceTeste(2, -1, 3)).toBe(1);
+    expect(ajustarIndiceTeste(5, 0)).toBe(0);
+  });
+
+  it("adiciona teste ao final e posiciona o visor no novo teste", () => {
+    const res = adicionarTesteNaLista(base, {
+      stdin: "7\n8",
+      stdout: "15",
+      publico: false,
+    });
+    expect(res.lista).toHaveLength(4);
+    expect(res.indice).toBe(3);
+    expect(res.lista[3]).toEqual({
+      stdin: "7\n8",
+      stdout: "15",
+      publico: false,
+    });
+  });
+
+  it("edita um teste existente mantendo o índice selecionado", () => {
+    const res = atualizarTesteNaLista(base, 1, {
+      stdin: "6\n6",
+      stdout: "12",
+      publico: true,
+    });
+    expect(res.lista).toHaveLength(3);
+    expect(res.indice).toBe(1);
+    expect(res.lista[1]).toEqual({
+      stdin: "6\n6",
+      stdout: "12",
+      publico: true,
+    });
+  });
+
+  it("remove um teste e reajusta o índice caso o último seja removido", () => {
+    const resUltimo = removerTesteDaLista(base, 2);
+    expect(resUltimo.lista).toHaveLength(2);
+    expect(resUltimo.indice).toBe(1);
+
+    const resMeio = removerTesteDaLista(base, 0);
+    expect(resMeio.lista).toHaveLength(2);
+    expect(resMeio.indice).toBe(0);
+    expect(resMeio.lista[0]?.stdout).toBe("10");
   });
 });
