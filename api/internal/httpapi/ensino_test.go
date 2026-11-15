@@ -70,6 +70,9 @@ func TestEnsinoTurmasMatriculas(t *testing.T) {
 	if mat, _ := turma["materia"].(map[string]any); mat["nome"] != "Programação I (nova grade)" {
 		t.Errorf("materia na turma: %v", turma["materia"])
 	}
+	if intOf(turma["total_alunos"]) != 0 {
+		t.Errorf("total_alunos inicial deveria ser 0: %v", turma["total_alunos"])
+	}
 	idTurma := int64(turma["id"].(float64))
 
 	// Dona: lista 1; Bruno (não-dono): lista 0 e ver → 404.
@@ -134,6 +137,14 @@ func TestEnsinoTurmasMatriculas(t *testing.T) {
 	if w.Code != http.StatusOK || intOf(body["total"]) != 1 {
 		t.Errorf("matriculas da dona: %d %v", w.Code, body["total"])
 	}
+	w, body = chama(t, r, "GET", "/v1/turmas/"+intStr(idTurma), "", autenticado(tokPaula))
+	if w.Code != http.StatusOK || intOf(body["total_alunos"]) != 1 {
+		t.Errorf("total_alunos após matrícula deveria ser 1: %d %v", w.Code, body["total_alunos"])
+	}
+	w, body = chama(t, r, "GET", "/v1/turmas", "", autenticado(tokPaula))
+	if ts, _ := body["turmas"].([]any); len(ts) != 1 || intOf(ts[0].(map[string]any)["total_alunos"]) != 1 {
+		t.Errorf("total_alunos na listagem deveria ser 1: %v", body["turmas"])
+	}
 	w, body = chama(t, r, "GET", "/v1/turmas/"+intStr(idTurma)+"/matriculas",
 		"", autenticado(tokSuper))
 	if w.Code != http.StatusOK || intOf(body["total"]) != 1 {
@@ -144,6 +155,10 @@ func TestEnsinoTurmasMatriculas(t *testing.T) {
 	w, _ = chama(t, r, "DELETE", "/v1/matriculas/"+intStr(idMat), "", autenticado(tokSuper))
 	if w.Code != http.StatusNoContent {
 		t.Errorf("encerrar matrícula: status %d", w.Code)
+	}
+	w, body = chama(t, r, "GET", "/v1/turmas/"+intStr(idTurma), "", autenticado(tokPaula))
+	if w.Code != http.StatusOK || intOf(body["total_alunos"]) != 0 {
+		t.Errorf("total_alunos após encerrar matrícula deveria ser 0: %d %v", w.Code, body["total_alunos"])
 	}
 	w, body = chama(t, r, "GET", "/v1/turmas/"+intStr(idTurma)+"/matriculas",
 		"", autenticado(tokPaula))
