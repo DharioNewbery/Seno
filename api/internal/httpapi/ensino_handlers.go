@@ -309,6 +309,50 @@ func (d *Dependencies) MatricularTurma(c *gin.Context) {
 	c.JSON(http.StatusCreated, mat)
 }
 
+// ConferirMatriculasTurma: POST /v1/turmas/:id/matriculas/conferir — dono|staff;
+// separa candidatos em alunos já existentes no banco e alunos novos a convidar.
+func (d *Dependencies) ConferirMatriculasTurma(c *gin.Context) {
+	user, _ := currentUser(c)
+	id, ok := idDaRota(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		Alunos []ensino.CadastroMatricula `json:"alunos"`
+	}
+	if !bindJSON(c, &req) {
+		return
+	}
+	res, err := d.Ensino.ConferirMatriculas(c.Request.Context(), user, id, req.Alunos)
+	if err != nil {
+		platform.ErrorBody(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, res)
+}
+
+// ReenviarConviteAlunoTurma: POST /v1/turmas/:id/alunos/:aluno_id/reenviar-convite — dono|staff;
+// reemite o convite para um aluno pendente matriculado na turma.
+func (d *Dependencies) ReenviarConviteAlunoTurma(c *gin.Context) {
+	user, _ := currentUser(c)
+	turmaID, ok := idDaRota(c)
+	if !ok {
+		return
+	}
+	alunoID, err := strconv.ParseInt(c.Param("aluno_id"), 10, 64)
+	if err != nil || alunoID < 1 {
+		platform.ErrorBody(c, platform.NewAPIError(
+			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+			"Identificador de aluno inválido."))
+		return
+	}
+	if err := d.Ensino.ReenviarConviteAluno(c.Request.Context(), user, turmaID, alunoID); err != nil {
+		platform.ErrorBody(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 // EncerrarMatricula: DELETE /v1/matriculas/:id — dono da turma|staff.
 func (d *Dependencies) EncerrarMatricula(c *gin.Context) {
 	user, _ := currentUser(c)

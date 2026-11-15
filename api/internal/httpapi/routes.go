@@ -84,6 +84,8 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	turmas.DELETE("/:id", deps.ExcluirTurma)
 	turmas.GET("/:id/matriculas", deps.ListarMatriculasTurma)
 	turmas.POST("/:id/matriculas", deps.MatricularTurma)
+	turmas.POST("/:id/matriculas/conferir", deps.ConferirMatriculasTurma)
+	turmas.POST("/:id/alunos/:aluno_id/reenviar-convite", deps.ReenviarConviteAlunoTurma)
 	turmas.GET("/:id/analytics", deps.TurmaAnalytics)
 	turmas.GET("/:id/alunos/:aluno_id/analytics", deps.AlunoTurmaAnalytics)
 

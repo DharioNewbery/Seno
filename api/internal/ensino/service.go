@@ -59,11 +59,43 @@ type Periodo struct {
 
 // Aluno é a visão do aluno dentro das matrículas.
 type Aluno struct {
-	ID        int64  `json:"id"`
-	Email     string `json:"email"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Status    string `json:"status"`
+	ID              int64  `json:"id"`
+	Email           string `json:"email"`
+	FirstName       string `json:"first_name"`
+	LastName        string `json:"last_name"`
+	Status          string `json:"status"`
+	ConviteExpirado bool   `json:"convite_expirado,omitempty"`
+}
+
+// AlunoExistenteConferencia descreve um aluno já cadastrado no banco durante
+// a conferência prévia de matrícula (individual ou CSV em lote).
+type AlunoExistenteConferencia struct {
+	ID              int64  `json:"id"`
+	Email           string `json:"email"`
+	FirstName       string `json:"first_name"`
+	LastName        string `json:"last_name"`
+	Status          string `json:"status"`
+	ConviteExpirado bool   `json:"convite_expirado,omitempty"`
+	JaMatriculado   bool   `json:"ja_matriculado"`
+	PodeMatricular  bool   `json:"pode_matricular"`
+	MotivoBloqueio  string `json:"motivo_bloqueio,omitempty"`
+}
+
+// AlunoNovoConferencia descreve um aluno ainda não cadastrado no sistema que
+// receberá convite ao confirmar a matrícula.
+type AlunoNovoConferencia struct {
+	Email           string `json:"email"`
+	FirstName       string `json:"first_name"`
+	LastName        string `json:"last_name"`
+	PodeConvidar    bool   `json:"pode_convidar"`
+	MotivoPendencia string `json:"motivo_pendencia,omitempty"`
+}
+
+// ConferenciaMatriculas separa os candidatos em alunos já existentes no banco
+// e novos alunos que serão convidados para o sistema.
+type ConferenciaMatriculas struct {
+	Existentes []AlunoExistenteConferencia `json:"existentes"`
+	Novos      []AlunoNovoConferencia      `json:"novos"`
 }
 
 // Professor é a visão do professor dono da turma.

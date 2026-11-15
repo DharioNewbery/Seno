@@ -359,6 +359,18 @@ func (s *Service) Matricular(ctx context.Context, actor domain.User, turmaID int
 					http.StatusUnprocessableEntity, platform.CodeUnprocessable,
 					"Usuário sem cargo de aluno.")
 			}
+		} else if row.Status == domain.StatusPending {
+			ativo, err := s.store.Q.HasActiveInviteToken(ctx, row.ID)
+			if err != nil {
+				return Matricula{}, err
+			}
+			if !ativo {
+				if err := s.recoverer.Invite(
+					ctx, email, row.FirstName, row.LastName, &actor.ID,
+				); err != nil {
+					return Matricula{}, err
+				}
+			}
 		}
 	case errors.Is(err, pgx.ErrNoRows):
 		if strings.TrimSpace(cad.FirstName) == "" || strings.TrimSpace(cad.LastName) == "" {
@@ -438,17 +450,173 @@ func (s *Service) ListarMatriculas(ctx context.Context, actor domain.User, turma
 		mats = append(mats, Matricula{
 			ID: row.ID,
 			Aluno: Aluno{
-				ID:        row.AlunoID,
-				Email:     row.AlunoEmail,
-				FirstName: row.AlunoFirstName,
-				LastName:  row.AlunoLastName,
-				Status:    row.AlunoStatus,
+				ID:              row.AlunoID,
+				Email:           row.AlunoEmail,
+				FirstName:       row.AlunoFirstName,
+				LastName:        row.AlunoLastName,
+				Status:          row.AlunoStatus,
+				ConviteExpirado: row.ConviteExpirado,
 			},
 			EntradaEm: row.EntradaEm.Time,
 			SaidaEm:   saida,
 		})
 	}
 	return ListaMatriculas{Total: int64(len(mats)), Matriculas: mats}, nil
+}
+
+// ConferirMatriculas analisa uma lista de candidatos (individual ou CSV em lote)
+// e retorna duas listas separadas: alunos já existentes no banco (com seus dados
+// e status de conta/convite) e alunos novos que serão convidados para o sistema.
+func (s *Service) ConferirMatriculas(
+	ctx context.Context, actor domain.User, turmaID int64, candidatos []CadastroMatricula,
+) (ConferenciaMatriculas, error) {
+	turma, err := s.VerTurma(ctx, actor, turmaID)
+	if err != nil {
+		return ConferenciaMatriculas{}, err
+	}
+	if turma.EncerradoEm != nil {
+		return ConferenciaMatriculas{}, platform.NewAPIError(
+			http.StatusConflict, platform.CodeConflict, "Turma encerrada.")
+	}
+	if len(candidatos) == 0 {
+		return ConferenciaMatriculas{}, platform.NewAPIError(
+			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+			"Informe pelo menos um aluno para conferência.")
+	}
+
+	existentes := make([]AlunoExistenteConferencia, 0)
+	novos := make([]AlunoNovoConferencia, 0)
+	vistos := make(map[string]bool, len(candidatos))
+
+	for _, c := range candidatos {
+		email := strings.ToLower(strings.TrimSpace(c.Email))
+		if email == "" || vistos[email] {
+			continue
+		}
+		vistos[email] = true
+		firstName := strings.TrimSpace(c.FirstName)
+		lastName := strings.TrimSpace(c.LastName)
+
+		if !strings.Contains(email, "@") {
+			novos = append(novos, AlunoNovoConferencia{
+				Email:           email,
+				FirstName:       firstName,
+				LastName:        lastName,
+				PodeConvidar:    false,
+				MotivoPendencia: "E-mail inválido.",
+			})
+			continue
+		}
+
+		row, err := s.store.Q.GetUserByEmail(ctx, email)
+		switch {
+		case err == nil:
+			jaMat, err := s.store.Q.HasMatriculaAtiva(ctx, gen.HasMatriculaAtivaParams{
+				TurmaID: turmaID,
+				AlunoID: row.ID,
+			})
+			if err != nil {
+				return ConferenciaMatriculas{}, err
+			}
+			var conviteExpirado bool
+			if row.Status == domain.StatusPending {
+				ativo, err := s.store.Q.HasActiveInviteToken(ctx, row.ID)
+				if err != nil {
+					return ConferenciaMatriculas{}, err
+				}
+				conviteExpirado = !ativo
+			}
+			pode := true
+			motivo := ""
+			if row.Status == domain.StatusDisabled || row.DisabledAt.Valid {
+				pode = false
+				motivo = "Conta bloqueada."
+			} else if jaMat {
+				pode = false
+				motivo = "Já matriculado nesta turma."
+			} else if row.Status == domain.StatusActive {
+				roles, err := s.store.Q.GetUserRoles(ctx, row.ID)
+				if err != nil {
+					return ConferenciaMatriculas{}, err
+				}
+				if !domain.HasAnyRole(rolesToSlice(roles), domain.RoleStudent) {
+					pode = false
+					motivo = "Usuário sem cargo de aluno."
+				}
+			}
+			existentes = append(existentes, AlunoExistenteConferencia{
+				ID:              row.ID,
+				Email:           row.Email,
+				FirstName:       row.FirstName,
+				LastName:        row.LastName,
+				Status:          row.Status,
+				ConviteExpirado: conviteExpirado,
+				JaMatriculado:   jaMat,
+				PodeMatricular:  pode,
+				MotivoBloqueio:  motivo,
+			})
+
+		case errors.Is(err, pgx.ErrNoRows):
+			pode := firstName != "" && lastName != ""
+			motivo := ""
+			if !pode {
+				motivo = "Informe nome e sobrenome para enviar o convite."
+			}
+			novos = append(novos, AlunoNovoConferencia{
+				Email:           email,
+				FirstName:       firstName,
+				LastName:        lastName,
+				PodeConvidar:    pode,
+				MotivoPendencia: motivo,
+			})
+
+		default:
+			return ConferenciaMatriculas{}, err
+		}
+	}
+
+	return ConferenciaMatriculas{
+		Existentes: existentes,
+		Novos:      novos,
+	}, nil
+}
+
+// ReenviarConviteAluno emite um novo convite para um aluno pendente matriculado
+// na turma (invalidando convites anteriores ou vencidos).
+func (s *Service) ReenviarConviteAluno(
+	ctx context.Context, actor domain.User, turmaID, alunoID int64,
+) error {
+	turma, err := s.VerTurma(ctx, actor, turmaID)
+	if err != nil {
+		return err
+	}
+	if turma.EncerradoEm != nil {
+		return platform.NewAPIError(
+			http.StatusConflict, platform.CodeConflict, "Turma encerrada.")
+	}
+	matriculado, err := s.store.Q.HasMatriculaAtiva(ctx, gen.HasMatriculaAtivaParams{
+		TurmaID: turmaID,
+		AlunoID: alunoID,
+	})
+	if err != nil {
+		return err
+	}
+	if !matriculado {
+		return matriculaNaoEncontrada()
+	}
+	row, err := s.store.Q.GetUserByID(ctx, alunoID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return matriculaNaoEncontrada()
+		}
+		return err
+	}
+	if row.Status != domain.StatusPending {
+		return platform.NewAPIError(
+			http.StatusConflict, platform.CodeConflict,
+			"Aluno já ativou a conta; o reenvio de convite aplica-se apenas a contas pendentes.")
+	}
+	return s.recoverer.Invite(ctx, row.Email, row.FirstName, row.LastName, &actor.ID)
 }
 
 // EncerrarMatricula encerra a matrícula ("remover aluno" — saída em).
