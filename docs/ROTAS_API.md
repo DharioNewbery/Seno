@@ -80,8 +80,10 @@ Class payloads (`Turma`) include `total_alunos` (count of active enrollments `sa
 | PATCH | `/v1/turmas/:id` | Edit class title | Owner or staff; 409 if class already closed |
 | POST | `/v1/turmas/:id/encerrar` | Close class | Owner or staff; 409 if already closed |
 | DELETE | `/v1/turmas/:id` | Delete class | Owner or staff; 409 if active enrollments |
-| GET | `/v1/turmas/:id/matriculas` | List enrollments (`incluir_encerradas`) | Owner or staff |
-| POST | `/v1/turmas/:id/matriculas` | Enroll student by email; unknown student becomes pending + invite | Owner or staff |
+| GET | `/v1/turmas/:id/matriculas` | List enrollments (`incluir_encerradas`; includes `convite_expirado` on `pending` students) | Owner or staff |
+| POST | `/v1/turmas/:id/matriculas` | Enroll student by email; unknown student becomes pending + invite; existing pending student with expired invite receives a new invite | Owner or staff |
+| POST | `/v1/turmas/:id/matriculas/conferir` | Pre-verifies candidate students (individual or CSV batch), returning two lists: `existentes` (found in DB with status and `convite_expirado`) and `novos` (to be invited) | Owner or staff |
+| POST | `/v1/turmas/:id/alunos/:aluno_id/reenviar-convite` | Re-issues a fresh 7-day invite token and email for a `pending` student enrolled in the class | Owner or staff |
 | GET | `/v1/turmas/:id/analytics` | Class analytics | Owner or staff |
 | GET | `/v1/turmas/:id/alunos/:aluno_id/analytics` | One student's analytics in the class | Owner or staff |
 

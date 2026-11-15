@@ -341,14 +341,16 @@ graph LR
 
     turmas --> cturma["criar nova turma (modal)"]
     turmas --> pturma["painel da turma"]
-    pturma --> eturmas["editar/excluir turma"]
+    pturma --> eturmas["configurações (modal: renomear, encerrar, excluir)"]
     
-    pturma --> aaluno["gerenciar alunos"]
-    aaluno --> aemail["adicionar por e-mail (convite)"]
+    pturma --> aaluno["seção alunos"]
+    aaluno --> aemail["modal adicionar (individual ou CSV c/ conferência de existentes vs novos)"]
+    aaluno --> rconvite["reenviar convite vencido"]
     aaluno --> raluno["remover aluno"]
 
-    pturma --> aatividade["atribuir atividade"]
-    aatividade --> cprazo["configurar prazo, duração, atraso e autocomplete"]
+    pturma --> aatividade["seção atividades"]
+    aatividade --> gpreview["grid de opções + modal de preview da atividade"]
+    gpreview --> cprazo["configurar prazo, duração, atraso e autocomplete"]
 
     pturma --> eatividade["entregas de atividades"]
     eatividade --> lrespostas["listar alunos que entregaram"]
@@ -358,12 +360,6 @@ graph LR
     cmanual --> gfeedback["adicionar feedback (geral e por tarefa)"]
     gfeedback --> confirmar["confirmar correção"]
     confirmar --> pnotas["publicar notas"]
-
-    pturma --> analytics["analytics"]
-    analytics --> atarefa["por tarefa"]
-    analytics --> aativ["por atividade"]
-    analytics --> aaluno2["por aluno"]
-    analytics --> aturma["por turma"]
 
     tarefas --> ctarefas["criar tarefa e testes"]
     tarefas --> ttarefa["testar tarefa (escolhe a linguagem)"]
