@@ -281,6 +281,10 @@ func (s *Service) montarDeRow(
 		if ordem <= 0 {
 			ordem = int32(idx + 1)
 		}
+		resultados := porCT[ct.ID]
+		if resultados == nil {
+			resultados = []Resultado{}
+		}
 		item := Tarefa{
 			ID: ct.ID, TarefaID: ct.TarefaID,
 			Ordem:      ordem,
@@ -293,7 +297,7 @@ func (s *Service) montarDeRow(
 			ValorPts:   ct.ValorPts,
 			NotaAuto:   notaPtr(ct.NotaAuto), NotaFinal: notaPtr(ct.NotaFinal),
 			Feedback:   textoPtr(ct.Feedback),
-			Resultados: porCT[ct.ID],
+			Resultados: resultados,
 		}
 		if tipo == contract.TipoTarefaArquivo {
 			var cfg contract.ConfigTarefaArquivo
