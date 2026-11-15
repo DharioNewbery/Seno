@@ -56,6 +56,10 @@ function ehTarefaArquivo(tarefa) {
   return Boolean(tarefa && tarefa.tipo === 'arquivo_submissao');
 }
 
+function ehTarefaCodigo(tarefa) {
+  return Boolean(tarefa && (!tarefa.tipo || tarefa.tipo === 'codigo'));
+}
+
 function formatarBytes(bytes) {
   const n = Number(bytes || 0);
   if (n < 1024) return `${n} B`;
@@ -518,6 +522,7 @@ function trocarParaTarefa(ordem) {
   const tarefa = obterTarefaAtual();
   if (!tarefa) return;
   const isArquivo = ehTarefaArquivo(tarefa);
+  const isCodigo = ehTarefaCodigo(tarefa);
 
   // Atualiza abas no header
   const nav = $('tarefas-nav');
@@ -527,10 +532,10 @@ function trocarParaTarefa(ordem) {
     });
   }
 
-  // Botão Testar Código no rodapé só faz sentido para tarefas de programação
+  // Botão Testar Código no rodapé só faz sentido para tarefas de codificação
   const btnTestar = $('btn-rodape-testar');
   if (btnTestar) {
-    btnTestar.hidden = isArquivo;
+    btnTestar.hidden = !isCodigo;
   }
 
   // 1. Painel Esquerdo (Enunciado, Limites e Exemplos)
@@ -570,14 +575,14 @@ function trocarParaTarefa(ordem) {
         </div>
       </div>
       <div class="enunciado-tarefa">${esc(tarefa.enunciado || 'Sem enunciado cadastrado.')}</div>
-      ${isArquivo ? '' : renderizarExemplos(tarefa)}
+      ${isCodigo ? renderizarExemplos(tarefa) : ''}
     `;
   }
 
   const btnHistorico = $('btn-historico');
   const consoleContainer = $('console-container');
-  if (btnHistorico) btnHistorico.hidden = isArquivo;
-  if (consoleContainer) consoleContainer.hidden = isArquivo;
+  if (btnHistorico) btnHistorico.hidden = !isCodigo;
+  if (consoleContainer) consoleContainer.hidden = !isCodigo;
 
   const wrap = $('editor-wrap');
   wrap.innerHTML = '';
@@ -1401,7 +1406,7 @@ window.addEventListener('keydown', (e) => {
   // Ctrl+Enter ou Cmd+Enter para testar código da tarefa ativa (apenas programação)
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
     const t = obterTarefaAtual();
-    if (!ehTarefaArquivo(t)) {
+    if (ehTarefaCodigo(t)) {
       e.preventDefault();
       testar(estado.tarefaAtiva);
     }
