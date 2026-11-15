@@ -28,6 +28,7 @@ import (
 	"github.com/seno-project/seno/api/internal/submissoes"
 	"github.com/seno-project/seno/api/internal/tarefas"
 	"github.com/seno-project/seno/api/internal/tentativas"
+	"github.com/seno-project/seno/api/internal/testar"
 	"github.com/seno-project/seno/api/internal/usuarios"
 )
 
@@ -91,6 +92,7 @@ func montaAPI(t *testing.T, pool *pgxpool.Pool) (*Dependencies, *gin.Engine) {
 	deps.Analytics = analytics.NewService(st)
 	judge0Cfg := judge0.CarregarConfigDasEnvLigada("", "", "", "http://localhost:5173")
 	deps.CorrecaoS = correcoes.New(st, audit, judge0.NewClient(judge0Cfg), judge0Cfg)
+	deps.TestarS = testar.New(st, audit, judge0.NewClient(judge0Cfg), judge0Cfg)
 	r := gin.New()
 	RegisterRoutes(r, deps)
 	return deps, r
