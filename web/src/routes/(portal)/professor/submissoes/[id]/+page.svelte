@@ -152,7 +152,8 @@
         {#if !publicada}
           <div class="botoes">
             <button type="submit" class="botao">Salvar correção</button>
-            <button type="submit" formaction="?/confirmar" class="botao verde">{cor?.confirmada_em ? "Reconfirmar validação" : "Confirmar / Validar"}</button>
+            <button type="submit" formaction="?/confirmar" class="botao">{cor?.confirmada_em ? "Reconfirmar validação" : "Confirmar / Validar"}</button>
+            <button type="submit" formaction="?/publicar" class="botao verde">Confirmar e publicar nota</button>
           </div>
         {/if}
       </form>

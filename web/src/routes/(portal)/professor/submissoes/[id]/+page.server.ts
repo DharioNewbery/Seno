@@ -86,6 +86,25 @@ export const actions: Actions = {
     if (!r.ok) return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
     return { ok: "Correção validada e confirmada com sucesso." };
   },
+  publicar: async (evento) => {
+    const token = tokenDaSessao(evento.cookies);
+    if (!token) return fail(401, { erro: "Sessão encerrada." });
+    const id = Number(evento.params.id);
+    const parse = await extrairEdicao(evento.request);
+    if ("erro" in parse && parse.erro) return fail(422, { erro: parse.erro });
+    if (parse.temCampos) {
+      const rEdit = await editarCorrecao(evento.request, token, id, parse.dados ?? {});
+      if (rEdit.status === 401) redirect(303, "/");
+      if (!rEdit.ok) return fail(rEdit.status || 500, { erro: mensagemDaApi(rEdit.body) });
+    }
+    const rConf = await acaoCorrecao(evento.request, token, id, "confirmar");
+    if (rConf.status === 401) redirect(303, "/");
+    if (!rConf.ok) return fail(rConf.status || 500, { erro: mensagemDaApi(rConf.body) });
+    const rPub = await acaoCorrecao(evento.request, token, id, "publicar");
+    if (rPub.status === 401) redirect(303, "/");
+    if (!rPub.ok) return fail(rPub.status || 500, { erro: mensagemDaApi(rPub.body) });
+    return { ok: "Correção confirmada e publicada para o aluno." };
+  },
   reexecutar: async (evento) => {
     const token = tokenDaSessao(evento.cookies);
     if (!token) return fail(401, { erro: "Sessão encerrada." });
