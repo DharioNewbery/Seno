@@ -46,6 +46,11 @@
   function delAtributo(i: number) {
     atributos = atributos.filter((_, idx) => idx !== i);
   }
+  function ehArquivo(tarefaId: number | null): boolean {
+    if (tarefaId == null) return false;
+    const t = data.tarefas.find((x) => x.id === tarefaId);
+    return t?.tipo === "arquivo_submissao";
+  }
 
   let confirmando = $state(false);
 </script>
@@ -95,18 +100,36 @@
         {#each atributos as a, i (i)}
           <div class="tarefa">
             <span class="num">{i + 1}</span>
-            <select required bind:value={a.tarefa_id}>
+            <select
+              required
+              bind:value={a.tarefa_id}
+              onchange={() => {
+                if (ehArquivo(a.tarefa_id)) {
+                  a.linguagem = "";
+                } else if (!a.linguagem) {
+                  a.linguagem = "python";
+                }
+              }}
+            >
               <option value={null} disabled selected>Escolha a tarefa</option>
               {#each data.tarefas as t (t.id)}
-                <option value={t.id}>#{t.id} — {t.nome}</option>
+                <option value={t.id}>
+                  #{t.id} — {t.nome} {t.tipo === "arquivo_submissao" ? "(Arquivo)" : ""}
+                </option>
               {/each}
             </select>
             <input type="number" min="0" bind:value={a.valor_pts} title="Valor (pontos)" />
-            <select bind:value={a.linguagem} title="Linguagem">
-              <option value="python">Python</option>
-              <option value="c">C</option>
-              <option value="cpp">C++</option>
-            </select>
+            {#if ehArquivo(a.tarefa_id)}
+              <span style="font-size:0.8rem;color:var(--seno-gray-600);text-align:center;">
+                Arquivo
+              </span>
+            {:else}
+              <select bind:value={a.linguagem} title="Linguagem">
+                <option value="python">Python</option>
+                <option value="c">C</option>
+                <option value="cpp">C++</option>
+              </select>
+            {/if}
             <button type="button" class="peq vermelho" onclick={() => delAtributo(i)}>
               Remover
             </button>

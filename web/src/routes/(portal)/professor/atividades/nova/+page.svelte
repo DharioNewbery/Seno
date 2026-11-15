@@ -110,11 +110,13 @@
   }
 
   function addTarefaDoWorkspace(id: number) {
+    const t = tarefaDe(id);
     const res = moverWorkspaceParaAtividade(
       workspaceTarefas,
       atributos,
       id,
       atributos.length,
+      t?.tipo === "arquivo_submissao" ? { linguagem: "" } : undefined,
     );
     workspaceTarefas = res.workspace;
     atributos = res.atributos;
@@ -214,11 +216,13 @@
     const targetIdx = dropTargetIndex ?? atributos.length;
 
     if (dragging.tipo === "workspace") {
+      const t = tarefaDe(dragging.id);
       const res = moverWorkspaceParaAtividade(
         workspaceTarefas,
         atributos,
         dragging.id,
         targetIdx,
+        t?.tipo === "arquivo_submissao" ? { linguagem: "" } : undefined,
       );
       workspaceTarefas = res.workspace;
       atributos = res.atributos;
@@ -352,7 +356,9 @@
 
                   <div class="direita">
                     <span class="badge-pontos">{a.valor_pts} pts</span>
-                    <span class="badge-ling">{lingLabel(a.linguagem)}</span>
+                    <span class="badge-ling">
+                      {t?.tipo === "arquivo_submissao" ? "Submissão de arquivo" : lingLabel(a.linguagem)}
+                    </span>
                     <span class="chevron" class:rotacionado={a.expandida} title="Expandir/Recolher">▼</span>
                   </div>
                 </button>
@@ -382,16 +388,25 @@
                       />
                     </label>
 
-                    <label class="campo-ling">
-                      <span>Linguagem permitida</span>
-                      <select
-                        bind:value={a.linguagem}
-                      >
-                        <option value="python">Python</option>
-                        <option value="c">C</option>
-                        <option value="cpp">C++</option>
-                      </select>
-                    </label>
+                    {#if t?.tipo === "arquivo_submissao"}
+                      <div class="campo-ling">
+                        <span>Tipo de resposta</span>
+                        <span class="badge-ling" style="display:inline-block;padding:0.45rem 0.7rem;">
+                          Submissão de arquivo (sem linguagem de programação)
+                        </span>
+                      </div>
+                    {:else}
+                      <label class="campo-ling">
+                        <span>Linguagem permitida</span>
+                        <select
+                          bind:value={a.linguagem}
+                        >
+                          <option value="python">Python</option>
+                          <option value="c">C</option>
+                          <option value="cpp">C++</option>
+                        </select>
+                      </label>
+                    {/if}
                   </div>
 
                   <div class="acoes-linha">

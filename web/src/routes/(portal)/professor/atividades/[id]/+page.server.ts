@@ -36,8 +36,15 @@ export const load: PageServerLoad = async ({ locals, cookies, request, params })
     return {
       id,
       atividade: (ra.body as { nome?: string; tarefas?: unknown[] } | null) ?? null,
-      tarefas: (rt.body as { tarefas?: { id: number; nome: string }[] } | null)
-        ?.tarefas ?? [],
+      tarefas: (
+        rt.body as {
+          tarefas?: {
+            id: number;
+            nome: string;
+            tipo?: "programacao" | "arquivo_submissao";
+          }[];
+        } | null
+      )?.tarefas ?? [],
       erro: ra.ok ? null : mensagemDaApi(ra.body),
     };
   } catch {
@@ -66,7 +73,7 @@ export const actions: Actions = {
         (a) =>
           Number.isInteger(a?.tarefa_id) &&
           Number.isInteger(a?.valor_pts) &&
-          ["python", "c", "cpp"].includes(a?.linguagem),
+          ["python", "c", "cpp", ""].includes(a?.linguagem ?? ""),
       )
     ) {
       return fail(422, { erro: "Tarefas inválidas: verifique linguagem/pontos." });

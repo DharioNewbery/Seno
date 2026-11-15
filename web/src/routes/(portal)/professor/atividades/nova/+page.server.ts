@@ -21,8 +21,15 @@ export const load: PageServerLoad = async ({ locals, cookies, request }) => {
     const r = await listarTarefas(request, token);
     if (r.status === 401) redirect(303, "/");
     return {
-      tarefas: (r.body as { tarefas?: { id: number; nome: string }[] } | null)
-        ?.tarefas ?? [],
+      tarefas: (
+        r.body as {
+          tarefas?: {
+            id: number;
+            nome: string;
+            tipo?: "programacao" | "arquivo_submissao";
+          }[];
+        } | null
+      )?.tarefas ?? [],
       erro: r.ok ? null : mensagemDaApi(r.body),
     };
   } catch {
@@ -43,7 +50,7 @@ function lerAtributos(bruto: FormDataEntryValue | null): Atributo[] | null {
       const linguagem = String(item.linguagem ?? "");
       if (!Number.isInteger(tarefa_id) || tarefa_id < 1) return null;
       if (!Number.isInteger(valor_pts) || valor_pts < 0) return null;
-      if (!["python", "c", "cpp"].includes(linguagem)) return null;
+      if (!["python", "c", "cpp", ""].includes(linguagem)) return null;
       lista.push({ tarefa_id, valor_pts, linguagem });
     }
     return lista;
