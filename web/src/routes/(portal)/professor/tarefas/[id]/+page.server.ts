@@ -8,17 +8,11 @@ import {
   excluirTarefa,
   mensagemDaApi,
   verTarefaBruta,
-  testarTarefaProfessor,
   obterAnalyticsTarefa,
   type TarefaAnalytics,
 } from "#lib/server/ensino";
 import { tokenDaSessao } from "#lib/server/sessao";
-
-interface Teste {
-  stdin: string;
-  stdout: string;
-  publico: boolean;
-}
+import type { TesteFormulario } from "#lib/tarefas-testes";
 
 export const load: PageServerLoad = async ({ locals, cookies, request, params }) => {
   if (!locals.usuario) redirect(303, "/");
@@ -95,7 +89,7 @@ export const actions: Actions = {
       }
       return { ok: "Tarefa atualizada." };
     }
-    let testes: Teste[] = [];
+    let testes: TesteFormulario[] = [];
     const bruto = form.get("testes");
     if (typeof bruto === "string" && bruto.trim() !== "") {
       try {
@@ -114,7 +108,7 @@ export const actions: Actions = {
       nome,
       enunciado,
       tipo: "programacao",
-      testes: testes.map((t: Teste) => ({
+      testes: testes.map((t: TesteFormulario) => ({
         stdin: t.stdin,
         stdout_esperado: t.stdout,
         publico: Boolean(t.publico),
@@ -157,23 +151,5 @@ export const actions: Actions = {
     return fail(r.status || 500, {
       erro: mensagemDaApi(r.body, "Não foi possível excluir."),
     });
-  },
-  /** Testar no banco: linguagem à escolha, todos os testes, sem histórico. */
-  testar: async (evento) => {
-    const token = tokenDaSessao(evento.cookies);
-    if (!token) return fail(401, { erro: "Sessão encerrada." });
-    const id = Number(evento.params.id);
-    const form = await evento.request.formData();
-    const linguagem = String(form.get("linguagem") ?? "python");
-    const codigo = String(form.get("codigo_teste") ?? "");
-    const r = await testarTarefaProfessor(evento.request, token, id, {
-      linguagem,
-      codigo,
-    });
-    if (r.status === 401) redirect(303, "/");
-    if (r.ok) {
-      return { testado: true, resultados: r.body as unknown };
-    }
-    return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
   },
 };
