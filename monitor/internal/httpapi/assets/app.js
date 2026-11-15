@@ -26,6 +26,10 @@ const ICONES = {
   memoria: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 19v-3"/><path d="M10 19v-3"/><path d="M14 19v-3"/><path d="M18 19v-3"/><path d="M2 12V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v6"/><rect x="2" y="12" width="20" height="8" rx="2"/></svg>`,
   chevronBaixo: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`,
   chevronCima: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>`,
+  arquivo: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
+  upload: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
+  download: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+  lixeira: `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
 };
 
 const estado = {
@@ -34,6 +38,7 @@ const estado = {
   revisao: 0,
   restantes: null,       // segundos restantes
   respostas: {},         // ordem (string/number) → código
+  arquivos: {},          // ordem (string/number) → ArquivoTentativaMeta
   preId: null,           // pré-avaliação ativa
   suja: false,
   bloqueada: null,       // detail de bloqueio
@@ -43,7 +48,20 @@ const estado = {
   instanciaEditor: null, // editor CodeMirror ativo
   consoleMinimizado: false,
   executandoTeste: false,
+  enviandoArquivo: false,
+  erroArquivo: '',
 };
+
+function ehTarefaArquivo(tarefa) {
+  return Boolean(tarefa && tarefa.tipo === 'arquivo_submissao');
+}
+
+function formatarBytes(bytes) {
+  const n = Number(bytes || 0);
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 // -------------------------------------------------------- local autosave ----
 
@@ -138,8 +156,13 @@ function mmss(total) {
 }
 
 function linkExterno(caminho) {
+  if (!caminho) return null;
+  const s = String(caminho).trim();
+  if (/^https?:\/\//i.test(s)) {
+    return s;
+  }
   if (WEB) {
-    return WEB.replace(/\/$/, '') + (caminho.startsWith('/') ? '' : '/') + caminho;
+    return WEB.replace(/\/$/, '') + (s.startsWith('/') ? '' : '/') + s;
   }
   return null;
 }
@@ -280,6 +303,7 @@ async function abrir() {
       estado.regras = r.json.regras || {};
       estado.revisao = tent.revisao;
       estado.respostas = tent.respostas || {};
+      estado.arquivos = tent.arquivos || {};
 
       const local = await obterLocal();
       if (local && local.pendente && local.revisao >= estado.revisao) {
@@ -465,6 +489,12 @@ function renderizarAbasHeader() {
 }
 
 function obterClasseStatusDot(ordem) {
+  const tarefa = estado.carga && estado.carga.tarefas
+    ? estado.carga.tarefas.find((t) => t.ordem === ordem)
+    : null;
+  if (ehTarefaArquivo(tarefa)) {
+    return estado.arquivos[String(ordem)] ? 'passou' : 'vazio';
+  }
   const res = estado.resultados[ordem];
   if (res && res.status === 'pronto') {
     const total = res.resultados.length;
@@ -484,8 +514,10 @@ function trocarParaTarefa(ordem) {
   }
 
   estado.tarefaAtiva = ordem;
+  estado.erroArquivo = '';
   const tarefa = obterTarefaAtual();
   if (!tarefa) return;
+  const isArquivo = ehTarefaArquivo(tarefa);
 
   // Atualiza abas no header
   const nav = $('tarefas-nav');
@@ -495,12 +527,35 @@ function trocarParaTarefa(ordem) {
     });
   }
 
+  // Botão Testar Código no rodapé só faz sentido para tarefas de programação
+  const btnTestar = $('btn-rodape-testar');
+  if (btnTestar) {
+    btnTestar.hidden = isArquivo;
+  }
+
   // 1. Painel Esquerdo (Enunciado, Limites e Exemplos)
   const painelEsq = $('painel-esquerdo');
   if (painelEsq) {
     const atv = estado.carga;
-    const cpu = tarefa.limites?.tempo_cpu_ms ? `${tarefa.limites.tempo_cpu_ms} ms CPU` : '2000 ms CPU';
-    const ram = tarefa.limites?.memoria_mb ? `${tarefa.limites.memoria_mb} MB RAM` : '256 MB RAM';
+    let metaTagsHTML = `<span class="tag tag-pts">${ICONES.estrela} ${tarefa.valor_pts} pts</span>`;
+    if (isArquivo) {
+      const cfg = tarefa.config_arquivo || {};
+      const exts = (cfg.extensoes_permitidas || []).join(', ') || 'qualquer permitido';
+      const maxB = cfg.max_bytes ? formatarBytes(cfg.max_bytes) : '10.0 MB';
+      metaTagsHTML += `
+        <span class="tag tag-ling">${ICONES.arquivo} Submissão de arquivo</span>
+        <span class="tag">Máx: ${esc(maxB)}</span>
+        <span class="tag">Formatos: ${esc(exts)}</span>
+      `;
+    } else {
+      const cpu = tarefa.limites?.tempo_cpu_ms ? `${tarefa.limites.tempo_cpu_ms} ms CPU` : '2000 ms CPU';
+      const ram = tarefa.limites?.memoria_mb ? `${tarefa.limites.memoria_mb} MB RAM` : '256 MB RAM';
+      metaTagsHTML += `
+        <span class="tag tag-ling">${ICONES.codigo} ${esc(tarefa.linguagem)}</span>
+        <span class="tag">${ICONES.cpu} ${cpu}</span>
+        <span class="tag">${ICONES.memoria} ${ram}</span>
+      `;
+    }
 
     painelEsq.innerHTML = `
       ${atv.enunciado ? `
@@ -511,21 +566,30 @@ function trocarParaTarefa(ordem) {
       <div class="tarefa-cabecalho">
         <h2 class="tarefa-titulo">${tarefa.ordem}. ${esc(tarefa.nome)}</h2>
         <div class="tarefa-meta">
-          <span class="tag tag-pts">${ICONES.estrela} ${tarefa.valor_pts} pts</span>
-          <span class="tag tag-ling">${ICONES.codigo} ${esc(tarefa.linguagem)}</span>
-          <span class="tag">${ICONES.cpu} ${cpu}</span>
-          <span class="tag">${ICONES.memoria} ${ram}</span>
+          ${metaTagsHTML}
         </div>
       </div>
       <div class="enunciado-tarefa">${esc(tarefa.enunciado || 'Sem enunciado cadastrado.')}</div>
-      ${renderizarExemplos(tarefa)}
+      ${isArquivo ? '' : renderizarExemplos(tarefa)}
     `;
   }
 
-  // 2. Editor de Código
-  $('editor-ling-badge').textContent = tarefa.linguagem || 'Código';
+  const btnHistorico = $('btn-historico');
+  const consoleContainer = $('console-container');
+  if (btnHistorico) btnHistorico.hidden = isArquivo;
+  if (consoleContainer) consoleContainer.hidden = isArquivo;
+
   const wrap = $('editor-wrap');
   wrap.innerHTML = '';
+
+  if (isArquivo) {
+    $('editor-ling-badge').textContent = 'Submissão de Arquivo';
+    renderizarPainelArquivo(wrap, tarefa);
+    return;
+  }
+
+  // 2. Editor de Código (programação)
+  $('editor-ling-badge').textContent = tarefa.linguagem || 'Código';
 
   const codigoSalvo = estado.respostas[String(ordem)] ?? '';
   const autocomplete = Boolean(estado.regras && estado.regras.autocomplete);
@@ -571,6 +635,218 @@ function trocarParaTarefa(ordem) {
 
   // 4. Renderiza Console de Testes
   renderizarConsoleTestes();
+}
+
+function renderizarPainelArquivo(wrap, tarefa) {
+  const ordem = tarefa.ordem;
+  const arq = estado.arquivos[String(ordem)] || null;
+  const cfg = tarefa.config_arquivo || {};
+  const exts = cfg.extensoes_permitidas || ['.pdf', '.zip', '.txt', '.md', '.py', '.c', '.cpp', '.png', '.jpg'];
+  const maxBytes = cfg.max_bytes || 10 * 1024 * 1024;
+  const acceptAttr = exts.join(',');
+  const urlDownload = `/a/atividade/${encodeURIComponent(MID)}/tarefas/${encodeURIComponent(ordem)}/arquivo`;
+
+  wrap.innerHTML = `
+    <div class="painel-arquivo">
+      <div class="painel-arquivo-card">
+        <div class="painel-arquivo-topo">
+          <h3>${ICONES.arquivo} Anexo da Tarefa ${ordem}</h3>
+          <p class="mudo">
+            Extensões permitidas: <b>${esc(exts.join(', '))}</b> · Tamanho máximo: <b>${esc(formatarBytes(maxBytes))}</b>
+          </p>
+        </div>
+
+        ${estado.erroArquivo ? `
+          <div class="alerta-arquivo-erro">
+            ${ICONES.alerta} <span>${esc(estado.erroArquivo)}</span>
+          </div>
+        ` : ''}
+
+        ${arq ? `
+          <div class="arquivo-anexado-box">
+            <div class="arquivo-anexado-info">
+              <div class="arquivo-anexado-nome">
+                ${ICONES.check} <strong>${esc(arq.nome_arquivo)}</strong>
+              </div>
+              <div class="arquivo-anexado-meta">
+                <span>${esc(formatarBytes(arq.tamanho_bytes))}</span>
+                <span>·</span>
+                <span>${esc(arq.mime_type || 'application/octet-stream')}</span>
+                ${arq.sha256 ? `<span>· SHA-256: <code>${esc(String(arq.sha256).slice(0, 12))}…</code></span>` : ''}
+              </div>
+            </div>
+            <div class="arquivo-anexado-acoes">
+              <a href="${esc(urlDownload)}" download class="btn btn-secundario">
+                ${ICONES.download} <span>Baixar arquivo</span>
+              </a>
+              <button id="btn-remover-arquivo" type="button" class="btn btn-secundario btn-perigo-leve" ${estado.enviandoArquivo ? 'disabled' : ''}>
+                ${ICONES.lixeira} <span>Remover</span>
+              </button>
+            </div>
+          </div>
+        ` : `
+          <div class="arquivo-vazio-aviso">
+            Nenhum arquivo anexado ainda para esta tarefa.
+          </div>
+        `}
+
+        <div id="dropzone-arquivo" class="dropzone-arquivo">
+          <input id="input-arquivo-tarefa" type="file" accept="${esc(acceptAttr)}" class="input-arquivo-oculto" ${estado.enviandoArquivo ? 'disabled' : ''}>
+          <div class="dropzone-conteudo">
+            <div class="dropzone-icone">${ICONES.upload}</div>
+            <p class="dropzone-titulo">
+              ${arq ? 'Selecionar outro arquivo para substituir o atual' : 'Clique para selecionar ou arraste seu arquivo aqui'}
+            </p>
+            <p class="dropzone-sub">
+              O arquivo será verificado (tipo e tamanho) e salvo imediatamente na sua tentativa.
+            </p>
+            <button id="btn-selecionar-arquivo" type="button" class="btn btn-primario" ${estado.enviandoArquivo ? 'disabled' : ''}>
+              ${estado.enviandoArquivo ? 'Enviando arquivo…' : (arq ? 'Substituir arquivo' : 'Escolher e anexar arquivo')}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const input = $('input-arquivo-tarefa');
+  const btnSel = $('btn-selecionar-arquivo');
+  const btnRem = $('btn-remover-arquivo');
+  const dropzone = $('dropzone-arquivo');
+
+  if (btnSel && input) {
+    btnSel.onclick = (e) => {
+      e.stopPropagation();
+      input.click();
+    };
+  }
+  if (dropzone && input) {
+    dropzone.onclick = (e) => {
+      if (e.target === input) return;
+      input.click();
+    };
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('arrastando');
+    });
+    dropzone.addEventListener('dragleave', () => {
+      dropzone.classList.remove('arrastando');
+    });
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('arrastando');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+        enviarArquivo(ordem, e.dataTransfer.files[0], maxBytes);
+      }
+    });
+  }
+  if (input) {
+    input.onchange = () => {
+      if (input.files && input.files[0]) {
+        enviarArquivo(ordem, input.files[0], maxBytes);
+      }
+    };
+  }
+  if (btnRem) {
+    btnRem.onclick = () => removerArquivo(ordem);
+  }
+}
+
+async function enviarArquivo(ordem, file, maxBytes) {
+  if (!file || estado.enviandoArquivo) return;
+  estado.erroArquivo = '';
+
+  if (file.size === 0) {
+    estado.erroArquivo = 'O arquivo selecionado está vazio.';
+    const wrap = $('editor-wrap');
+    const t = obterTarefaAtual();
+    if (wrap && t) renderizarPainelArquivo(wrap, t);
+    return;
+  }
+  if (maxBytes && file.size > maxBytes) {
+    estado.erroArquivo = `O arquivo excede o tamanho máximo permitido (${formatarBytes(maxBytes)}).`;
+    const wrap = $('editor-wrap');
+    const t = obterTarefaAtual();
+    if (wrap && t) renderizarPainelArquivo(wrap, t);
+    return;
+  }
+
+  estado.enviandoArquivo = true;
+  atualizarBadgeSalvo('salvando', 'enviando arquivo…');
+  const wrap = $('editor-wrap');
+  const tarefa = obterTarefaAtual();
+  if (wrap && tarefa && tarefa.ordem === ordem) {
+    renderizarPainelArquivo(wrap, tarefa);
+  }
+
+  const fd = new FormData();
+  fd.append('arquivo', file);
+
+  let status = 0;
+  let json = {};
+  try {
+    const res = await fetch(`/a/atividade/${encodeURIComponent(MID)}/tarefas/${encodeURIComponent(ordem)}/arquivo`, {
+      method: 'POST',
+      body: fd,
+    });
+    status = res.status;
+    try { json = await res.json(); } catch { json = {}; }
+  } catch {
+    status = 0;
+  }
+
+  estado.enviandoArquivo = false;
+
+  if (status === 200) {
+    if (json.revisao !== undefined) {
+      estado.revisao = json.revisao;
+    }
+    if (json.arquivo) {
+      estado.arquivos[String(ordem)] = json.arquivo;
+    }
+    salvarLocal(false);
+    atualizarBadgeSalvo('sucesso', `arquivo salvo às ${new Date().toLocaleTimeString('pt-BR')}`);
+    atualizarProgressoGlobal();
+  } else {
+    const msg = (json.erro && json.erro.mensagem) || 'Não foi possível anexar o arquivo.';
+    estado.erroArquivo = msg;
+    atualizarBadgeSalvo('erro', 'erro no arquivo');
+  }
+
+  const tAtual = obterTarefaAtual();
+  const wrapAtual = $('editor-wrap');
+  if (wrapAtual && tAtual && tAtual.ordem === ordem) {
+    renderizarPainelArquivo(wrapAtual, tAtual);
+  }
+}
+
+async function removerArquivo(ordem) {
+  if (estado.enviandoArquivo) return;
+  estado.erroArquivo = '';
+  estado.enviandoArquivo = true;
+  atualizarBadgeSalvo('salvando', 'removendo arquivo…');
+
+  const r = await api('DELETE', `/tarefas/${encodeURIComponent(ordem)}/arquivo`);
+  estado.enviandoArquivo = false;
+
+  if (r.status === 200) {
+    if (r.json.revisao !== undefined) {
+      estado.revisao = r.json.revisao;
+    }
+    delete estado.arquivos[String(ordem)];
+    salvarLocal(false);
+    atualizarBadgeSalvo('sucesso', 'arquivo removido');
+    atualizarProgressoGlobal();
+  } else {
+    estado.erroArquivo = mensagem(r, 'Não foi possível remover o arquivo.');
+    atualizarBadgeSalvo('erro', 'falha ao remover');
+  }
+
+  const tAtual = obterTarefaAtual();
+  const wrapAtual = $('editor-wrap');
+  if (wrapAtual && tAtual && tAtual.ordem === ordem) {
+    renderizarPainelArquivo(wrapAtual, tAtual);
+  }
 }
 
 function renderizarExemplos(tarefa) {
@@ -950,28 +1226,66 @@ async function preAvaliar() {
   modal.innerHTML = `
     <h2>Relatório de Entrega</h2>
     <p>
-      Acertos: <b>${rel.resumo.acertos}</b> de <b>${rel.resumo.total}</b> testes públicos.
+      ${rel.resumo.total > 0
+        ? `Acertos: <b>${rel.resumo.acertos}</b> de <b>${rel.resumo.total}</b> testes públicos.`
+        : `Confira o status das tarefas antes de confirmar a entrega.`}
       Válido por <span id="ttl" class="modal-ttl">${mmss(ttlSeg)}</span>
     </p>
     <div class="modal-tarefas-lista">
-      ${rel.tarefas.map((t) => `
-        <div class="modal-tarefa-card">
-          <div class="modal-tarefa-card-topo">
-            <span>Tarefa ${t.ordem}</span>
-            <span class="${t.veredito === 'accepted' ? 'passou' : 'falhou'}" style="display:inline-flex;align-items:center;gap:4px;">
-              ${t.veredito === 'accepted' ? `${ICONES.check} Todos os testes passaram` : `${ICONES.x} Falhas encontradas`}
-            </span>
-          </div>
-          <div class="modal-testes-chips">
-            ${(t.testes || []).map((x) => `
-              <span class="chip-teste ${x.status === 'accepted' ? 'passou' : 'falhou'}" style="display:inline-flex;align-items:center;gap:4px;">
-                ${x.status === 'accepted' ? ICONES.check : ICONES.x}
-                #${x.ordem} ${esc(decodificaVeredito(x.status).curto)}
+      ${rel.tarefas.map((t) => {
+        if (t.veredito === 'arquivo_anexado') {
+          return `
+            <div class="modal-tarefa-card">
+              <div class="modal-tarefa-card-topo">
+                <span>Tarefa ${t.ordem}</span>
+                <span class="passou" style="display:inline-flex;align-items:center;gap:4px;">
+                  ${ICONES.check} Arquivo anexado
+                </span>
+              </div>
+              <div class="modal-testes-chips">
+                <span class="chip-teste passou" style="display:inline-flex;align-items:center;gap:4px;">
+                  ${ICONES.arquivo} ${esc(t.nome_arquivo || 'Arquivo pronto para envio')}
+                </span>
+              </div>
+            </div>
+          `;
+        }
+        if (t.veredito === 'sem_arquivo') {
+          return `
+            <div class="modal-tarefa-card">
+              <div class="modal-tarefa-card-topo">
+                <span>Tarefa ${t.ordem}</span>
+                <span class="falhou" style="display:inline-flex;align-items:center;gap:4px;">
+                  ${ICONES.x} Nenhum arquivo anexado
+                </span>
+              </div>
+              <div class="modal-testes-chips">
+                <span class="chip-teste falhou" style="display:inline-flex;align-items:center;gap:4px;">
+                  Volte para anexar um arquivo antes de confirmar se desejar.
+                </span>
+              </div>
+            </div>
+          `;
+        }
+        return `
+          <div class="modal-tarefa-card">
+            <div class="modal-tarefa-card-topo">
+              <span>Tarefa ${t.ordem}</span>
+              <span class="${t.veredito === 'accepted' ? 'passou' : 'falhou'}" style="display:inline-flex;align-items:center;gap:4px;">
+                ${t.veredito === 'accepted' ? `${ICONES.check} Todos os testes passaram` : `${ICONES.x} Falhas encontradas`}
               </span>
-            `).join('')}
+            </div>
+            <div class="modal-testes-chips">
+              ${(t.testes || []).map((x) => `
+                <span class="chip-teste ${x.status === 'accepted' ? 'passou' : 'falhou'}" style="display:inline-flex;align-items:center;gap:4px;">
+                  ${x.status === 'accepted' ? ICONES.check : ICONES.x}
+                  #${x.ordem} ${esc(decodificaVeredito(x.status).curto)}
+                </span>
+              `).join('')}
+            </div>
           </div>
-        </div>
-      `).join('')}
+        `;
+      }).join('')}
     </div>
     <p class="mudo" style="font-size:12px;margin-bottom:0;">
       Atenção: A confirmação encerra sua tentativa nesta atividade. Se desejar corrigir algo antes de entregar, clique em "Voltar e editar".
@@ -1025,6 +1339,7 @@ async function confirmarPre(ttlTimer) {
       const tent = r2.json.tentativa;
       estado.revisao = tent.revisao;
       estado.respostas = tent.respostas || {};
+      estado.arquivos = tent.arquivos || {};
       renderizarTudo();
       aviso('Entrega registrada com sucesso!');
       return;
@@ -1059,7 +1374,12 @@ function atualizarProgressoGlobal() {
   if (!estado.carga || !estado.carga.tarefas) return;
   const tarefas = estado.carga.tarefas;
   const total = tarefas.length;
-  const preenchidas = tarefas.filter((t) => (estado.respostas[String(t.ordem)] || '').trim().length > 0).length;
+  const preenchidas = tarefas.filter((t) => {
+    if (ehTarefaArquivo(t)) {
+      return Boolean(estado.arquivos[String(t.ordem)]);
+    }
+    return (estado.respostas[String(t.ordem)] || '').trim().length > 0;
+  }).length;
 
   const txt = $('progresso-texto');
   const bar = $('progresso-barra');
@@ -1078,10 +1398,13 @@ function aviso(msg) {
 // ------------------------------------------------------------ atalhos teclado ----
 
 window.addEventListener('keydown', (e) => {
-  // Ctrl+Enter ou Cmd+Enter para testar código da tarefa ativa
+  // Ctrl+Enter ou Cmd+Enter para testar código da tarefa ativa (apenas programação)
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-    e.preventDefault();
-    testar(estado.tarefaAtiva);
+    const t = obterTarefaAtual();
+    if (!ehTarefaArquivo(t)) {
+      e.preventDefault();
+      testar(estado.tarefaAtiva);
+    }
   }
   // Ctrl+S ou Cmd+S para forçar autosave
   if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
