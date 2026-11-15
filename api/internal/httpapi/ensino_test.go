@@ -110,6 +110,20 @@ func TestEnsinoTurmasMatriculas(t *testing.T) {
 		t.Errorf("matricular professor: status %d corpo %v", w.Code, body)
 	}
 
+	// Conferência prévia: Bruno existe (sem cargo aluno), Carla é nova.
+	w, conf := chama(t, r, "POST", "/v1/turmas/"+intStr(idTurma)+"/matriculas/conferir",
+		`{"alunos":[{"email":"bruno.ensino@seno.dev"},{"email":"carla.aluna@seno.dev","first_name":"Carla","last_name":"Souza"}]}`,
+		autenticado(tokPaula))
+	if w.Code != http.StatusOK {
+		t.Fatalf("conferir matrículas: status %d corpo %v", w.Code, conf)
+	}
+	if exs, _ := conf["existentes"].([]any); len(exs) != 1 || exs[0].(map[string]any)["pode_matricular"] != false {
+		t.Errorf("existentes na conferência: %v", conf["existentes"])
+	}
+	if nvs, _ := conf["novos"].([]any); len(nvs) != 1 || nvs[0].(map[string]any)["pode_convidar"] != true {
+		t.Errorf("novos na conferência: %v", conf["novos"])
+	}
+
 	// Aluna inexistente nasce pendente + convite + matrícula.
 	w, mat := chama(t, r, "POST", "/v1/turmas/"+intStr(idTurma)+"/matriculas",
 		`{"email":"carla.aluna@seno.dev","first_name":"Carla","last_name":"Souza"}`,
@@ -118,9 +132,32 @@ func TestEnsinoTurmasMatriculas(t *testing.T) {
 		t.Fatalf("matricular aluna nova: status %d corpo %v", w.Code, mat)
 	}
 	idMat := int64(mat["id"].(float64))
-	if aluno, _ := mat["aluno"].(map[string]any); aluno["status"] != "pending" {
+	alunoCarla := mat["aluno"].(map[string]any)
+	idCarla := int64(alunoCarla["id"].(float64))
+	if alunoCarla["status"] != "pending" {
 		t.Errorf("aluna nova pendente: %v", mat["aluno"])
 	}
+
+	// Simula expiração do convite da Carla e verifica detecção + reenvio.
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE one_time_tokens SET expires_at = now() - interval '1 hour' WHERE user_id = $1 AND kind = 'invite'`,
+		idCarla); err != nil {
+		t.Fatalf("expirar token de convite: %v", err)
+	}
+	w, body = chama(t, r, "GET", "/v1/turmas/"+intStr(idTurma)+"/matriculas", "", autenticado(tokPaula))
+	if mats, _ := body["matriculas"].([]any); len(mats) != 1 || mats[0].(map[string]any)["aluno"].(map[string]any)["convite_expirado"] != true {
+		t.Errorf("convite_expirado deveria ser true: %v", body["matriculas"])
+	}
+	w, _ = chama(t, r, "POST", "/v1/turmas/"+intStr(idTurma)+"/alunos/"+intStr(idCarla)+"/reenviar-convite",
+		`{}`, autenticado(tokPaula))
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("reenviar convite: status %d", w.Code)
+	}
+	w, body = chama(t, r, "GET", "/v1/turmas/"+intStr(idTurma)+"/matriculas", "", autenticado(tokPaula))
+	if mats, _ := body["matriculas"].([]any); len(mats) != 1 || mats[0].(map[string]any)["aluno"].(map[string]any)["convite_expirado"] == true {
+		t.Errorf("convite_expirado deveria voltar a false após reenvio: %v", body["matriculas"])
+	}
+
 	tokConvite := tokenDoLog(t, pool)
 	aceitarConvite(t, r, tokConvite, "senha-carla-1")
 	tokCarla := logar(t, r, "carla.aluna@seno.dev", "senha-carla-1")
