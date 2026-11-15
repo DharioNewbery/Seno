@@ -1,8 +1,8 @@
 <script lang="ts">
   import { dataHora, prazoRelativo } from "#lib/formato";
-  // Tela pré-atividade: nome, prazo, tempo limite, iniciar (se possível)
-  // e as próprias entregas — com a correção, quando publicada (§Visibili-
-  // dade: a entrega é do aluno; os detalhes da correção, só publicada).
+  import VisaoSubmissaoAluno from "#lib/components/VisaoSubmissaoAluno.svelte";
+  // Tela da atividade do aluno: prazo, tempo limite, iniciar (se pendente)
+  // e exibição das próprias respostas e notas (quando corrigidas e publicadas).
   import type { PageProps } from "./$types";
 
   let { data }: PageProps = $props();
@@ -65,44 +65,36 @@
       </div>
     </div>
 
-    <div class="iniciar">
-      {#if podeIniciar}
-        <!-- Fase 9.4: inicia pelo BFF (st → Monitor); cai no editor se a
-             integração estiver desligada -->
-        <a class="botao" href={`/aluno/monitor/${a.id}`}>
-          {a.em_andamento ? `Continuar (rev. ${a.minha_revisao})` : "Iniciar atividade"} →
-        </a>
-      {:else if encerrada}
-        <span class="estado encerrada">Prazo encerrado</span>
-      {:else if !a.entregue && a.inicio && new Date(a.inicio) > new Date()}
-        <span class="estado nao">Atividade ainda não começou</span>
-      {:else if a.entregue}
-        {#if a.submissao_id}
-          <a class="botao" href={`/aluno/submissao/${a.submissao_id}`}>
-            {a.publicada_em ? "Ver respostas e notas →" : "Ver comprovante de entrega →"}
+    {#if !a.entregue}
+      <div class="iniciar">
+        {#if podeIniciar}
+          <a class="botao" href={`/aluno/monitor/${a.id}`}>
+            {a.em_andamento ? `Continuar (rev. ${a.minha_revisao})` : "Iniciar atividade"} →
           </a>
+        {:else if encerrada}
+          <span class="estado encerrada">Prazo encerrado</span>
+        {:else if a.inicio && new Date(a.inicio) > new Date()}
+          <span class="estado nao">Atividade ainda não começou</span>
         {:else}
-          <span class="estado entregue">Atividade entregue</span>
+          <span class="estado encerrada">Turma encerrada</span>
         {/if}
-      {:else}
-        <span class="estado encerrada">Turma encerrada</span>
-      {/if}
-    </div>
+      </div>
+    {/if}
 
     <div class="cartao entregas">
-      <span class="subrotulo">Suas entregas</span>
+      <span class="subrotulo">Sua entrega</span>
       {#if a.entregue}
         <div class="entrega">
           <span>
             Entregue em {a.entregue_em ? dataHora(a.entregue_em) : ""}
             {#if a.atrasada}<b class="rel vencido">(atrasada)</b>{/if}
             {#if a.publicada_em}
-              · correção publicada {a.nota_final !== null && a.nota_final !== undefined ? `— nota ${a.nota_final}` : ""}
+              · <strong class="destaque-publicada">correção publicada{a.nota_final !== null && a.nota_final !== undefined ? ` — nota ${a.nota_final} pts` : ""}</strong>
             {/if}
           </span>
           {#if a.submissao_id}
             <a class="botao secundario" href={`/aluno/submissao/${a.submissao_id}`}>
-              {a.publicada_em ? "Ver respostas e nota →" : "Ver submissão →"}
+              {a.publicada_em ? "Abrir página exclusiva da correção →" : "Abrir comprovante de entrega →"}
             </a>
           {/if}
         </div>
@@ -110,6 +102,14 @@
         <span class="nota">Nenhuma entrega ainda.</span>
       {/if}
     </div>
+
+    {#if a.entregue && data.visao}
+      <VisaoSubmissaoAluno
+        visao={data.visao}
+        entrega={data.entrega}
+        mostrarCabecalhoEntrega={false}
+      />
+    {/if}
 
     <a class="voltar" href="/aluno/atividades">← Atividades</a>
   {/if}
@@ -209,10 +209,6 @@
     background: var(--seno-gray-100);
     color: var(--seno-gray-700);
   }
-  .estado.entregue {
-    background: var(--seno-blue-100);
-    color: var(--seno-blue-800);
-  }
   .estado.encerrada {
     background: var(--seno-red-50);
     color: var(--seno-red);
@@ -225,6 +221,9 @@
     flex-wrap: wrap;
     font-size: 0.92rem;
     color: var(--seno-gray-800);
+  }
+  .destaque-publicada {
+    color: var(--seno-green);
   }
   .voltar {
     color: var(--seno-blue-600);

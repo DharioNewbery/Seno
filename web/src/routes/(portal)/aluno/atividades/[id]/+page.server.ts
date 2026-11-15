@@ -1,11 +1,14 @@
-// Tela pré-atividade: inspeção da atribuição pelo aluno antes de abrir o
-// editor/Monitor. Dados do portal (GET /v1/me/atribuicoes), filtrado aqui
-// pelo id da rota; atribuição inexistente ou fora do portal → lista.
+// Tela da atividade do aluno: inspeção antes de iniciar e visualização
+// completa das próprias respostas e notas quando entregue e publicada.
 import {
   listarMinhasAtribuicoes,
   mensagemDaApi,
+  minhaCorrecao,
+  minhaSubmissao,
   type AtribuicaoDoAluno,
   type Resultado,
+  type SubmissaoAluno,
+  type VisaoCorrecaoAluno,
 } from "#lib/server/ensino";
 import { redirect } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
@@ -20,11 +23,37 @@ export const load: PageServerLoad = async ({ locals, cookies, request, params })
   try {
     r = await listarMinhasAtribuicoes(request, token);
   } catch {
-    return { a: null as AtribuicaoDoAluno | null, erro: "Sem comunicação com a API." };
+    return {
+      a: null as AtribuicaoDoAluno | null,
+      visao: null as VisaoCorrecaoAluno | null,
+      entrega: null as SubmissaoAluno | null,
+      erro: "Sem comunicação com a API.",
+    };
   }
   if (r.status === 401 || r.status === 403) redirect(303, "/");
   const lista = (r.body as { atribuicoes?: AtribuicaoDoAluno[] } | null)?.atribuicoes ?? [];
   const a = lista.find((x) => x.id === id) ?? null;
   if (!a) redirect(303, "/aluno/atividades");
-  return { a, erro: r.ok ? null : mensagemDaApi(r.body) };
+
+  let visao: VisaoCorrecaoAluno | null = null;
+  let entrega: SubmissaoAluno | null = null;
+  if (a.submissao_id) {
+    try {
+      const [rc, rs] = await Promise.all([
+        minhaCorrecao(request, token, a.submissao_id),
+        minhaSubmissao(request, token, a.submissao_id),
+      ]);
+      if (rc.ok) visao = rc.body as VisaoCorrecaoAluno;
+      if (rs.ok) entrega = rs.body as SubmissaoAluno;
+    } catch {
+      // Mantém os metadados da atribuição caso falhe o detalhe da submissão.
+    }
+  }
+
+  return {
+    a,
+    visao,
+    entrega,
+    erro: r.ok ? null : mensagemDaApi(r.body),
+  };
 };

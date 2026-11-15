@@ -1,7 +1,8 @@
 <script lang="ts">
   import { dataHora, prazoRelativo } from "#lib/formato";
+  import { resumirEstadoAtribuicaoAluno } from "#lib/correcao-aluno";
   // Atividades do aluno (atribuições das minhas turmas): filtro por
-  // turma, estado do rascunho e prazo; correção publicada no portal.
+  // turma, estado do rascunho e prazo; correção publicada com nota e respostas no portal.
   import { page } from "$app/state";
   import { SvelteURLSearchParams } from "svelte/reactivity";
   import type { PageProps } from "./$types";
@@ -16,19 +17,6 @@
     else qs.set("turma_id", String(id));
     const query = qs.toString();
     return query ? `?${query}` : "";
-  }
-
-  function estado(
-    a: (typeof atribuicoes)[number] | undefined,
-  ): { rotulo: string; classe: string } {
-    if (a?.entregue)
-      return a?.atrasada
-        ? { rotulo: "Entregue atrasada", classe: "entregue" }
-        : { rotulo: "Entregue", classe: "entregue" };
-    if (a?.em_andamento) return { rotulo: "Em andamento", classe: "andamento" };
-    if (a?.prazo && new Date(a.prazo) < new Date() && !a.pode_atrasado)
-      return { rotulo: "Prazo encerrado", classe: "encerrada" };
-    return { rotulo: "Não começou", classe: "nao" };
   }
 
   function paraTexto(iso: string | undefined): string {
@@ -71,6 +59,7 @@
   <ul class="lista">
     {#each atribuicoes as a (a.id)}
       {@const rel = a.entregue ? null : prazoRelativo(a.prazo)}
+      {@const est = resumirEstadoAtribuicaoAluno(a)}
       <li>
         <div class="identidade">
           <strong>{a.atividade_nome}</strong>
@@ -84,10 +73,8 @@
           </span>
         </div>
         <div class="acao-area">
-          <span class="estado {estado(a).classe}">{estado(a).rotulo}</span>
+          <span class="estado {est.classe}">{est.rotulo}</span>
           {#if a.turma_ativa && !a.entregue}
-            <!-- Tela pré-atividade: inspeção; o início (Monitor/editor, Fase
-                 9.4) acontece lá. -->
             <a class="abrir" href={`/aluno/atividades/${a.id}`}>
               {a.em_andamento ? `Continuar (rev. ${a.minha_revisao})` : "Abrir"} →
             </a>
@@ -95,7 +82,7 @@
             <span class="meta">Entregue em {a.entregue_em ? dataHora(a.entregue_em) : ""}</span>
             {#if a.submissao_id}
               <a class="abrir" href={`/aluno/submissao/${a.submissao_id}`}>
-                {a.publicada_em ? "Ver respostas e nota →" : "Ver submissão →"}
+                {a.publicada_em ? "Ver respostas e notas →" : "Ver submissão →"}
               </a>
             {:else}
               <a class="abrir secundario" href={`/aluno/atividades/${a.id}`}>Inspecionar →</a>
@@ -114,8 +101,8 @@
   </ul>
 
   <p class="nota">
-    Quando o professor publicar as notas, a correção completa (feedback e
-    resultados por teste) fica disponível em "Correção publicada".
+    Quando o professor publicar as notas, suas respostas, notas por questão,
+    feedback e resultados por teste ficam disponíveis em "Ver respostas e notas".
   </p>
 </section>
 
@@ -133,7 +120,7 @@
   .cabeca h2 {
     margin: 0;
   }
-    .filtro {
+  .filtro {
     color: var(--seno-gray-500);
     font-size: 0.85rem;
     font-weight: 400;
@@ -143,7 +130,7 @@
     text-decoration: none;
     font-size: 0.88rem;
   }
-    .turmas {
+  .turmas {
     display: flex;
     gap: 0.4rem;
     flex-wrap: wrap;
@@ -163,7 +150,7 @@
     color: var(--seno-blue-800);
     font-weight: 600;
   }
-      .identidade {
+  .identidade {
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
@@ -171,7 +158,7 @@
   .identidade strong {
     color: var(--seno-blue-900);
   }
-    .rel {
+  .rel {
     font-weight: 600;
   }
   .rel.folga {
@@ -187,8 +174,9 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    flex-wrap: wrap;
   }
-    .estado.nao {
+  .estado.nao {
     background: var(--seno-gray-100);
     color: var(--seno-gray-700);
   }
@@ -200,16 +188,17 @@
     background: var(--seno-blue-100);
     color: var(--seno-blue-800);
   }
+  .estado.nota {
+    background: var(--seno-green-50);
+    color: var(--seno-green);
+    border: 1px solid #bbf7d0;
+    font-weight: 700;
+  }
   .estado.encerrada {
     background: var(--seno-red-50);
     color: var(--seno-red);
   }
-      .corrigido {
-    color: var(--seno-blue-600);
-    text-decoration: none;
-    font-size: 0.86rem;
-  }
-    .nota {
+  .nota {
     color: var(--seno-gray-500);
     font-size: 0.82rem;
     margin: 0;

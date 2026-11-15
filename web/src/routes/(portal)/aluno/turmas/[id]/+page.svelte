@@ -1,5 +1,6 @@
 <script lang="ts">
   import { dataHora } from "#lib/formato";
+  import { resumirEstadoAtribuicaoAluno } from "#lib/correcao-aluno";
   import type { PageProps } from "./$types";
 
   let { data }: PageProps = $props();
@@ -12,19 +13,7 @@
   function estado(
     a: (typeof atribuicoes)[number],
   ): { rotulo: string; classe: string } {
-    if (a.entregue) {
-      if (a.nota_final !== undefined && a.nota_final !== null) {
-        return { rotulo: `Nota: ${a.nota_final} pts`, classe: "nota" };
-      }
-      return a.atrasada
-        ? { rotulo: "Entregue atrasada", classe: "entregue" }
-        : { rotulo: "Entregue", classe: "entregue" };
-    }
-    if (a.em_andamento) return { rotulo: "Em andamento", classe: "andamento" };
-    if (a.prazo && new Date(a.prazo) < new Date() && !a.pode_atrasado) {
-      return { rotulo: "Prazo encerrado", classe: "encerrada" };
-    }
-    return { rotulo: "Não começou", classe: "nao" };
+    return resumirEstadoAtribuicaoAluno(a);
   }
 
   function paraTexto(iso: string | undefined): string {
