@@ -246,6 +246,12 @@ sequenceDiagram
 ```
 
 * O batch é por **Correção/submissão** (não um batch global de toda a prova), para limitar o impacto de retentativas; o callback atualiza a Correção de `executando` para `concluída`/`falhou`.
+* **Extensibilidade por tipo de tarefa (`tipo` + `config` JSONB):**
+  * A tabela `tarefas` possui o discriminador `tipo` (`programacao` | `arquivo_submissao`) e a coluna `config JSONB` (validada por estratégia registrada em `internal/tarefas` e compartilhada via pacote `contract`).
+  * Tarefas do tipo `arquivo_submissao` não geram execuções no Judge0 (nem no `/testar`, nem na pré-avaliação do Monitor, nem na fila de correção da API). Quando uma submissão contém apenas tarefas sem testes automatizados (abertas ou `arquivo_submissao`), a confirmação pelo professor transiciona o status da correção diretamente para `concluida`.
+  * **Armazenamento e segurança de arquivos submetidos:**
+    * Durante a realização no Monitor, os arquivos anexados ficam em `tentativa_arquivo` e, ao confirmar/coletar a submissão, são movidos para `submissao_arquivo` e transferidos no pacote assinado (`SubmissaoMonitor.Arquivos`) para a API principal, que os persiste em `submissao_arquivos` (`BYTEA`, com `sha256`, `mime_type` verificado e `tamanho_bytes`).
+    * Defesa em profundidade (`contract.ValidarArquivo`): validação estrita de tamanho máximo (`max_bytes` da tarefa limitado por `SENO_ARQUIVO_MAX_BYTES`), whitelist de extensões permitidas, inspeção de *magic bytes* / validação UTF-8 (rejeitando binários executáveis disfarçados ou poliglotas HTML/script em arquivos de texto), sanitização do nome do arquivo e entrega de download exclusivamente com `Content-Disposition: attachment` e `X-Content-Type-Options: nosniff`.
 
 ## 8. Empacotamento e produção
 

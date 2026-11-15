@@ -92,17 +92,21 @@ Group requires **admin or super** via middleware. Services add the restrictions 
 
 ### Tarefas (task bank)
 
+Task payloads include `tipo` (`programacao` default, or `arquivo_submissao`) and, for `arquivo_submissao`, `config_arquivo` (`extensoes_permitidas`, `max_bytes`).
+
 | Method | Route | What it does | Permissions |
 |---|---|---|---|
-| GET | `/v1/tarefas` | List task-bank tasks | Professor sees only own; staff sees all |
-| POST | `/v1/tarefas` | Create task with optional tests; actor = owner | Role `professor` required; pure admin cannot create |
-| GET | `/v1/tarefas/:id` | Task detail + tests | Owner or staff; 404 otherwise |
+| GET | `/v1/tarefas` | List task-bank tasks (optional filter `tipo`) | Professor sees only own; staff sees all |
+| POST | `/v1/tarefas` | Create task (`programacao` with optional tests/limits, or `arquivo_submissao` with `config_arquivo`); actor = owner | Role `professor` required; pure admin cannot create |
+| GET | `/v1/tarefas/:id` | Task detail + tests + `config_arquivo` | Owner or staff; 404 otherwise |
 | PATCH | `/v1/tarefas/:id` | Edit task; non-nil tests replace the whole list | Owner or staff |
-| POST | `/v1/tarefas/:id/duplicar` | Duplicate task | Owner or staff |
+| POST | `/v1/tarefas/:id/duplicar` | Duplicate task (preserves `tipo` and `config`) | Owner or staff |
 | DELETE | `/v1/tarefas/:id` | Delete task | Owner or staff |
 | GET | `/v1/tarefas/:id/analytics` | Task usage analytics | Owner or staff |
 
 ### Atividades (activity bank)
+
+Activity task items carry `tarefa_tipo` and `config_arquivo`; `linguagem` is required (`python`, `c`, `cpp`) for `programacao` tasks and empty (`""`) for `arquivo_submissao` tasks.
 
 | Method | Route | What it does | Permissions |
 |---|---|---|---|
@@ -146,22 +150,25 @@ Route only requires authentication; services/handlers enforce the rules.
 | POST | `/v1/atribuicoes/:id/correcoes/publicar` | Batch-publishes confirmed, unpublished corrections | Class owner or staff |
 | POST | `/v1/atribuicoes/:id/monitor/alunos/:aluno_id/reexecutar` | Re-runs a student's correction in the Monitor | Class owner or staff; assignment must have a `monitor_id` |
 | DELETE | `/v1/atribuicoes/:id/monitor/alunos/:aluno_id/submissao` | Deletes a student's submission in the Monitor | Class owner or staff; assignment must have a `monitor_id` |
-| GET | `/v1/atribuicoes/:id/monitor/alunos/:aluno_id/submissao` | Fetches a student's submission from the Monitor | Class owner or staff; assignment must have a `monitor_id` |
+| GET | `/v1/atribuicoes/:id/monitor/alunos/:aluno_id/submissao` | Fetches a student's submission from the Monitor (strips raw file bytes, returning file metadata) | Class owner or staff; assignment must have a `monitor_id` |
+| GET | `/v1/atribuicoes/:id/monitor/alunos/:aluno_id/tarefas/:ordem/arquivo` | Downloads a student's submitted file for task `:ordem` (persisted or mirrored from Monitor) | Class owner or staff |
+| POST | `/v1/atribuicoes/:id/monitor/submissoes` | Ingests a finalized submission package (including `arquivos`) from Monitor | Internal HMAC (`RequireMonitorHMAC`) |
 | GET | `/v1/atribuicoes/:id/entrar` | Issues short-lived SSO token + Monitor entry URL | Student + active enrollment; assignment transferred to Monitor |
 
 ### Correções (submission corrections)
 
-Route only requires authentication; services enforce ownership.
+Route only requires authentication; services enforce ownership. Correction tasks (`CorrecaoTarefa`) include `tarefa_tipo`, `config_arquivo`, and `arquivo` metadata (`nome_arquivo`, `mime_type`, `tamanho_bytes`, `sha256`, `enviado_em`) when present.
 
 | Method | Route | What it does | Permissions |
 |---|---|---|---|
 | DELETE | `/v1/submissoes/:id` | Deletes submission + correction; restores a prefilled draft for the student | Class owner or staff |
 | GET | `/v1/submissoes/:id/correcao` | Full correction view | Class owner or staff |
 | PATCH | `/v1/submissoes/:id/correcao` | Edit general feedback and per-task grades/feedback | Class owner or staff; 409 if already published |
-| POST | `/v1/submissoes/:id/correcao/confirmar` | Confirms correction (records who confirmed) | Class owner or staff |
+| POST | `/v1/submissoes/:id/correcao/confirmar` | Confirms correction (records who confirmed; transitions `pendente` -> `concluida` for manual-only submissions) | Class owner or staff |
 | POST | `/v1/submissoes/:id/correcao/publicar` | Publishes correction to the student; requires confirmation | Class owner or staff |
 | POST | `/v1/submissoes/:id/correcao/reexecutar` | Re-runs automatic grading; only `falhou` or unconfirmed `concluida` | Class owner or staff |
 | GET | `/v1/submissoes/:id/minha` | Student's view of own correction; before publishing only status | Student owner of the submission |
+| GET | `/v1/submissoes/:id/tarefas/:tarefa_id/arquivo` | Downloads the submitted file (`Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`) | Class owner, staff, or student owner of the submission |
 
 ### Judge0 callback
 
@@ -196,9 +203,12 @@ Route only requires authentication; services enforce ownership.
 | DELETE | `/interna/v1/atividades/:monitor_id/alunos/:aluno_id/submissao` | Deletes a student's submission in Monitor | Internal HMAC |
 | GET | `/interna/v1/atividades/:monitor_id/alunos/:aluno_id/submissao` | Fetches a student's submission from Monitor | Internal HMAC |
 | POST | `/interna/v1/atividades/:monitor_id/alunos/:aluno_id/coletar` | Collects a student's draft in Monitor | Internal HMAC |
-| POST | `/a/atividade/:monitor_id/abrir` | Opens/returns the exam activity (idempotent) | Valid `hm_sess` cookie bound to student + Monitor activity; finalization/window checks |
+| POST | `/a/atividade/:monitor_id/abrir` | Opens/returns the exam activity (idempotent; includes `tentativa.arquivos` metadata) | Valid `hm_sess` cookie bound to student + Monitor activity; finalization/window checks |
 | PUT | `/a/atividade/:monitor_id/tentativa` | Autosave draft with optimistic revision | Same student session |
-| POST | `/a/atividade/:monitor_id/testar` | Queues a Judge0 test run (202 + `run_id`) | Same student session; rate limits |
+| POST | `/a/atividade/:monitor_id/tarefas/:ordem/arquivo` | Uploads/replaces the attached file for an `arquivo_submissao` task (`multipart/form-data` field `arquivo` or JSON base64); validates size, extension, and magic bytes | Same student session |
+| GET | `/a/atividade/:monitor_id/tarefas/:ordem/arquivo` | Downloads the currently attached file in the open attempt (`Content-Disposition: attachment`) | Same student session |
+| DELETE | `/a/atividade/:monitor_id/tarefas/:ordem/arquivo` | Removes the attached file from the open attempt and increments `revisao` | Same student session |
+| POST | `/a/atividade/:monitor_id/testar` | Queues a Judge0 test run (202 + `run_id`; returns 422 for non-programming tasks) | Same student session; rate limits |
 | GET | `/a/atividade/:monitor_id/testar/:run_id` | Polls a test run result (202/200) | Same student session |
 | POST | `/a/atividade/:monitor_id/submissao/avaliar` | Synchronous pre-evaluation; returns report + `pre_id`/expiry | Same student session |
 | POST | `/a/atividade/:monitor_id/submissao/cancelar` | Discards pre-evaluation, keeps draft alive | Same student session |

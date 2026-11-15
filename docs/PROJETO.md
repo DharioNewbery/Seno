@@ -80,7 +80,11 @@ Uma **Matrícula** associa um **Aluno** a uma **Turma**. Ao adicionar por e-mail
 * saída em
 
 ### Tarefas:
-Uma **Tarefa** é uma unidade de trabalho destinado ao **Aluno**. Para disponibilizar uma **Tarefa** ao **Aluno**, ela deve ser envelopada em uma **Atividade**. A linguagem de programação **não** pertence à Tarefa: é definida pelo professor na **Atividade**, por tarefa.
+Uma **Tarefa** é uma unidade de trabalho destinado ao **Aluno**. Para disponibilizar uma **Tarefa** ao **Aluno**, ela deve ser envelopada em uma **Atividade**.
+
+Existem dois tipos de tarefa atualmente (arquitetura preparada para novos tipos via discriminador `tipo` e configuração polimórfica `config` JSONB):
+1. **Programação (`programacao`, padrão):** O aluno escreve código-fonte em um editor web e pode executá-lo contra casos de teste no Judge0. A linguagem de programação **não** pertence à Tarefa: é definida pelo professor na **Atividade**, por tarefa.
+2. **Submissão de arquivo (`arquivo_submissao`):** O aluno anexa e submete um arquivo (ex.: `.pdf`, `.zip`, `.png`, `.py`, `.c`, `.cpp`, `.txt`, `.md`, `.csv`, `.json`), validado por tamanho máximo e assinatura/tipo (extensão + magic bytes / UTF-8). Não possui testes automatizados nem linguagem de programação associada, e sua avaliação pelo professor é manual (com download do arquivo submetido).
 
 Uma vez que a **Tarefa** foi utilizada em uma *Atividade* que foi atribuida a uma **Turma** e algum **Aluno** fez uma submissão, ela não pode mais ser editada. Nesse caso o professor pode **duplicar** a tarefa para obter uma cópia editável.
 
@@ -89,15 +93,19 @@ Exclusão: se a Tarefa não é referenciada por nenhuma Atividade, é excluída 
 V-00:
 * nome
 * enunciado
-> [Opcional]
+* tipo (`programacao` | `arquivo_submissao`)
+> [Opcional — `programacao`]
 * Tempo de CPU
 * Tempo de execução (total)
 * Uso de memória
 * testes (0..N)
+> [Opcional — `arquivo_submissao`]
+* extensões permitidas (`extensoes_permitidas`, padrão: `.pdf`, `.zip`, `.txt`, `.md`, `.py`, `.c`, `.cpp`, `.png`, `.jpg`)
+* tamanho máximo em bytes (`max_bytes`, padrão: 10 MB, teto: 50 MB)
 
 Quando um limite não é definido, vale o padrão global (ver **Limites de execução**).
 
-Uma Tarefa **sem testes** é uma tarefa **aberta**: não há correção automática e o professor preenche a nota manualmente.
+Uma Tarefa de programação **sem testes** ou uma Tarefa do tipo **submissão de arquivo** é uma tarefa **aberta**: não há correção automática e o professor preenche a nota manualmente.
 
 ### Teste:
 Um **Teste** é um caso de teste de entrada e saída. É associado à uma tarefa e pode ser privado (usado internamente para corrigir submissões) ou público (também pode ser usado para o aluno verificar seu código). A comparação da saída é **exata**, nos termos do Judge0; esse comportamento deve ser documentado na tela de criação do teste.
@@ -110,7 +118,7 @@ Um **Teste** é um caso de teste de entrada e saída. É associado à uma tarefa
 ### Atividades:
 Uma **Atividade** é um conjunto de **Tarefas**. Ela é disponibilizada aos alunos através de uma **Atribuição**. A atividade armazena um JSON, que será hidratado pelo backend e depois fornecido ao front, que renderizará as páginas. No momento que uma Atividade recebe uma Submissão, ela não pode mais ser editada (pode ser duplicada). A regra de exclusão é a mesma da Tarefa (hard delete se nunca usada, soft delete caso contrário).
 
-A linguagem é definida **por tarefa** no JSON, uma única por tarefa, e o aluno não a escolhe. Linguagens suportadas na v1: `python`, `c`, `cpp`. O identificador é próprio do Seno e é mapeado para o `language_id` do Judge0 apenas na camada de integração.
+A linguagem é definida **por tarefa de programação** no JSON, uma única por tarefa, e o aluno não a escolhe. Linguagens suportadas na v1: `python`, `c`, `cpp`. O identificador é próprio do Seno e é mapeado para o `language_id` do Judge0 apenas na camada de integração. Tarefas do tipo `arquivo_submissao` não exigem linguagem (`linguagem` vazia) e uma mesma **Atividade** pode mesclar tarefas de `programacao` e `arquivo_submissao`.
 
 V-00:
 * Nome
@@ -212,10 +220,11 @@ Uma correção feita a uma **Submissão** (1 para 1; a Correção aponta para a 
 
 ### Correção de tarefa:
 * tarefa
-* nota automática (`value_pts` se todos os testes passaram, senão 0; vazia em tarefas abertas, sem testes)
+* nota automática (`value_pts` se todos os testes passaram, senão 0; vazia em tarefas abertas/sem testes e em tarefas `arquivo_submissao`)
 * nota final (o professor pode alterá-la livremente, inclusive com nota parcial)
 * Feedback do professor (por tarefa)
-* Resultados (lista de **Resultado**)
+* Resultados (lista de **Resultado**, para tarefas de programação)
+* Arquivo submetido (metadados `nome_arquivo`, `mime_type`, `tamanho_bytes`, `sha256` e link de download para o professor e para o aluno dono, em tarefas `arquivo_submissao`)
 
 ### Resultado:
 O resultado associa um **Teste** a um relatório sobre a sua execução em uma correção. Para testes sem submissão, ver **Execução de teste**.

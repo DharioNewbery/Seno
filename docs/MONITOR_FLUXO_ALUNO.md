@@ -62,10 +62,12 @@ Corpo (JSON único, transferência integral):
         "ordem": 1,
         "tarefa_api_id": 5,
         "nome": "Dobro",
+        "tipo": "programacao", // "programacao" (padrão) ou "arquivo_submissao"
         "valor_pts": 10,
         "enunciado": "...",
-        "linguagem": "python",
+        "linguagem": "python", // vazio ("") quando tipo == "arquivo_submissao"
         "limites": { "tempo_cpu_ms": 2000, "tempo_total_ms": 5000, "memoria_mb": 256 },
+        "config_arquivo": null, // para "arquivo_submissao": { "extensoes_permitidas": [".pdf", ".zip"], "max_bytes": 10485760 }
         "testes": [
           { "stdin": "3", "stdout_esperado": "6", "publico": true },
           { "stdin": "",  "stdout_esperado": "",  "publico": false }
@@ -233,7 +235,7 @@ Erros:
 - Já submetido com submissões únicas: 403 `{ "erro": "finalizada" }`
   (tela fixa, ver 5.6)
 
-### 5.2 Autosave
+### 5.2 Autosave e Submissão de Arquivos na Tentativa
 
 `PUT /a/atividade/{monitor_id}/tentativa`
 
@@ -246,9 +248,16 @@ Corpo: `{ "revisao": n, "respostas": { "1": "..." } }`
   sobrescrever `dados`. O snapshot não depende do cliente.
 - Corpo além de `SENO_MONITOR_MAX_SNAPSHOT_BYTES`: 413.
 
+Para tarefas do tipo `arquivo_submissao`, o aluno gerencia o anexo diretamente na tentativa aberta (tabelas `tentativa_arquivo` e, após entrega, `submissao_arquivo`):
+
+- `POST /a/atividade/{monitor_id}/tarefas/{ordem}/arquivo` (`multipart/form-data` com campo `arquivo`, ou JSON `{ "nome_arquivo", "conteudo" }`): valida se a tarefa é `arquivo_submissao`, verifica tamanho máximo, extensão permitida e assinatura de conteúdo (*magic bytes* / UTF-8 via `contract.ValidarArquivo`), grava em `tentativa_arquivo`, incrementa `revisao` da tentativa e retorna `{ "revisao", "arquivo": { "tarefa_ordem", "nome_arquivo", "mime_type", "tamanho_bytes", "sha256", "enviado_em" } }`.
+- `GET /a/atividade/{monitor_id}/tarefas/{ordem}/arquivo`: baixa o arquivo atualmente anexado na tentativa (`Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`).
+- `DELETE /a/atividade/{monitor_id}/tarefas/{ordem}/arquivo`: remove o arquivo anexado da tentativa, incrementa `revisao` e retorna `{ "revisao" }`.
+- Ao abrir a atividade (`POST /a/atividade/{monitor_id}/abrir`), `tentativa.arquivos` traz o mapa `{ "<ordem>": { "nome_arquivo", "mime_type", "tamanho_bytes", "sha256", "enviado_em" } }` dos arquivos anexados.
+
 ### 5.3 Ensaios (executar tarefa contra testes públicos)
 
-Contrato equivalente ao atual, mudando quem executa:
+Contrato equivalente ao atual, mudando quem executa (apenas para tarefas `programacao`; tarefas `arquivo_submissao` retornam `422 TAREFA_NAO_PROGRAMACAO`):
 
 - `POST /a/atividade/{monitor_id}/testar`
   `{ "ordem": 1, "linguagem": "python", "codigo": "..." }`
@@ -287,7 +296,7 @@ síncrono no Judge0, comparação exata stdin e stdout esperado). Registra
 ```
 
 O relatório expira após `SENO_PRE_AVA_TTL_S` (padrão 900). A pré avaliação não
-entra no histórico de ensaios do aluno.
+entra no histórico de ensaios do aluno. Para tarefas do tipo `arquivo_submissao`, o Monitor não aciona o Judge0 e inclui no relatório da tarefa o `veredito: "arquivo_anexado"` (com `nome_arquivo`) ou `"sem_arquivo"`. Ao confirmar a submissão (`confirmar`) ou coletar rascunho (`coletar`), os arquivos são movidos de `tentativa_arquivo` para `submissao_arquivo` e enviados junto ao pacote de submissão (`SubmissaoMonitor.Arquivos`) para a API principal.
 
 ### 5.5 Submissão (escolha do aluno)
 
