@@ -36,6 +36,8 @@ SELECT at.tarefa_id,
        at.linguagem,
        t.nome           AS tarefa_nome,
        t.enunciado      AS tarefa_enunciado,
+       t.tipo           AS tarefa_tipo,
+       t.config         AS tarefa_config,
        t.deleted_at     AS tarefa_deleted_at
 FROM atividade_tarefas at
 JOIN tarefas t ON t.id = at.tarefa_id

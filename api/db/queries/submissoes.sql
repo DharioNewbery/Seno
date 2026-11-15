@@ -55,3 +55,25 @@ WHERE s.id = $1;
 DELETE FROM submissoes
 WHERE id = $1;
 
+-- name: UpsertSubmissaoArquivo :exec
+INSERT INTO submissao_arquivos (submissao_id, tarefa_id, nome_arquivo, mime_type, tamanho_bytes, sha256, conteudo)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (submissao_id, tarefa_id) DO UPDATE
+SET nome_arquivo  = excluded.nome_arquivo,
+    mime_type     = excluded.mime_type,
+    tamanho_bytes = excluded.tamanho_bytes,
+    sha256        = excluded.sha256,
+    conteudo      = excluded.conteudo,
+    criado_em     = now();
+
+-- name: ListSubmissaoArquivosMeta :many
+SELECT id, submissao_id, tarefa_id, nome_arquivo, mime_type, tamanho_bytes, sha256, criado_em
+FROM submissao_arquivos
+WHERE submissao_id = $1
+ORDER BY tarefa_id;
+
+-- name: GetSubmissaoArquivo :one
+SELECT id, submissao_id, tarefa_id, nome_arquivo, mime_type, tamanho_bytes, sha256, conteudo, criado_em
+FROM submissao_arquivos
+WHERE submissao_id = $1
+  AND tarefa_id = $2;

@@ -177,6 +177,18 @@ type Session struct {
 	UserAgent    *string            `json:"user_agent"`
 }
 
+type SubmissaoArquivo struct {
+	ID           int64              `json:"id"`
+	SubmissaoID  int64              `json:"submissao_id"`
+	TarefaID     int64              `json:"tarefa_id"`
+	NomeArquivo  string             `json:"nome_arquivo"`
+	MimeType     string             `json:"mime_type"`
+	TamanhoBytes int64              `json:"tamanho_bytes"`
+	Sha256       string             `json:"sha256"`
+	Conteudo     []byte             `json:"conteudo"`
+	CriadoEm     pgtype.Timestamptz `json:"criado_em"`
+}
+
 type Submisso struct {
 	ID           int64              `json:"id"`
 	AtribuicaoID int64              `json:"atribuicao_id"`
@@ -200,6 +212,8 @@ type Tarefa struct {
 	CreatedBy    pgtype.Int8        `json:"created_by"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+	Tipo         string             `json:"tipo"`
+	Config       []byte             `json:"config"`
 }
 
 type Tentativa struct {

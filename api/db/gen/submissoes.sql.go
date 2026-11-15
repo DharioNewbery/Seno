@@ -83,6 +83,35 @@ func (q *Queries) GetSubmissaoAluno(ctx context.Context, arg GetSubmissaoAlunoPa
 	return i, err
 }
 
+const getSubmissaoArquivo = `-- name: GetSubmissaoArquivo :one
+SELECT id, submissao_id, tarefa_id, nome_arquivo, mime_type, tamanho_bytes, sha256, conteudo, criado_em
+FROM submissao_arquivos
+WHERE submissao_id = $1
+  AND tarefa_id = $2
+`
+
+type GetSubmissaoArquivoParams struct {
+	SubmissaoID int64 `json:"submissao_id"`
+	TarefaID    int64 `json:"tarefa_id"`
+}
+
+func (q *Queries) GetSubmissaoArquivo(ctx context.Context, arg GetSubmissaoArquivoParams) (SubmissaoArquivo, error) {
+	row := q.db.QueryRow(ctx, getSubmissaoArquivo, arg.SubmissaoID, arg.TarefaID)
+	var i SubmissaoArquivo
+	err := row.Scan(
+		&i.ID,
+		&i.SubmissaoID,
+		&i.TarefaID,
+		&i.NomeArquivo,
+		&i.MimeType,
+		&i.TamanhoBytes,
+		&i.Sha256,
+		&i.Conteudo,
+		&i.CriadoEm,
+	)
+	return i, err
+}
+
 const getSubmissaoPorID = `-- name: GetSubmissaoPorID :one
 SELECT s.id,
        s.atribuicao_id,
@@ -180,6 +209,53 @@ func (q *Queries) InsertSubmissao(ctx context.Context, arg InsertSubmissaoParams
 	return i, err
 }
 
+const listSubmissaoArquivosMeta = `-- name: ListSubmissaoArquivosMeta :many
+SELECT id, submissao_id, tarefa_id, nome_arquivo, mime_type, tamanho_bytes, sha256, criado_em
+FROM submissao_arquivos
+WHERE submissao_id = $1
+ORDER BY tarefa_id
+`
+
+type ListSubmissaoArquivosMetaRow struct {
+	ID           int64              `json:"id"`
+	SubmissaoID  int64              `json:"submissao_id"`
+	TarefaID     int64              `json:"tarefa_id"`
+	NomeArquivo  string             `json:"nome_arquivo"`
+	MimeType     string             `json:"mime_type"`
+	TamanhoBytes int64              `json:"tamanho_bytes"`
+	Sha256       string             `json:"sha256"`
+	CriadoEm     pgtype.Timestamptz `json:"criado_em"`
+}
+
+func (q *Queries) ListSubmissaoArquivosMeta(ctx context.Context, submissaoID int64) ([]ListSubmissaoArquivosMetaRow, error) {
+	rows, err := q.db.Query(ctx, listSubmissaoArquivosMeta, submissaoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSubmissaoArquivosMetaRow{}
+	for rows.Next() {
+		var i ListSubmissaoArquivosMetaRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SubmissaoID,
+			&i.TarefaID,
+			&i.NomeArquivo,
+			&i.MimeType,
+			&i.TamanhoBytes,
+			&i.Sha256,
+			&i.CriadoEm,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSubmissoesAtribuicao = `-- name: ListSubmissoesAtribuicao :many
 SELECT s.id,
        s.atribuicao_id,
@@ -237,4 +313,39 @@ func (q *Queries) ListSubmissoesAtribuicao(ctx context.Context, atribuicaoID int
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertSubmissaoArquivo = `-- name: UpsertSubmissaoArquivo :exec
+INSERT INTO submissao_arquivos (submissao_id, tarefa_id, nome_arquivo, mime_type, tamanho_bytes, sha256, conteudo)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (submissao_id, tarefa_id) DO UPDATE
+SET nome_arquivo  = excluded.nome_arquivo,
+    mime_type     = excluded.mime_type,
+    tamanho_bytes = excluded.tamanho_bytes,
+    sha256        = excluded.sha256,
+    conteudo      = excluded.conteudo,
+    criado_em     = now()
+`
+
+type UpsertSubmissaoArquivoParams struct {
+	SubmissaoID  int64  `json:"submissao_id"`
+	TarefaID     int64  `json:"tarefa_id"`
+	NomeArquivo  string `json:"nome_arquivo"`
+	MimeType     string `json:"mime_type"`
+	TamanhoBytes int64  `json:"tamanho_bytes"`
+	Sha256       string `json:"sha256"`
+	Conteudo     []byte `json:"conteudo"`
+}
+
+func (q *Queries) UpsertSubmissaoArquivo(ctx context.Context, arg UpsertSubmissaoArquivoParams) error {
+	_, err := q.db.Exec(ctx, upsertSubmissaoArquivo,
+		arg.SubmissaoID,
+		arg.TarefaID,
+		arg.NomeArquivo,
+		arg.MimeType,
+		arg.TamanhoBytes,
+		arg.Sha256,
+		arg.Conteudo,
+	)
+	return err
 }

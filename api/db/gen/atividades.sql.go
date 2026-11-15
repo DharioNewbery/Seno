@@ -265,6 +265,8 @@ SELECT at.tarefa_id,
        at.linguagem,
        t.nome           AS tarefa_nome,
        t.enunciado      AS tarefa_enunciado,
+       t.tipo           AS tarefa_tipo,
+       t.config         AS tarefa_config,
        t.deleted_at     AS tarefa_deleted_at
 FROM atividade_tarefas at
 JOIN tarefas t ON t.id = at.tarefa_id
@@ -279,6 +281,8 @@ type ListAtividadeTarefasRow struct {
 	Linguagem       string             `json:"linguagem"`
 	TarefaNome      string             `json:"tarefa_nome"`
 	TarefaEnunciado string             `json:"tarefa_enunciado"`
+	TarefaTipo      string             `json:"tarefa_tipo"`
+	TarefaConfig    []byte             `json:"tarefa_config"`
 	TarefaDeletedAt pgtype.Timestamptz `json:"tarefa_deleted_at"`
 }
 
@@ -298,6 +302,8 @@ func (q *Queries) ListAtividadeTarefas(ctx context.Context, atividadeID int64) (
 			&i.Linguagem,
 			&i.TarefaNome,
 			&i.TarefaEnunciado,
+			&i.TarefaTipo,
+			&i.TarefaConfig,
 			&i.TarefaDeletedAt,
 		); err != nil {
 			return nil, err

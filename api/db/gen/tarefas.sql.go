@@ -12,11 +12,11 @@ import (
 )
 
 const copyTarefa = `-- name: CopyTarefa :one
-INSERT INTO tarefas (professor_id, nome, enunciado, tempo_cpu_ms, tempo_total_ms, memoria_mb, created_by)
-SELECT src.professor_id, $2, src.enunciado, src.tempo_cpu_ms, src.tempo_total_ms, src.memoria_mb, $3
+INSERT INTO tarefas (professor_id, nome, enunciado, tipo, config, tempo_cpu_ms, tempo_total_ms, memoria_mb, created_by)
+SELECT src.professor_id, $2, src.enunciado, src.tipo, src.config, src.tempo_cpu_ms, src.tempo_total_ms, src.memoria_mb, $3
 FROM tarefas src
 WHERE src.id = $1
-RETURNING tarefas.id, tarefas.professor_id, tarefas.nome, tarefas.enunciado, tarefas.tempo_cpu_ms, tarefas.tempo_total_ms, tarefas.memoria_mb, tarefas.created_at, tarefas.deleted_at
+RETURNING tarefas.id, tarefas.professor_id, tarefas.nome, tarefas.enunciado, tarefas.tipo, tarefas.config, tarefas.tempo_cpu_ms, tarefas.tempo_total_ms, tarefas.memoria_mb, tarefas.created_at, tarefas.deleted_at
 `
 
 type CopyTarefaParams struct {
@@ -30,6 +30,8 @@ type CopyTarefaRow struct {
 	ProfessorID  int64              `json:"professor_id"`
 	Nome         string             `json:"nome"`
 	Enunciado    string             `json:"enunciado"`
+	Tipo         string             `json:"tipo"`
+	Config       []byte             `json:"config"`
 	TempoCpuMs   int32              `json:"tempo_cpu_ms"`
 	TempoTotalMs int32              `json:"tempo_total_ms"`
 	MemoriaMb    int32              `json:"memoria_mb"`
@@ -45,6 +47,8 @@ func (q *Queries) CopyTarefa(ctx context.Context, arg CopyTarefaParams) (CopyTar
 		&i.ProfessorID,
 		&i.Nome,
 		&i.Enunciado,
+		&i.Tipo,
+		&i.Config,
 		&i.TempoCpuMs,
 		&i.TempoTotalMs,
 		&i.MemoriaMb,
@@ -137,6 +141,8 @@ SELECT t.id,
        t.professor_id,
        t.nome,
        t.enunciado,
+       t.tipo,
+       t.config,
        t.tempo_cpu_ms,
        t.tempo_total_ms,
        t.memoria_mb,
@@ -156,6 +162,8 @@ type GetTarefaRow struct {
 	ProfessorID    int64              `json:"professor_id"`
 	Nome           string             `json:"nome"`
 	Enunciado      string             `json:"enunciado"`
+	Tipo           string             `json:"tipo"`
+	Config         []byte             `json:"config"`
 	TempoCpuMs     int32              `json:"tempo_cpu_ms"`
 	TempoTotalMs   int32              `json:"tempo_total_ms"`
 	MemoriaMb      int32              `json:"memoria_mb"`
@@ -174,6 +182,8 @@ func (q *Queries) GetTarefa(ctx context.Context, id int64) (GetTarefaRow, error)
 		&i.ProfessorID,
 		&i.Nome,
 		&i.Enunciado,
+		&i.Tipo,
+		&i.Config,
 		&i.TempoCpuMs,
 		&i.TempoTotalMs,
 		&i.MemoriaMb,
@@ -188,15 +198,17 @@ func (q *Queries) GetTarefa(ctx context.Context, id int64) (GetTarefaRow, error)
 
 const insertTarefa = `-- name: InsertTarefa :one
 
-INSERT INTO tarefas (professor_id, nome, enunciado, tempo_cpu_ms, tempo_total_ms, memoria_mb, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, professor_id, nome, enunciado, tempo_cpu_ms, tempo_total_ms, memoria_mb, created_at, deleted_at
+INSERT INTO tarefas (professor_id, nome, enunciado, tipo, config, tempo_cpu_ms, tempo_total_ms, memoria_mb, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, professor_id, nome, enunciado, tipo, config, tempo_cpu_ms, tempo_total_ms, memoria_mb, created_at, deleted_at
 `
 
 type InsertTarefaParams struct {
 	ProfessorID  int64       `json:"professor_id"`
 	Nome         string      `json:"nome"`
 	Enunciado    string      `json:"enunciado"`
+	Tipo         string      `json:"tipo"`
+	Config       []byte      `json:"config"`
 	TempoCpuMs   int32       `json:"tempo_cpu_ms"`
 	TempoTotalMs int32       `json:"tempo_total_ms"`
 	MemoriaMb    int32       `json:"memoria_mb"`
@@ -208,6 +220,8 @@ type InsertTarefaRow struct {
 	ProfessorID  int64              `json:"professor_id"`
 	Nome         string             `json:"nome"`
 	Enunciado    string             `json:"enunciado"`
+	Tipo         string             `json:"tipo"`
+	Config       []byte             `json:"config"`
 	TempoCpuMs   int32              `json:"tempo_cpu_ms"`
 	TempoTotalMs int32              `json:"tempo_total_ms"`
 	MemoriaMb    int32              `json:"memoria_mb"`
@@ -222,6 +236,8 @@ func (q *Queries) InsertTarefa(ctx context.Context, arg InsertTarefaParams) (Ins
 		arg.ProfessorID,
 		arg.Nome,
 		arg.Enunciado,
+		arg.Tipo,
+		arg.Config,
 		arg.TempoCpuMs,
 		arg.TempoTotalMs,
 		arg.MemoriaMb,
@@ -233,6 +249,8 @@ func (q *Queries) InsertTarefa(ctx context.Context, arg InsertTarefaParams) (Ins
 		&i.ProfessorID,
 		&i.Nome,
 		&i.Enunciado,
+		&i.Tipo,
+		&i.Config,
 		&i.TempoCpuMs,
 		&i.TempoTotalMs,
 		&i.MemoriaMb,
@@ -290,6 +308,8 @@ SELECT t.id,
        t.professor_id,
        t.nome,
        t.enunciado,
+       t.tipo,
+       t.config,
        t.tempo_cpu_ms,
        t.tempo_total_ms,
        t.memoria_mb,
@@ -318,6 +338,8 @@ type ListTarefasRow struct {
 	ProfessorID    int64              `json:"professor_id"`
 	Nome           string             `json:"nome"`
 	Enunciado      string             `json:"enunciado"`
+	Tipo           string             `json:"tipo"`
+	Config         []byte             `json:"config"`
 	TempoCpuMs     int32              `json:"tempo_cpu_ms"`
 	TempoTotalMs   int32              `json:"tempo_total_ms"`
 	MemoriaMb      int32              `json:"memoria_mb"`
@@ -342,6 +364,8 @@ func (q *Queries) ListTarefas(ctx context.Context, arg ListTarefasParams) ([]Lis
 			&i.ProfessorID,
 			&i.Nome,
 			&i.Enunciado,
+			&i.Tipo,
+			&i.Config,
 			&i.TempoCpuMs,
 			&i.TempoTotalMs,
 			&i.MemoriaMb,
@@ -436,18 +460,22 @@ const updateTarefa = `-- name: UpdateTarefa :one
 UPDATE tarefas
 SET nome           = $2,
     enunciado      = $3,
-    tempo_cpu_ms   = $4,
-    tempo_total_ms = $5,
-    memoria_mb     = $6
+    tipo           = $4,
+    config         = $5,
+    tempo_cpu_ms   = $6,
+    tempo_total_ms = $7,
+    memoria_mb     = $8
 WHERE id = $1
   AND deleted_at IS NULL
-RETURNING id, professor_id, nome, enunciado, tempo_cpu_ms, tempo_total_ms, memoria_mb, created_at, deleted_at
+RETURNING id, professor_id, nome, enunciado, tipo, config, tempo_cpu_ms, tempo_total_ms, memoria_mb, created_at, deleted_at
 `
 
 type UpdateTarefaParams struct {
 	ID           int64  `json:"id"`
 	Nome         string `json:"nome"`
 	Enunciado    string `json:"enunciado"`
+	Tipo         string `json:"tipo"`
+	Config       []byte `json:"config"`
 	TempoCpuMs   int32  `json:"tempo_cpu_ms"`
 	TempoTotalMs int32  `json:"tempo_total_ms"`
 	MemoriaMb    int32  `json:"memoria_mb"`
@@ -458,6 +486,8 @@ type UpdateTarefaRow struct {
 	ProfessorID  int64              `json:"professor_id"`
 	Nome         string             `json:"nome"`
 	Enunciado    string             `json:"enunciado"`
+	Tipo         string             `json:"tipo"`
+	Config       []byte             `json:"config"`
 	TempoCpuMs   int32              `json:"tempo_cpu_ms"`
 	TempoTotalMs int32              `json:"tempo_total_ms"`
 	MemoriaMb    int32              `json:"memoria_mb"`
@@ -470,6 +500,8 @@ func (q *Queries) UpdateTarefa(ctx context.Context, arg UpdateTarefaParams) (Upd
 		arg.ID,
 		arg.Nome,
 		arg.Enunciado,
+		arg.Tipo,
+		arg.Config,
 		arg.TempoCpuMs,
 		arg.TempoTotalMs,
 		arg.MemoriaMb,
@@ -480,6 +512,8 @@ func (q *Queries) UpdateTarefa(ctx context.Context, arg UpdateTarefaParams) (Upd
 		&i.ProfessorID,
 		&i.Nome,
 		&i.Enunciado,
+		&i.Tipo,
+		&i.Config,
 		&i.TempoCpuMs,
 		&i.TempoTotalMs,
 		&i.MemoriaMb,

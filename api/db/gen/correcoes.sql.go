@@ -303,7 +303,9 @@ const listCorrecaoTarefas = `-- name: ListCorrecaoTarefas :many
 SELECT ct.id, ct.correcao_id, ct.tarefa_id, ct.valor_pts,
        ct.nota_auto, ct.nota_final, ct.feedback,
        t.nome AS tarefa_nome,
-       t.enunciado AS tarefa_enunciado
+       t.enunciado AS tarefa_enunciado,
+       t.tipo AS tarefa_tipo,
+       t.config AS tarefa_config
 FROM correcao_tarefas ct
 JOIN tarefas t ON t.id = ct.tarefa_id
 WHERE ct.correcao_id = $1
@@ -320,6 +322,8 @@ type ListCorrecaoTarefasRow struct {
 	Feedback        *string     `json:"feedback"`
 	TarefaNome      string      `json:"tarefa_nome"`
 	TarefaEnunciado string      `json:"tarefa_enunciado"`
+	TarefaTipo      string      `json:"tarefa_tipo"`
+	TarefaConfig    []byte      `json:"tarefa_config"`
 }
 
 func (q *Queries) ListCorrecaoTarefas(ctx context.Context, correcaoID int64) ([]ListCorrecaoTarefasRow, error) {
@@ -341,6 +345,8 @@ func (q *Queries) ListCorrecaoTarefas(ctx context.Context, correcaoID int64) ([]
 			&i.Feedback,
 			&i.TarefaNome,
 			&i.TarefaEnunciado,
+			&i.TarefaTipo,
+			&i.TarefaConfig,
 		); err != nil {
 			return nil, err
 		}
@@ -543,18 +549,21 @@ func (q *Queries) SetNotaAuto(ctx context.Context, arg SetNotaAutoParams) error 
 }
 
 const tarefasDaAtribuicao = `-- name: TarefasDaAtribuicao :many
-SELECT at.tarefa_id, at.linguagem, at.valor_pts, at.ordem
+SELECT at.tarefa_id, at.linguagem, at.valor_pts, at.ordem, t.tipo AS tarefa_tipo, t.config AS tarefa_config
 FROM atividade_tarefas at
 JOIN atribuicoes a ON a.atividade_id = at.atividade_id
+JOIN tarefas t ON t.id = at.tarefa_id
 WHERE a.id = $1
 ORDER BY at.ordem, at.tarefa_id
 `
 
 type TarefasDaAtribuicaoRow struct {
-	TarefaID  int64  `json:"tarefa_id"`
-	Linguagem string `json:"linguagem"`
-	ValorPts  int32  `json:"valor_pts"`
-	Ordem     int32  `json:"ordem"`
+	TarefaID     int64  `json:"tarefa_id"`
+	Linguagem    string `json:"linguagem"`
+	ValorPts     int32  `json:"valor_pts"`
+	Ordem        int32  `json:"ordem"`
+	TarefaTipo   string `json:"tarefa_tipo"`
+	TarefaConfig []byte `json:"tarefa_config"`
 }
 
 func (q *Queries) TarefasDaAtribuicao(ctx context.Context, id int64) ([]TarefasDaAtribuicaoRow, error) {
@@ -571,6 +580,8 @@ func (q *Queries) TarefasDaAtribuicao(ctx context.Context, id int64) ([]TarefasD
 			&i.Linguagem,
 			&i.ValorPts,
 			&i.Ordem,
+			&i.TarefaTipo,
+			&i.TarefaConfig,
 		); err != nil {
 			return nil, err
 		}

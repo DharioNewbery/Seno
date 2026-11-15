@@ -16,7 +16,9 @@ WHERE c.submissao_id = $1;
 SELECT ct.id, ct.correcao_id, ct.tarefa_id, ct.valor_pts,
        ct.nota_auto, ct.nota_final, ct.feedback,
        t.nome AS tarefa_nome,
-       t.enunciado AS tarefa_enunciado
+       t.enunciado AS tarefa_enunciado,
+       t.tipo AS tarefa_tipo,
+       t.config AS tarefa_config
 FROM correcao_tarefas ct
 JOIN tarefas t ON t.id = ct.tarefa_id
 WHERE ct.correcao_id = $1
@@ -139,9 +141,10 @@ JOIN persons p ON p.id = u.person_id
 WHERE s.id = $1;
 
 -- name: TarefasDaAtribuicao :many
-SELECT at.tarefa_id, at.linguagem, at.valor_pts, at.ordem
+SELECT at.tarefa_id, at.linguagem, at.valor_pts, at.ordem, t.tipo AS tarefa_tipo, t.config AS tarefa_config
 FROM atividade_tarefas at
 JOIN atribuicoes a ON a.atividade_id = at.atividade_id
+JOIN tarefas t ON t.id = at.tarefa_id
 WHERE a.id = $1
 ORDER BY at.ordem, at.tarefa_id;
 
