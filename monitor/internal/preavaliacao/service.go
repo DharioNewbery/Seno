@@ -53,9 +53,11 @@ type TestePre struct {
 }
 
 type TarefaPre struct {
-	Ordem    int        `json:"ordem"`
-	Veredito string     `json:"veredito"`
-	Testes   []TestePre `json:"testes"`
+	Ordem       int        `json:"ordem"`
+	Tipo        string     `json:"tipo,omitempty"`
+	Veredito    string     `json:"veredito"`
+	NomeArquivo string     `json:"nome_arquivo,omitempty"`
+	Testes      []TestePre `json:"testes"`
 }
 
 type Relatorio struct {
@@ -102,6 +104,28 @@ func (s *Service) Avaliar(ctx context.Context, mid string, aluno int64, agora ti
 
 	rel := &Relatorio{PreID: preID}
 	for _, tarefa := range t.Carga.Tarefas {
+		tipo := contract.NormalizarTipoTarefa(tarefa.Tipo)
+		if tipo == contract.TipoTarefaArquivo {
+			var nomeArq string
+			errArq := s.pool.QueryRow(ctx, `SELECT nome_arquivo FROM tentativa_arquivo
+			    WHERE monitor_id = $1 AND aluno_api_id = $2 AND tarefa_ordem = $3`,
+				mid, aluno, tarefa.Ordem).Scan(&nomeArq)
+			if errArq == nil && nomeArq != "" {
+				rel.Tarefas = append(rel.Tarefas, TarefaPre{
+					Ordem:       tarefa.Ordem,
+					Tipo:        tipo,
+					Veredito:    "arquivo_anexado",
+					NomeArquivo: nomeArq,
+				})
+			} else {
+				rel.Tarefas = append(rel.Tarefas, TarefaPre{
+					Ordem:    tarefa.Ordem,
+					Tipo:     tipo,
+					Veredito: "sem_arquivo",
+				})
+			}
+			continue
+		}
 		codigo := codigoPara(respostas, tarefa.Ordem)
 		if strings.TrimSpace(codigo) == "" {
 			// resposta vazia: Judge0 rejeita source_code blank (422); relata

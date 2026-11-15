@@ -3,11 +3,13 @@ package httpapi
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/seno-project/seno/contract"
 	"github.com/seno-project/seno/monitor/internal/atividades"
 	"github.com/seno-project/seno/monitor/internal/ensaios"
 	"github.com/seno-project/seno/monitor/internal/estado"
@@ -59,6 +61,9 @@ func RegisterRoutes(r *gin.Engine, d *Dependencies) {
 	a := r.Group("/a", d.RequireSessao, d.guardaOrigin, d.BloquearFinalizado)
 	a.POST("/atividade/:monitor_id/abrir", d.AbrirAtividade)
 	a.PUT("/atividade/:monitor_id/tentativa", d.SalvarTentativa)
+	a.POST("/atividade/:monitor_id/tarefas/:ordem/arquivo", d.EnviarArquivoTarefa)
+	a.GET("/atividade/:monitor_id/tarefas/:ordem/arquivo", d.BaixarArquivoTarefa)
+	a.DELETE("/atividade/:monitor_id/tarefas/:ordem/arquivo", d.RemoverArquivoTarefa)
 	a.POST("/atividade/:monitor_id/testar", d.Ensaio)
 	a.GET("/atividade/:monitor_id/testar", d.EnsaioHistorico)
 	a.GET("/atividade/:monitor_id/testar/:run_id", d.EnsaioResultado)
@@ -88,8 +93,17 @@ func RegisterRoutes(r *gin.Engine, d *Dependencies) {
 // detecta o estouro como 413.
 func (d *Dependencies) limiteCorpo(c *gin.Context) {
 	if d.Cfg != nil && c.Request.Body != nil {
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body,
-			int64(d.Cfg.MaxPayloadBytes))
+		limite := int64(d.Cfg.MaxPayloadBytes)
+		if strings.HasSuffix(c.Request.URL.Path, "/arquivo") {
+			maxArq := int64(contract.MaxArquivoMaxBytes) + (2 << 20)
+			if d.Cfg.ArquivoMaxBytes+(2<<20) > maxArq {
+				maxArq = d.Cfg.ArquivoMaxBytes + (2 << 20)
+			}
+			if maxArq > limite {
+				limite = maxArq
+			}
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limite)
 	}
 	c.Next()
 }

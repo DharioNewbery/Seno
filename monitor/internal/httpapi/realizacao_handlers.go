@@ -3,9 +3,13 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -57,6 +61,7 @@ func (d *Dependencies) AbrirAtividade(c *gin.Context) {
 			"segundos_restantes": aberta.Restantes,
 			"revisao":            aberta.Revisao,
 			"respostas":          aberta.Respostas,
+			"arquivos":           aberta.Arquivos,
 		},
 	})
 }
@@ -99,6 +104,166 @@ func (d *Dependencies) SalvarTentativa(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"revisao": nova})
+}
+
+// EnviarArquivoTarefa — POST /a/atividade/:monitor_id/tarefas/:ordem/arquivo:
+// recebe o arquivo de uma tarefa do tipo arquivo_submissao via multipart/form-data
+// (campo "arquivo") ou JSON ({"nome_arquivo":"...","conteudo":"<base64>"}).
+func (d *Dependencies) EnviarArquivoTarefa(c *gin.Context) {
+	mid, aluno, ok := contextoAluno(c)
+	if !ok {
+		return
+	}
+	ordem, err := strconv.Atoi(c.Param("ordem"))
+	if err != nil || ordem < 1 {
+		respondErro(c, http.StatusBadRequest, contract.CodeValidacao,
+			"Ordem da tarefa inválida.", nil)
+		return
+	}
+
+	maxPadrao := int64(contract.DefaultArquivoMaxBytes)
+	if d.Cfg != nil && d.Cfg.ArquivoMaxBytes > 0 {
+		maxPadrao = d.Cfg.ArquivoMaxBytes
+	}
+
+	var nomeArquivo string
+	var dados []byte
+	ct := strings.ToLower(c.ContentType())
+	if strings.HasPrefix(ct, "multipart/") {
+		fh, err := c.FormFile("arquivo")
+		if err != nil {
+			var maxBytesErr *http.MaxBytesError
+			if errors.As(err, &maxBytesErr) {
+				respondErro(c, http.StatusRequestEntityTooLarge, contract.CodeTamanhoExcedido,
+					contract.ErrArquivoTamanhoExcedido.Error(), nil)
+				return
+			}
+			respondErro(c, http.StatusBadRequest, contract.CodeValidacao,
+				"Envie o arquivo no campo 'arquivo' (multipart/form-data).", nil)
+			return
+		}
+		f, err := fh.Open()
+		if err != nil {
+			respondErro(c, http.StatusBadRequest, contract.CodeValidacao,
+				"Falha ao abrir arquivo enviado.", nil)
+			return
+		}
+		defer f.Close()
+		dados, err = io.ReadAll(io.LimitReader(f, contract.MaxArquivoMaxBytes+1))
+		if err != nil {
+			respondErro(c, http.StatusBadRequest, contract.CodeValidacao,
+				"Falha ao ler arquivo enviado.", nil)
+			return
+		}
+		nomeArquivo = fh.Filename
+	} else {
+		var req struct {
+			NomeArquivo string `json:"nome_arquivo"`
+			Conteudo    []byte `json:"conteudo"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			var maxBytesErr *http.MaxBytesError
+			if errors.As(err, &maxBytesErr) {
+				respondErro(c, http.StatusRequestEntityTooLarge, contract.CodeTamanhoExcedido,
+					contract.ErrArquivoTamanhoExcedido.Error(), nil)
+				return
+			}
+			respondErro(c, http.StatusBadRequest, contract.CodeJSONInvalido,
+				"Corpo inválido para upload de arquivo.", nil)
+			return
+		}
+		nomeArquivo = req.NomeArquivo
+		dados = req.Conteudo
+	}
+
+	meta, novaRevisao, err := d.TentativaS.SalvarArquivo(
+		c.Request.Context(), mid, aluno, ordem, nomeArquivo, dados, maxPadrao, time.Now(),
+	)
+	switch {
+	case errors.Is(err, contract.ErrArquivoTamanhoExcedido):
+		respondErro(c, http.StatusRequestEntityTooLarge, contract.CodeTamanhoExcedido,
+			err.Error(), nil)
+	case errors.Is(err, contract.ErrArquivoExtensaoNegada),
+		errors.Is(err, contract.ErrArquivoConteudoNegado),
+		errors.Is(err, contract.ErrArquivoVazio),
+		errors.Is(err, contract.ErrArquivoNomeInvalido),
+		errors.Is(err, tentativas.ErrTipoNaoArquivo):
+		respondErro(c, http.StatusUnprocessableEntity, contract.CodeValidacao,
+			err.Error(), nil)
+	case errors.Is(err, tentativas.ErrSemTarefa):
+		respondErro(c, http.StatusNotFound, contract.CodeEncerrada,
+			"Tarefa não encontrada na atividade.", nil)
+	case err != nil:
+		mapearErroTentativa(c, err)
+	default:
+		c.JSON(http.StatusOK, gin.H{
+			"arquivo": meta,
+			"revisao": novaRevisao,
+		})
+	}
+}
+
+// BaixarArquivoTarefa — GET /a/atividade/:monitor_id/tarefas/:ordem/arquivo:
+// devolve o arquivo anexado pelo próprio aluno na tarefa.
+func (d *Dependencies) BaixarArquivoTarefa(c *gin.Context) {
+	mid, aluno, ok := contextoAluno(c)
+	if !ok {
+		return
+	}
+	ordem, err := strconv.Atoi(c.Param("ordem"))
+	if err != nil || ordem < 1 {
+		respondErro(c, http.StatusBadRequest, contract.CodeValidacao,
+			"Ordem da tarefa inválida.", nil)
+		return
+	}
+	meta, dados, err := d.TentativaS.ObterArquivo(c.Request.Context(), mid, aluno, ordem)
+	if err != nil {
+		if errors.Is(err, tentativas.ErrArquivoInexistente) {
+			respondErro(c, http.StatusNotFound, contract.CodeEncerrada,
+				"Nenhum arquivo anexado nesta tarefa.", nil)
+			return
+		}
+		mapearErroTentativa(c, err)
+		return
+	}
+	nome, _ := contract.SanitizarNomeArquivo(meta.NomeArquivo)
+	if nome == "" {
+		nome = "arquivo.bin"
+	}
+	mimeType := meta.MimeType
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename=%q; filename*=UTF-8''%s`, nome, url.PathEscape(nome)))
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Header("Content-Length", strconv.Itoa(len(dados)))
+	c.Data(http.StatusOK, mimeType, dados)
+}
+
+// RemoverArquivoTarefa — DELETE /a/atividade/:monitor_id/tarefas/:ordem/arquivo:
+// remove o arquivo anexado pelo aluno durante a tentativa.
+func (d *Dependencies) RemoverArquivoTarefa(c *gin.Context) {
+	mid, aluno, ok := contextoAluno(c)
+	if !ok {
+		return
+	}
+	ordem, err := strconv.Atoi(c.Param("ordem"))
+	if err != nil || ordem < 1 {
+		respondErro(c, http.StatusBadRequest, contract.CodeValidacao,
+			"Ordem da tarefa inválida.", nil)
+		return
+	}
+	novaRevisao, err := d.TentativaS.RemoverArquivo(c.Request.Context(), mid, aluno, ordem, time.Now())
+	if err != nil {
+		if errors.Is(err, tentativas.ErrArquivoInexistente) {
+			respondErro(c, http.StatusNotFound, contract.CodeEncerrada,
+				"Nenhum arquivo anexado nesta tarefa.", nil)
+			return
+		}
+		mapearErroTentativa(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "revisao": novaRevisao})
 }
 
 // mapearErroTentativa converte os erros de negócio do service em respostas.

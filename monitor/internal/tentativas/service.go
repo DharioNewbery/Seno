@@ -33,11 +33,25 @@ func New(pool *pgxpool.Pool, intervalo time.Duration) *Service {
 
 // Erros de negócio que os handlers mapeiam (errors.Is).
 var (
-	ErrEncerrada    = errors.New("janela encerrada")
-	ErrFinalizada   = errors.New("cota de submissões atingida")
-	ErrSemTentativa = errors.New("sem tentativa aberta")
-	ErrRevisao      = errors.New("revisão obsoleta")
+	ErrEncerrada          = errors.New("janela encerrada")
+	ErrFinalizada         = errors.New("cota de submissões atingida")
+	ErrSemTentativa       = errors.New("sem tentativa aberta")
+	ErrRevisao            = errors.New("revisão obsoleta")
+	ErrSemTarefa          = errors.New("tarefa não encontrada")
+	ErrTipoNaoArquivo     = errors.New("tarefa não aceita submissão de arquivo")
+	ErrArquivoInexistente = errors.New("arquivo não encontrado")
 )
+
+// ArquivoTentativaMeta descreve os metadados de um arquivo anexado na tentativa.
+type ArquivoTentativaMeta struct {
+	TarefaOrdem  int       `json:"tarefa_ordem"`
+	TarefaAPIID  int64     `json:"tarefa_api_id"`
+	NomeArquivo  string    `json:"nome_arquivo"`
+	MimeType     string    `json:"mime_type"`
+	TamanhoBytes int64     `json:"tamanho_bytes"`
+	Sha256       string    `json:"sha256"`
+	AtualizadoEm time.Time `json:"atualizado_em"`
+}
 
 // ErroInicio é janela futura, com contagem para o handler do 409 (errors.As).
 type ErroInicio struct{ Segundos int64 }
@@ -64,6 +78,7 @@ type Aberta struct {
 	Atrasada  bool
 	Revisao   int
 	Respostas map[string]any
+	Arquivos  map[string]ArquivoTentativaMeta
 }
 
 // Abrir cria ou devolve a tentativa do aluno (spec §5.1, idempotente).
@@ -143,6 +158,7 @@ func (s *Service) Abrir(ctx context.Context, mid string, aluno int64, agora time
 	if restantes < 0 {
 		restantes = 0
 	}
+	arquivos := s.listarArquivosMeta(ctx, mid, aluno)
 	return &Aberta{
 		Carga:     c.carga,
 		Regras:    c.regras,
@@ -151,6 +167,7 @@ func (s *Service) Abrir(ctx context.Context, mid string, aluno int64, agora time
 		Atrasada:  est.Atrasada,
 		Revisao:   revisao,
 		Respostas: resp,
+		Arquivos:  arquivos,
 	}, nil
 }
 
@@ -259,6 +276,171 @@ func (s *Service) RevisaoAtual(ctx context.Context, mid string, aluno int64) (in
 		return 0, ErrSemTentativa
 	}
 	return r, nil
+}
+
+func (s *Service) listarArquivosMeta(ctx context.Context, mid string, aluno int64) map[string]ArquivoTentativaMeta {
+	out := map[string]ArquivoTentativaMeta{}
+	rows, err := s.pool.Query(ctx, `SELECT tarefa_ordem, tarefa_api_id, nome_arquivo, mime_type, tamanho_bytes, sha256, atualizado_em
+	    FROM tentativa_arquivo WHERE monitor_id = $1 AND aluno_api_id = $2 ORDER BY tarefa_ordem`, mid, aluno)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var m ArquivoTentativaMeta
+		if err := rows.Scan(&m.TarefaOrdem, &m.TarefaAPIID, &m.NomeArquivo, &m.MimeType, &m.TamanhoBytes, &m.Sha256, &m.AtualizadoEm); err == nil {
+			out[strconv.Itoa(m.TarefaOrdem)] = m
+		}
+	}
+	return out
+}
+
+// SalvarArquivo valida e grava o arquivo submetido pelo aluno para uma tarefa do tipo arquivo_submissao.
+func (s *Service) SalvarArquivo(ctx context.Context, mid string, aluno int64, ordem int,
+	nome string, dados []byte, maxPadrao int64, agora time.Time) (ArquivoTentativaMeta, int, error) {
+	if _, err := s.VerificarJanela(ctx, mid, aluno, agora); err != nil {
+		return ArquivoTentativaMeta{}, 0, err
+	}
+	c, err := s.carregar(ctx, mid)
+	if err != nil {
+		return ArquivoTentativaMeta{}, 0, ErrSemTentativa
+	}
+	var tarefa *contract.TarefaCarga
+	for i := range c.carga.Tarefas {
+		if c.carga.Tarefas[i].Ordem == ordem {
+			tarefa = &c.carga.Tarefas[i]
+			break
+		}
+	}
+	if tarefa == nil {
+		return ArquivoTentativaMeta{}, 0, ErrSemTarefa
+	}
+	if contract.NormalizarTipoTarefa(tarefa.Tipo) != contract.TipoTarefaArquivo {
+		return ArquivoTentativaMeta{}, 0, ErrTipoNaoArquivo
+	}
+	var cfg contract.ConfigTarefaArquivo
+	if tarefa.ConfigArquivo != nil {
+		cfg = *tarefa.ConfigArquivo
+	}
+	val, err := contract.ValidarArquivo(nome, dados, cfg, maxPadrao)
+	if err != nil {
+		return ArquivoTentativaMeta{}, 0, err
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return ArquivoTentativaMeta{}, 0, fmt.Errorf("tentativas: tx arquivo: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var novaRevisao int
+	err = tx.QueryRow(ctx, `UPDATE tentativa SET revisao = revisao + 1
+	    WHERE monitor_id = $1 AND aluno_api_id = $2
+	    RETURNING revisao`, mid, aluno).Scan(&novaRevisao)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ArquivoTentativaMeta{}, 0, ErrSemTentativa
+	}
+	if err != nil {
+		return ArquivoTentativaMeta{}, 0, fmt.Errorf("tentativas: revisao arquivo: %w", err)
+	}
+
+	var atualizadoEm time.Time
+	if err := tx.QueryRow(ctx, `INSERT INTO tentativa_arquivo
+	    (monitor_id, aluno_api_id, tarefa_ordem, tarefa_api_id, nome_arquivo, mime_type, tamanho_bytes, sha256, conteudo, atualizado_em)
+	    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+	    ON CONFLICT (monitor_id, aluno_api_id, tarefa_ordem) DO UPDATE SET
+	      tarefa_api_id = EXCLUDED.tarefa_api_id,
+	      nome_arquivo = EXCLUDED.nome_arquivo,
+	      mime_type = EXCLUDED.mime_type,
+	      tamanho_bytes = EXCLUDED.tamanho_bytes,
+	      sha256 = EXCLUDED.sha256,
+	      conteudo = EXCLUDED.conteudo,
+	      atualizado_em = EXCLUDED.atualizado_em
+	    RETURNING atualizado_em`,
+		mid, aluno, ordem, tarefa.TarefaAPIID, val.NomeSanitizado, val.MimeType, val.TamanhoBytes, val.Sha256, dados, agora,
+	).Scan(&atualizadoEm); err != nil {
+		return ArquivoTentativaMeta{}, 0, fmt.Errorf("tentativas: upsert arquivo: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return ArquivoTentativaMeta{}, 0, err
+	}
+	return ArquivoTentativaMeta{
+		TarefaOrdem:  ordem,
+		TarefaAPIID:  tarefa.TarefaAPIID,
+		NomeArquivo:  val.NomeSanitizado,
+		MimeType:     val.MimeType,
+		TamanhoBytes: val.TamanhoBytes,
+		Sha256:       val.Sha256,
+		AtualizadoEm: atualizadoEm,
+	}, novaRevisao, nil
+}
+
+// ObterArquivo lê o arquivo anexado na tentativa (ou na última submissão se a tentativa já tiver sido encerrada).
+func (s *Service) ObterArquivo(ctx context.Context, mid string, aluno int64, ordem int) (ArquivoTentativaMeta, []byte, error) {
+	var m ArquivoTentativaMeta
+	var conteudo []byte
+	m.TarefaOrdem = ordem
+	err := s.pool.QueryRow(ctx, `SELECT tarefa_api_id, nome_arquivo, mime_type, tamanho_bytes, sha256, conteudo, atualizado_em
+	    FROM tentativa_arquivo
+	    WHERE monitor_id = $1 AND aluno_api_id = $2 AND tarefa_ordem = $3`,
+		mid, aluno, ordem).Scan(&m.TarefaAPIID, &m.NomeArquivo, &m.MimeType, &m.TamanhoBytes, &m.Sha256, &conteudo, &m.AtualizadoEm)
+	if err == nil {
+		return m, conteudo, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return ArquivoTentativaMeta{}, nil, err
+	}
+	// Fallback: se o aluno já submeteu e quer baixar seu próprio arquivo enviado
+	err = s.pool.QueryRow(ctx, `SELECT sa.tarefa_api_id, sa.nome_arquivo, sa.mime_type, sa.tamanho_bytes, sa.sha256, sa.conteudo, sa.criado_em
+	    FROM submissao_arquivo sa
+	    JOIN submissao s ON s.id = sa.submissao_id
+	    WHERE s.monitor_id = $1 AND s.aluno_api_id = $2 AND sa.tarefa_ordem = $3
+	    ORDER BY s.n_t DESC LIMIT 1`,
+		mid, aluno, ordem).Scan(&m.TarefaAPIID, &m.NomeArquivo, &m.MimeType, &m.TamanhoBytes, &m.Sha256, &conteudo, &m.AtualizadoEm)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ArquivoTentativaMeta{}, nil, ErrArquivoInexistente
+	}
+	if err != nil {
+		return ArquivoTentativaMeta{}, nil, err
+	}
+	return m, conteudo, nil
+}
+
+// RemoverArquivo remove o arquivo anexado na tentativa aberta.
+func (s *Service) RemoverArquivo(ctx context.Context, mid string, aluno int64, ordem int, agora time.Time) (int, error) {
+	if _, err := s.VerificarJanela(ctx, mid, aluno, agora); err != nil {
+		return 0, err
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+
+	var novaRevisao int
+	err = tx.QueryRow(ctx, `UPDATE tentativa SET revisao = revisao + 1
+	    WHERE monitor_id = $1 AND aluno_api_id = $2
+	    RETURNING revisao`, mid, aluno).Scan(&novaRevisao)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrSemTentativa
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	tag, err := tx.Exec(ctx, `DELETE FROM tentativa_arquivo
+	    WHERE monitor_id = $1 AND aluno_api_id = $2 AND tarefa_ordem = $3`, mid, aluno, ordem)
+	if err != nil {
+		return 0, err
+	}
+	if tag.RowsAffected() == 0 {
+		return 0, ErrArquivoInexistente
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, err
+	}
+	return novaRevisao, nil
 }
 
 // finalizada aplica o bloqueio §5.6: submissões únicas fecham após 1 entrega;

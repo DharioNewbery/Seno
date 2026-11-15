@@ -163,6 +163,17 @@ func (s *Service) Confirmar(ctx context.Context, mid string, aluno int64, preID 
 		mid, aluno, nT, string(dados), abertaEm, agora, est.Atrasada).Scan(&subID); err != nil {
 		return nil, fmt.Errorf("submissoes: gravando submissão: %w", err)
 	}
+	if _, err := tx.Exec(ctx, `INSERT INTO submissao_arquivo
+	    (submissao_id, tarefa_ordem, tarefa_api_id, nome_arquivo, mime_type, tamanho_bytes, sha256, conteudo, criado_em)
+	    SELECT $1, tarefa_ordem, tarefa_api_id, nome_arquivo, mime_type, tamanho_bytes, sha256, conteudo, $4
+	    FROM tentativa_arquivo
+	    WHERE monitor_id = $2 AND aluno_api_id = $3`, subID, mid, aluno, agora); err != nil {
+		return nil, fmt.Errorf("submissoes: copiando arquivos da tentativa: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM tentativa_arquivo
+	    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno); err != nil {
+		return nil, fmt.Errorf("submissoes: limpando tentativa_arquivo: %w", err)
+	}
 	// Limpa dados temporários gerados durante a realização da atividade.
 	if _, err := tx.Exec(ctx, `DELETE FROM pre_avaliacao
 	    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno); err != nil {
@@ -299,6 +310,22 @@ func (s *Service) Handler() fila.Handler {
 		tarefas := make([]resultadoCOR, 0, len(t.Carga.Tarefas))
 		notaTotal := 0.0
 		for _, tarefa := range t.Carga.Tarefas {
+			if contract.NormalizarTipoTarefa(tarefa.Tipo) == contract.TipoTarefaArquivo {
+				var existeArq bool
+				_ = s.pool.QueryRow(ctx, `SELECT EXISTS(
+					SELECT 1 FROM submissao_arquivo WHERE submissao_id = $1 AND tarefa_ordem = $2
+				)`, p.SubmissaoID, tarefa.Ordem).Scan(&existeArq)
+				veredito := "sem_arquivo"
+				if existeArq {
+					veredito = "arquivo_entregue"
+				}
+				tarefas = append(tarefas, resultadoCOR{
+					Ordem:       tarefa.Ordem,
+					TarefaAPIID: tarefa.TarefaAPIID,
+					Veredito:    veredito,
+				})
+				continue
+			}
 			codigo := ""
 			if v, ok := respostas[fmt.Sprint(tarefa.Ordem)]; ok {
 				if s, ok := v.(string); ok {
@@ -500,7 +527,25 @@ func (s *Service) Excluir(ctx context.Context, mid string, aluno int64) error {
 		return fmt.Errorf("submissoes: restaurar tentativa: %w", err)
 	}
 
-	// Deleta a submissão (correção cai em cascata)
+	// Restaura os arquivos submetidos de volta para tentativa_arquivo
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO tentativa_arquivo (monitor_id, aluno_api_id, tarefa_ordem, tarefa_api_id, nome_arquivo, mime_type, tamanho_bytes, sha256, conteudo, atualizado_em)
+		SELECT $1, $2, tarefa_ordem, tarefa_api_id, nome_arquivo, mime_type, tamanho_bytes, sha256, conteudo, now()
+		FROM submissao_arquivo
+		WHERE submissao_id = $3
+		ON CONFLICT (monitor_id, aluno_api_id, tarefa_ordem) DO UPDATE SET
+			tarefa_api_id = EXCLUDED.tarefa_api_id,
+			nome_arquivo = EXCLUDED.nome_arquivo,
+			mime_type = EXCLUDED.mime_type,
+			tamanho_bytes = EXCLUDED.tamanho_bytes,
+			sha256 = EXCLUDED.sha256,
+			conteudo = EXCLUDED.conteudo,
+			atualizado_em = EXCLUDED.atualizado_em`,
+		mid, aluno, subID); err != nil {
+		return fmt.Errorf("submissoes: restaurar tentativa_arquivo: %w", err)
+	}
+
+	// Deleta a submissão (correção e submissao_arquivo caem em cascata)
 	if _, err := tx.Exec(ctx, `DELETE FROM submissao WHERE id = $1`, subID); err != nil {
 		return fmt.Errorf("submissoes: delete submissao: %w", err)
 	}
@@ -549,6 +594,17 @@ func (s *Service) Coletar(ctx context.Context, mid string, aluno int64, agora ti
 	    VALUES ($1, $2, $3, $4::jsonb, $5, $6, true) RETURNING id`,
 		mid, aluno, nT, string(dados), abertaEm, agora).Scan(&subID); err != nil {
 		return nil, fmt.Errorf("submissoes: gravando submissão: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO submissao_arquivo
+	    (submissao_id, tarefa_ordem, tarefa_api_id, nome_arquivo, mime_type, tamanho_bytes, sha256, conteudo, criado_em)
+	    SELECT $1, tarefa_ordem, tarefa_api_id, nome_arquivo, mime_type, tamanho_bytes, sha256, conteudo, $4
+	    FROM tentativa_arquivo
+	    WHERE monitor_id = $2 AND aluno_api_id = $3`, subID, mid, aluno, agora); err != nil {
+		return nil, fmt.Errorf("submissoes: copiando arquivos da tentativa na coleta: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM tentativa_arquivo
+	    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno); err != nil {
+		return nil, fmt.Errorf("submissoes: limpando tentativa_arquivo na coleta: %w", err)
 	}
 
 	if _, err := tx.Exec(ctx, `DELETE FROM pre_avaliacao
@@ -622,12 +678,14 @@ func (s *Service) ObterDetalhes(ctx context.Context, mid string, aluno int64) (*
 	for _, t := range envelope.Carga.Tarefas {
 		ordemParaTarefaID[t.Ordem] = t.TarefaAPIID
 		det.Atividade.Tarefas = append(det.Atividade.Tarefas, contract.TarefaInfoMonitor{
-			Ordem:       t.Ordem,
-			TarefaAPIID: t.TarefaAPIID,
-			Nome:        t.Nome,
-			Enunciado:   t.Enunciado,
-			Linguagem:   t.Linguagem,
-			ValorPts:    t.ValorPts,
+			Ordem:         t.Ordem,
+			TarefaAPIID:   t.TarefaAPIID,
+			Nome:          t.Nome,
+			Enunciado:     t.Enunciado,
+			Tipo:          contract.NormalizarTipoTarefa(t.Tipo),
+			ConfigArquivo: t.ConfigArquivo,
+			Linguagem:     t.Linguagem,
+			ValorPts:      t.ValorPts,
 		})
 	}
 
@@ -673,6 +731,7 @@ func (s *Service) ObterDetalhes(ctx context.Context, mid string, aluno int64) (*
 			EntregueEm: entregueEm,
 			Atrasada:   atrasada,
 			Respostas:  respostas,
+			Arquivos:   s.carregarArquivosSubmissao(ctx, subID, ordemParaTarefaID),
 		}
 
 		var (
@@ -724,11 +783,68 @@ func (s *Service) ObterDetalhes(ctx context.Context, mid string, aluno int64) (*
 			det.Submissao = &contract.SubmissaoMonitor{
 				AlunoID:   aluno,
 				Respostas: respostas,
+				Arquivos:  s.carregarArquivosTentativa(ctx, mid, aluno, ordemParaTarefaID),
 			}
 		}
 	}
 
 	return det, nil
+}
+
+func (s *Service) carregarArquivosSubmissao(ctx context.Context, subID int64, ordemParaTarefaID map[int]int64) map[string]contract.ArquivoSubmetidoMonitor {
+	rows, err := s.pool.Query(ctx, `
+		SELECT tarefa_ordem, tarefa_api_id, nome_arquivo, mime_type, tamanho_bytes, sha256, conteudo, criado_em
+		FROM submissao_arquivo
+		WHERE submissao_id = $1
+		ORDER BY tarefa_ordem`, subID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var out map[string]contract.ArquivoSubmetidoMonitor
+	for rows.Next() {
+		var a contract.ArquivoSubmetidoMonitor
+		var criadoEm time.Time
+		if err := rows.Scan(&a.TarefaOrdem, &a.TarefaAPIID, &a.NomeArquivo, &a.MimeType, &a.TamanhoBytes, &a.Sha256, &a.Conteudo, &criadoEm); err == nil {
+			if a.TarefaAPIID == 0 {
+				a.TarefaAPIID = ordemParaTarefaID[a.TarefaOrdem]
+			}
+			a.EnviadoEm = criadoEm.UTC().Format(time.RFC3339)
+			if out == nil {
+				out = make(map[string]contract.ArquivoSubmetidoMonitor)
+			}
+			out[strconv.Itoa(a.TarefaOrdem)] = a
+		}
+	}
+	return out
+}
+
+func (s *Service) carregarArquivosTentativa(ctx context.Context, mid string, aluno int64, ordemParaTarefaID map[int]int64) map[string]contract.ArquivoSubmetidoMonitor {
+	rows, err := s.pool.Query(ctx, `
+		SELECT tarefa_ordem, tarefa_api_id, nome_arquivo, mime_type, tamanho_bytes, sha256, conteudo, atualizado_em
+		FROM tentativa_arquivo
+		WHERE monitor_id = $1 AND aluno_api_id = $2
+		ORDER BY tarefa_ordem`, mid, aluno)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var out map[string]contract.ArquivoSubmetidoMonitor
+	for rows.Next() {
+		var a contract.ArquivoSubmetidoMonitor
+		var atualizadoEm time.Time
+		if err := rows.Scan(&a.TarefaOrdem, &a.TarefaAPIID, &a.NomeArquivo, &a.MimeType, &a.TamanhoBytes, &a.Sha256, &a.Conteudo, &atualizadoEm); err == nil {
+			if a.TarefaAPIID == 0 {
+				a.TarefaAPIID = ordemParaTarefaID[a.TarefaOrdem]
+			}
+			a.EnviadoEm = atualizadoEm.UTC().Format(time.RFC3339)
+			if out == nil {
+				out = make(map[string]contract.ArquivoSubmetidoMonitor)
+			}
+			out[strconv.Itoa(a.TarefaOrdem)] = a
+		}
+	}
+	return out
 }
 
 // notificarAPI envia o pacote da submissão e correção para a API principal via HMAC
