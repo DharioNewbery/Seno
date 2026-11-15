@@ -59,14 +59,16 @@ type AtividadeCarga struct {
 }
 
 type TarefaCarga struct {
-	Ordem       int          `json:"ordem"`
-	TarefaAPIID int64        `json:"tarefa_api_id"`
-	Nome        string       `json:"nome"`
-	ValorPts    float64      `json:"valor_pts"`
-	Enunciado   string       `json:"enunciado"`
-	Linguagem   string       `json:"linguagem"`
-	Limites     *Limites     `json:"limites"`
-	Testes      []TesteCarga `json:"testes"`
+	Ordem         int                  `json:"ordem"`
+	TarefaAPIID   int64                `json:"tarefa_api_id"`
+	Tipo          string               `json:"tipo,omitempty"` // "programacao" (default) | "arquivo_submissao"
+	Nome          string               `json:"nome"`
+	ValorPts      float64              `json:"valor_pts"`
+	Enunciado     string               `json:"enunciado"`
+	Linguagem     string               `json:"linguagem"`
+	Limites       *Limites             `json:"limites"`
+	ConfigArquivo *ConfigTarefaArquivo `json:"config_arquivo,omitempty"`
+	Testes        []TesteCarga         `json:"testes"`
 }
 
 type Limites struct {
@@ -125,13 +127,14 @@ type PacoteSubmissaoMonitor struct {
 }
 
 type SubmissaoMonitor struct {
-	ID         int64             `json:"id"`
-	AlunoID    int64             `json:"aluno_id"`
-	NT         int               `json:"n_t"`
-	ComecouEm  time.Time         `json:"comecou_em"`
-	EntregueEm time.Time         `json:"entregue_em"`
-	Atrasada   bool              `json:"atrasada"`
-	Respostas  map[string]string `json:"respostas"` // ordem ("1", "2"...) -> código
+	ID         int64                              `json:"id"`
+	AlunoID    int64                              `json:"aluno_id"`
+	NT         int                                `json:"n_t"`
+	ComecouEm  time.Time                          `json:"comecou_em"`
+	EntregueEm time.Time                          `json:"entregue_em"`
+	Atrasada   bool                               `json:"atrasada"`
+	Respostas  map[string]string                  `json:"respostas"`          // ordem ("1", "2"...) -> código
+	Arquivos   map[string]ArquivoSubmetidoMonitor `json:"arquivos,omitempty"` // ordem ("1", "2"...) -> arquivo
 }
 
 type CorrecaoMonitor struct {
@@ -169,10 +172,12 @@ type AtividadeInfoMonitor struct {
 }
 
 type TarefaInfoMonitor struct {
-	Ordem       int     `json:"ordem"`
-	TarefaAPIID int64   `json:"tarefa_api_id"`
-	Nome        string  `json:"nome"`
-	Enunciado   string  `json:"enunciado"`
-	Linguagem   string  `json:"linguagem"`
-	ValorPts    float64 `json:"valor_pts"`
+	Ordem         int                  `json:"ordem"`
+	TarefaAPIID   int64                `json:"tarefa_api_id"`
+	Tipo          string               `json:"tipo,omitempty"`
+	Nome          string               `json:"nome"`
+	Enunciado     string               `json:"enunciado"`
+	Linguagem     string               `json:"linguagem"`
+	ValorPts      float64              `json:"valor_pts"`
+	ConfigArquivo *ConfigTarefaArquivo `json:"config_arquivo,omitempty"`
 }
