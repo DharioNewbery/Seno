@@ -115,18 +115,20 @@ func horaPtr(ts pgtype.Timestamptz) *time.Time {
 }
 
 // notaPtrMeu: nota só existe quando a correção foi publicada; o valor
-// chega como texto pelo LATERAL (NULL → nil).
+// chega como texto pelo LATERAL (NULL → 0 quando publicada).
 func notaPtrMeu(valor any, pub pgtype.Timestamptz) *int32 {
 	if !pub.Valid {
 		return nil
 	}
 	texto, ok := valor.(string)
-	if !ok {
-		return nil
+	if !ok || texto == "" {
+		zero := int32(0)
+		return &zero
 	}
 	var n int
 	if _, err := fmt.Sscan(texto, &n); err != nil {
-		return nil
+		zero := int32(0)
+		return &zero
 	}
 	out := int32(n)
 	return &out

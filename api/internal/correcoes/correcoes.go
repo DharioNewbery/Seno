@@ -83,6 +83,8 @@ type ArquivoMeta struct {
 type Tarefa struct {
 	ID            int64                         `json:"id"`
 	TarefaID      int64                         `json:"tarefa_id"`
+	Ordem         int32                         `json:"ordem,omitempty"`
+	Linguagem     string                        `json:"linguagem,omitempty"`
 	TarefaNome    string                        `json:"tarefa_nome"`
 	TarefaTipo    string                        `json:"tarefa_tipo"`
 	ConfigArquivo *contract.ConfigTarefaArquivo `json:"config_arquivo,omitempty"`
@@ -98,15 +100,17 @@ type Tarefa struct {
 
 // Resultado é a execução de um teste (veredito Judge0).
 type Resultado struct {
-	TesteID       int64   `json:"teste_id"`
-	Status        *string `json:"status,omitempty"`
-	Stdout        *string `json:"stdout,omitempty"`
-	Stderr        *string `json:"stderr,omitempty"`
-	CompileOutput *string `json:"compile_output,omitempty"`
-	Tempo         *string `json:"tempo,omitempty"`
-	Memoria       *string `json:"memoria,omitempty"`
-	CPU           *string `json:"cpu,omitempty"`
-	Publico       bool    `json:"publico"`
+	TesteID        int64   `json:"teste_id"`
+	Status         *string `json:"status,omitempty"`
+	Stdout         *string `json:"stdout,omitempty"`
+	Stderr         *string `json:"stderr,omitempty"`
+	CompileOutput  *string `json:"compile_output,omitempty"`
+	Tempo          *string `json:"tempo,omitempty"`
+	Memoria        *string `json:"memoria,omitempty"`
+	CPU            *string `json:"cpu,omitempty"`
+	Stdin          string  `json:"stdin,omitempty"`
+	StdoutEsperado string  `json:"stdout_esperado,omitempty"`
+	Publico        bool    `json:"publico"`
 }
 
 // SubmissaoResumo é o contexto/professor da submissão corrigida.
@@ -129,9 +133,12 @@ type VisaoProfessor struct {
 // VisaoAluno: pré-publicação traz apenas o estado (sem detalhes);
 // pós-publicação traz tudo, inclusive testes privados (§Visibilidade).
 type VisaoAluno struct {
-	Publicada   bool       `json:"publicada"`
-	PublicadaEm *time.Time `json:"publicada_em,omitempty"`
-	Correcao    *Correcao  `json:"correcao,omitempty"`
+	Publicada     bool       `json:"publicada"`
+	PublicadaEm   *time.Time `json:"publicada_em,omitempty"`
+	Confirmada    bool       `json:"confirmada,omitempty"`
+	AtribuicaoID  int64      `json:"atribuicao_id,omitempty"`
+	AtividadeNome string     `json:"atividade_nome,omitempty"`
+	Correcao      *Correcao  `json:"correcao,omitempty"`
 }
 
 // Edição do professor (PATCH): feedback geral + notas por tarefa.
@@ -228,17 +235,30 @@ func (s *Service) montarDeRow(
 		porCT[r.CorrecaoTarefaID] = append(porCT[r.CorrecaoTarefaID], Resultado{
 			TesteID: r.TesteID, Status: textoPtr(r.Status),
 			Stdout: textoPtr(r.Stdout), Stderr: textoPtr(r.Stderr),
-			CompileOutput: textoPtr(r.CompileOutput),
-			Tempo:         textoPtr(r.Tempo), Memoria: textoPtr(r.Memoria),
-			CPU: textoPtr(r.Cpu), Publico: r.Publico,
+			CompileOutput:  textoPtr(r.CompileOutput),
+			Tempo:          textoPtr(r.Tempo), Memoria: textoPtr(r.Memoria),
+			CPU:            textoPtr(r.Cpu),
+			Stdin:          r.Stdin,
+			StdoutEsperado: r.StdoutEsperado,
+			Publico:        r.Publico,
 		})
 	}
 	codigosPorTarefa := map[int64]string{}
-	if sub, err := s.store.Q.GetSubmissaoCorrecao(ctx, row.SubmissaoID); err == nil && len(sub.Snapshot) > 0 {
-		var st snapshotTasks
-		if err := json.Unmarshal(sub.Snapshot, &st); err == nil {
-			for _, t := range st.Tasks {
-				codigosPorTarefa[t.ID] = t.Text
+	ordemPorTarefa := map[int64]int32{}
+	lingPorTarefa := map[int64]string{}
+	if sub, err := s.store.Q.GetSubmissaoCorrecao(ctx, row.SubmissaoID); err == nil {
+		if len(sub.Snapshot) > 0 {
+			var st snapshotTasks
+			if err := json.Unmarshal(sub.Snapshot, &st); err == nil {
+				for _, t := range st.Tasks {
+					codigosPorTarefa[t.ID] = t.Text
+				}
+			}
+		}
+		if tas, errT := s.store.Q.TarefasDaAtribuicao(ctx, sub.AtribuicaoID); errT == nil {
+			for _, ta := range tas {
+				ordemPorTarefa[ta.TarefaID] = ta.Ordem
+				lingPorTarefa[ta.TarefaID] = ta.Linguagem
 			}
 		}
 	}
@@ -255,10 +275,17 @@ func (s *Service) montarDeRow(
 		}
 	}
 	tarefas := make([]Tarefa, 0, len(cts))
-	for _, ct := range cts {
+	for idx, ct := range cts {
 		tipo := contract.NormalizarTipoTarefa(ct.TarefaTipo)
+		ordem := ordemPorTarefa[ct.TarefaID]
+		if ordem <= 0 {
+			ordem = int32(idx + 1)
+		}
 		item := Tarefa{
-			ID: ct.ID, TarefaID: ct.TarefaID, TarefaNome: ct.TarefaNome,
+			ID: ct.ID, TarefaID: ct.TarefaID,
+			Ordem:      ordem,
+			Linguagem:  lingPorTarefa[ct.TarefaID],
+			TarefaNome: ct.TarefaNome,
 			TarefaTipo: tipo,
 			Enunciado:  ct.TarefaEnunciado,
 			Codigo:     codigosPorTarefa[ct.TarefaID],
@@ -757,11 +784,17 @@ func (s *Service) VerAluno(
 	if err != nil {
 		return VisaoAluno{}, err
 	}
-	visao := VisaoAluno{}
-	if cor != nil && cor.PublicadaEm != nil {
-		visao.Publicada = true
-		visao.PublicadaEm = cor.PublicadaEm
-		visao.Correcao = cor
+	visao := VisaoAluno{
+		AtribuicaoID:  row.AtribuicaoID,
+		AtividadeNome: row.AtividadeNome,
+	}
+	if cor != nil {
+		visao.Confirmada = cor.ConfirmadaEm != nil
+		if cor.PublicadaEm != nil {
+			visao.Publicada = true
+			visao.PublicadaEm = cor.PublicadaEm
+			visao.Correcao = cor
+		}
 	}
 	return visao, nil
 }
