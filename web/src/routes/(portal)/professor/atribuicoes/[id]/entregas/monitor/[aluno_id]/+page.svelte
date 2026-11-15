@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { dataHora } from "#lib/formato";
+  import { dataHora, formatarBytes } from "#lib/formato";
   import type { PageProps } from "./$types";
   import EditorCodigo from "#lib/components/EditorCodigo.svelte";
 
@@ -14,6 +14,11 @@
   function resultadoDaTarefa(ordem: number) {
     if (!cor?.resultados?.tarefas) return null;
     return cor.resultados.tarefas.find((t) => t.ordem === ordem) ?? null;
+  }
+
+  function arquivoDaTarefa(ordem: number) {
+    if (!sub?.arquivos) return null;
+    return sub.arquivos.find((a) => a.tarefa_ordem === ordem) ?? null;
   }
 </script>
 
@@ -81,15 +86,21 @@
       {#each atv.tarefas as t (t.ordem)}
         {@const res = resultadoDaTarefa(t.ordem)}
         {@const cod = sub.respostas[String(t.ordem)] ?? ""}
+        {@const arq = arquivoDaTarefa(t.ordem)}
+        {@const isArq = t.tipo === "arquivo_submissao" || Boolean(arq)}
         <article class="tarefa-cartao">
           <header class="tarefa-cabecalho">
             <div>
               <h3>Questão {t.ordem}: {t.nome}</h3>
               <span class="tarefa-meta">
-                Linguagem: <code>{t.linguagem}</code> · Valor: {t.valor_pts} pts
+                {#if isArq}
+                  Tipo: <code>Submissão de arquivo</code> · Valor: {t.valor_pts} pts
+                {:else}
+                  Linguagem: <code>{t.linguagem}</code> · Valor: {t.valor_pts} pts
+                {/if}
               </span>
             </div>
-            {#if res}
+            {#if res && !isArq}
               <div class="tarefa-resultado-resumo">
                 <span class="badge {res.veredito === 'accepted' ? 'sucesso' : 'perigo'}">
                   {res.veredito}
@@ -106,62 +117,92 @@
             </div>
           {/if}
 
-          <div class="bloco-codigo">
-            <span class="subrotulo">Código submetido pelo aluno:</span>
-            {#if cod.trim().length > 0}
-              <EditorCodigo valor={cod} linguagem={t.linguagem} somenteLeitura={true} />
-            {:else}
-              <p class="codigo-vazio">Nenhum código enviado para esta tarefa.</p>
-            {/if}
-          </div>
-
-          {#if res && res.testes && res.testes.length > 0}
-            <div class="bloco-testes">
-              <span class="subrotulo">Resultados dos casos de teste:</span>
-              <ul class="lista-testes">
-                {#each res.testes as teste (teste.ordem)}
-                  <li class="item-teste {teste.status === 'accepted' ? 'ok' : 'falha'}">
-                    <div class="teste-info">
-                      <span class="badge {teste.status === 'accepted' ? 'sucesso' : 'perigo'}">
-                        {teste.status}
-                      </span>
-                      <span class="teste-nome">Teste #{teste.ordem}</span>
-                      {#if teste.privado}
-                        <span class="teste-detalhe">(privado)</span>
-                      {:else}
-                        <span class="teste-detalhe">(público)</span>
+          {#if isArq}
+            <div class="bloco-codigo">
+              <span class="subrotulo">Arquivo submetido pelo aluno:</span>
+              {#if arq}
+                <div class="arquivo-box">
+                  <div class="arquivo-meta">
+                    <strong>{arq.nome_arquivo}</strong>
+                    <span class="tarefa-meta">
+                      {formatarBytes(arq.tamanho_bytes)} · {arq.mime_type}
+                      {#if arq.sha256}
+                        · SHA-256: <code>{arq.sha256.slice(0, 12)}…</code>
                       {/if}
-                      {#if teste.tempo !== undefined}
-                        <span class="teste-detalhe">{teste.tempo}s</span>
-                      {/if}
-                      {#if teste.memoria !== undefined}
-                        <span class="teste-detalhe">{teste.memoria}KB</span>
-                      {/if}
-                    </div>
-                    {#if teste.stderr}
-                      <details class="detalhe-saida">
-                        <summary>stderr</summary>
-                        <pre>{teste.stderr}</pre>
-                      </details>
-                    {/if}
-                    {#if teste.compile_output}
-                      <details class="detalhe-saida">
-                        <summary>saída de compilação</summary>
-                        <pre>{teste.compile_output}</pre>
-                      </details>
-                    {/if}
-                    {#if teste.stdout}
-                      <details class="detalhe-saida">
-                        <summary>stdout</summary>
-                        <pre>{teste.stdout}</pre>
-                      </details>
-                    {/if}
-                  </li>
-                {/each}
-              </ul>
+                    </span>
+                  </div>
+                  {#if atribuicao}
+                    <a
+                      class="botao-download"
+                      href={`/api/atribuicoes/${atribuicao.id}/monitor/alunos/${sub.aluno_id}/tarefas/${t.ordem}/arquivo`}
+                      download
+                    >
+                      Baixar arquivo ↓
+                    </a>
+                  {/if}
+                </div>
+              {:else}
+                <p class="codigo-vazio">Nenhum arquivo enviado para esta tarefa.</p>
+              {/if}
             </div>
-          {:else if cor}
-            <p class="sem-testes">Nenhum resultado de teste disponível para esta questão.</p>
+          {:else}
+            <div class="bloco-codigo">
+              <span class="subrotulo">Código submetido pelo aluno:</span>
+              {#if cod.trim().length > 0}
+                <EditorCodigo valor={cod} linguagem={t.linguagem} somenteLeitura={true} />
+              {:else}
+                <p class="codigo-vazio">Nenhum código enviado para esta tarefa.</p>
+              {/if}
+            </div>
+
+            {#if res && res.testes && res.testes.length > 0}
+              <div class="bloco-testes">
+                <span class="subrotulo">Resultados dos casos de teste:</span>
+                <ul class="lista-testes">
+                  {#each res.testes as teste (teste.ordem)}
+                    <li class="item-teste {teste.status === 'accepted' ? 'ok' : 'falha'}">
+                      <div class="teste-info">
+                        <span class="badge {teste.status === 'accepted' ? 'sucesso' : 'perigo'}">
+                          {teste.status}
+                        </span>
+                        <span class="teste-nome">Teste #{teste.ordem}</span>
+                        {#if teste.privado}
+                          <span class="teste-detalhe">(privado)</span>
+                        {:else}
+                          <span class="teste-detalhe">(público)</span>
+                        {/if}
+                        {#if teste.tempo !== undefined}
+                          <span class="teste-detalhe">{teste.tempo}s</span>
+                        {/if}
+                        {#if teste.memoria !== undefined}
+                          <span class="teste-detalhe">{teste.memoria}KB</span>
+                        {/if}
+                      </div>
+                      {#if teste.stderr}
+                        <details class="detalhe-saida">
+                          <summary>stderr</summary>
+                          <pre>{teste.stderr}</pre>
+                        </details>
+                      {/if}
+                      {#if teste.compile_output}
+                        <details class="detalhe-saida">
+                          <summary>saída de compilação</summary>
+                          <pre>{teste.compile_output}</pre>
+                        </details>
+                      {/if}
+                      {#if teste.stdout}
+                        <details class="detalhe-saida">
+                          <summary>stdout</summary>
+                          <pre>{teste.stdout}</pre>
+                        </details>
+                      {/if}
+                    </li>
+                  {/each}
+                </ul>
+              </div>
+            {:else if cor}
+              <p class="sem-testes">Nenhum resultado de teste disponível para esta questão.</p>
+            {/if}
           {/if}
         </article>
       {/each}
@@ -393,5 +434,36 @@
     font-size: 0.85rem;
     font-style: italic;
     margin: 0.2rem 0;
+  }
+  .arquivo-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--seno-blue-50);
+    border: 1px solid var(--seno-blue-100);
+    border-radius: var(--raio-md);
+  }
+  .arquivo-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .botao-download {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: var(--seno-blue-600);
+    color: var(--seno-white);
+    text-decoration: none;
+    padding: 0.45rem 0.9rem;
+    border-radius: var(--raio-md);
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .botao-download:hover {
+    background: var(--seno-blue-700);
   }
     </style>

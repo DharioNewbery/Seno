@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { dataHora } from "#lib/formato";
+  import { dataHora, formatarBytes } from "#lib/formato";
   // Correção publicada da entrega do aluno: nota total, notas e
   // feedback por tarefa e resultados dos testes (§Visibilidade).
   // Além disso, a própria entrega: metadados e código enviado por tarefa.
@@ -73,7 +73,26 @@
             <span class="nota">Nota: <strong>{t.nota_final ?? t.nota_auto ?? "—"}</strong> de {t.valor_pts} pts</span>
           </div>
 
-          {#if entrega?.snapshot?.tasks}
+          {#if t.tarefa_tipo === "arquivo_submissao" || t.arquivo}
+            <span class="subrotulo">Arquivo enviado</span>
+            {#if t.arquivo}
+              <div class="arquivo-box">
+                <div class="arquivo-meta">
+                  <strong>{t.arquivo.nome_arquivo}</strong>
+                  <span class="meta">{formatarBytes(t.arquivo.tamanho_bytes)} · {t.arquivo.mime_type}</span>
+                </div>
+                <a
+                  class="botao-download"
+                  href={`/api/submissoes/${cor.submissao_id}/tarefas/${t.tarefa_id}/arquivo`}
+                  download
+                >
+                  Baixar meu arquivo ↓
+                </a>
+              </div>
+            {:else}
+              <p class="texto">Nenhum arquivo anexado.</p>
+            {/if}
+          {:else if entrega?.snapshot?.tasks}
             {@const taskCode = entrega.snapshot.tasks.find((tk) => tk.id === t.tarefa_id)?.text}
             {#if taskCode}
               <span class="subrotulo">Código enviado</span>
@@ -252,5 +271,36 @@
     font-size: 1.05rem;
     color: var(--seno-green);
     margin: 0;
+  }
+  .arquivo-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.7rem 0.95rem;
+    background: var(--seno-blue-50);
+    border: 1px solid var(--seno-blue-100);
+    border-radius: var(--raio-md);
+  }
+  .arquivo-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .botao-download {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: var(--seno-blue-600);
+    color: var(--seno-white);
+    text-decoration: none;
+    padding: 0.4rem 0.85rem;
+    border-radius: var(--raio-md);
+    font-size: 0.84rem;
+    font-weight: 600;
+  }
+  .botao-download:hover {
+    background: var(--seno-blue-700);
   }
 </style>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { dataHora } from "#lib/formato";
+  import { dataHora, formatarBytes } from "#lib/formato";
   // Correção da entrega (professor): resultados automáticos por teste,
   // ajuste de nota/feedback por tarefa, confirmação e publicação.
   import type { PageProps } from "./$types";
@@ -61,7 +61,33 @@
                 <p class="texto-enunciado">{t.enunciado}</p>
               </div>
             {/if}
-            {#if t.codigo}
+            {#if t.tarefa_tipo === "arquivo_submissao"}
+              <div class="bloco-arquivo">
+                <span class="subrotulo">Arquivo submetido pelo aluno:</span>
+                {#if t.arquivo}
+                  <div class="arquivo-box">
+                    <div class="arquivo-meta">
+                      <strong>{t.arquivo.nome_arquivo}</strong>
+                      <span class="meta">
+                        {formatarBytes(t.arquivo.tamanho_bytes)} · {t.arquivo.mime_type}
+                        {#if t.arquivo.sha256}
+                          · SHA-256: <code>{t.arquivo.sha256.slice(0, 12)}…</code>
+                        {/if}
+                      </span>
+                    </div>
+                    <a
+                      class="botao-download"
+                      href={`/api/submissoes/${visao.submissao.id}/tarefas/${t.tarefa_id}/arquivo`}
+                      download
+                    >
+                      Baixar arquivo ↓
+                    </a>
+                  </div>
+                {:else}
+                  <p class="sem">Nenhum arquivo foi anexado pelo aluno nesta tarefa.</p>
+                {/if}
+              </div>
+            {:else if t.codigo}
               <div class="bloco-codigo">
                 <span class="subrotulo">Código submetido pelo aluno:</span>
                 <EditorCodigo valor={t.codigo} somenteLeitura={true} />
@@ -91,29 +117,35 @@
                 <input name={`fb_${t.id}`} value={t.feedback ?? ""} disabled={publicada} placeholder="Comentários sobre a resposta..." />
               </label>
             </div>
-            <ul class="resultados">
-              {#each t.resultados as res (res.teste_id)}
-                <li class:ok={res.status === "accepted"}>
-                  <div class="teste-cabeca">
-                    <span class="veredito">{res.status ?? "—"}</span>
-                    <span>teste #{res.teste_id} {res.publico ? "(público)" : "(privado)"}</span>
-                    {#if res.tempo}<span>· tempo: {res.tempo}s</span>{/if}
-                    {#if res.memoria}<span>· memória: {res.memoria}KB</span>{/if}
-                  </div>
-                  {#if res.stdout}
-                    <details><summary>stdout</summary><pre>{res.stdout}</pre></details>
-                  {/if}
-                  {#if res.stderr}
-                    <details><summary>stderr</summary><pre>{res.stderr}</pre></details>
-                  {/if}
-                  {#if res.compile_output}
-                    <details><summary>compilação</summary><pre>{res.compile_output}</pre></details>
-                  {/if}
-                </li>
-              {:else}
-                <li class="sem">Sem resultados (tarefa aberta ou Judge0 desligado).</li>
-              {/each}
-            </ul>
+            {#if t.tarefa_tipo === "arquivo_submissao"}
+              <p class="sem" style="margin:0;font-size:0.82rem;">
+                Tarefa de submissão de arquivo — avalie o anexo e atribua a nota manualmente.
+              </p>
+            {:else}
+              <ul class="resultados">
+                {#each t.resultados as res (res.teste_id)}
+                  <li class:ok={res.status === "accepted"}>
+                    <div class="teste-cabeca">
+                      <span class="veredito">{res.status ?? "—"}</span>
+                      <span>teste #{res.teste_id} {res.publico ? "(público)" : "(privado)"}</span>
+                      {#if res.tempo}<span>· tempo: {res.tempo}s</span>{/if}
+                      {#if res.memoria}<span>· memória: {res.memoria}KB</span>{/if}
+                    </div>
+                    {#if res.stdout}
+                      <details><summary>stdout</summary><pre>{res.stdout}</pre></details>
+                    {/if}
+                    {#if res.stderr}
+                      <details><summary>stderr</summary><pre>{res.stderr}</pre></details>
+                    {/if}
+                    {#if res.compile_output}
+                      <details><summary>compilação</summary><pre>{res.compile_output}</pre></details>
+                    {/if}
+                  </li>
+                {:else}
+                  <li class="sem">Sem resultados (tarefa aberta ou Judge0 desligado).</li>
+                {/each}
+              </ul>
+            {/if}
           </fieldset>
         {/each}
 
@@ -362,5 +394,39 @@
   }
   .bloco-codigo {
     margin-bottom: 0.75rem;
+  }
+  .bloco-arquivo {
+    margin-bottom: 0.5rem;
+  }
+  .arquivo-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--seno-blue-50);
+    border: 1px solid var(--seno-blue-100);
+    border-radius: var(--raio-md);
+  }
+  .arquivo-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .botao-download {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: var(--seno-blue-600);
+    color: var(--seno-white);
+    text-decoration: none;
+    padding: 0.45rem 0.9rem;
+    border-radius: var(--raio-md);
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .botao-download:hover {
+    background: var(--seno-blue-700);
   }
 </style>
