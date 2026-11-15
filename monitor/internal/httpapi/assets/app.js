@@ -57,7 +57,7 @@ function ehTarefaArquivo(tarefa) {
 }
 
 function ehTarefaCodigo(tarefa) {
-  return Boolean(tarefa && (!tarefa.tipo || tarefa.tipo === 'codigo'));
+  return Boolean(tarefa && (!tarefa.tipo || tarefa.tipo === 'programacao'));
 }
 
 function formatarBytes(bytes) {
