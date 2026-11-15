@@ -323,9 +323,10 @@ graph LR
     rtarefas --> rrevisao["revisar respostas"]
     rrevisao --> submeter["enviar/submeter atividade"]
 
-    eatividades --> iatividade["inspecionar entrega"]
+    eatividades --> iatividade["inspecionar entrega (na atividade ou submissão)"]
+    iatividade --> vrespostas["ver próprias respostas (código ou arquivo)"]
     iatividade --> vnota["ver nota final e por tarefa"]
-    iatividade --> vcorrecao["ver acertos e erros (incluindo testes privados)"]
+    iatividade --> vcorrecao["ver acertos e erros (visor unitário c/ testes privados)"]
     iatividade --> vfeedback["ler feedback geral e por tarefa"]
 ```
 
