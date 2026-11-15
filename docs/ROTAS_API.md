@@ -70,11 +70,13 @@ Group requires **admin or super** via middleware. Services add the restrictions 
 
 **Turmas**
 
+Class payloads (`Turma`) include `total_alunos` (count of active enrollments `saida_em IS NULL`).
+
 | Method | Route | What it does | Permissions |
 |---|---|---|---|
-| GET | `/v1/turmas` | List classes; filters by professor/subject/period/closed | Professor sees only own (forced filter); staff sees all |
+| GET | `/v1/turmas` | List classes (includes `total_alunos`; ordered with active classes first); filters by professor/subject/period/closed | Professor sees only own (forced filter); staff sees all |
 | POST | `/v1/turmas` | Create class; actor becomes owner | Role `professor` required (a pure admin cannot create); admin/super also pass the route but need the professor role |
-| GET | `/v1/turmas/:id` | Class detail | Owner or staff; 404 outside scope |
+| GET | `/v1/turmas/:id` | Class detail (includes `total_alunos`) | Owner or staff; 404 outside scope |
 | PATCH | `/v1/turmas/:id` | Edit class title | Owner or staff; 409 if class already closed |
 | POST | `/v1/turmas/:id/encerrar` | Close class | Owner or staff; 409 if already closed |
 | DELETE | `/v1/turmas/:id` | Delete class | Owner or staff; 409 if active enrollments |

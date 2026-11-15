@@ -335,11 +335,11 @@ graph LR
 title: Portal professor
 ---
 graph LR
-    hub["hub"] --> turmas["minhas turmas"]
+    hub["hub"] --> turmas["turmas (filtro por período/matéria e encerradas sob demanda)"]
     hub --> tarefas["banco de tarefas (questões)"]
     hub --> atividades["banco de atividades (envelopes)"]
 
-    turmas --> cturma["criar nova turma"]
+    turmas --> cturma["criar nova turma (modal)"]
     turmas --> pturma["painel da turma"]
     pturma --> eturmas["editar/excluir turma"]
     
