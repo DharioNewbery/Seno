@@ -38,6 +38,8 @@ func TestWebuiServidos(t *testing.T) {
 		{"/a/app.js", "/abrir"},
 		{"/a/app.css", "background"},
 		{"/a/app/app.js", "fetch"},
+		{"/a/editor.js", "SenoEditor"},
+		{"/a/app/editor.js", "SenoEditor"},
 	} {
 		w := reqR(t, r, "GET", alvo.path, "", "")
 		if w.Code != 200 {

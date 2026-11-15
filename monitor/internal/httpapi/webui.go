@@ -21,6 +21,7 @@ func (d *Dependencies) AppServir(arquivo string) gin.HandlerFunc {
 		"index.html": "text/html; charset=utf-8",
 		"app.css":    "text/css; charset=utf-8",
 		"app.js":     "text/javascript; charset=utf-8",
+		"editor.js":  "text/javascript; charset=utf-8",
 	}
 	return func(c *gin.Context) {
 		b, err := assetsFS.ReadFile("assets/" + arquivo)

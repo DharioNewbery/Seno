@@ -80,8 +80,10 @@ func RegisterRoutes(r *gin.Engine, d *Dependencies) {
 	r.GET("/a/app/", d.AppServir("index.html"))
 	r.GET("/a/app/app.css", d.AppServir("app.css"))
 	r.GET("/a/app/app.js", d.AppServir("app.js"))
+	r.GET("/a/app/editor.js", d.AppServir("editor.js"))
 	r.GET("/a/app.css", d.AppServir("app.css"))
 	r.GET("/a/app.js", d.AppServir("app.js"))
+	r.GET("/a/editor.js", d.AppServir("editor.js"))
 
 	// callback do Judge0 (autenticado por ?key=, não HMAC)
 	r.PUT("/interna/callbacks/judge0", d.CallbackJudge0)
