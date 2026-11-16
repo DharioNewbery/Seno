@@ -140,7 +140,7 @@ export const actions: Actions = {
     const form = await evento.request.formData();
     const modo = String(form.get("modo") ?? "individual");
 
-    let candidatos: CandidatoMatricula[] = [];
+    let candidatos: CandidatoMatricula[];
     if (modo === "lote") {
       const lote = String(form.get("lote") ?? "");
       candidatos = parseCsvAlunos(lote);
@@ -152,7 +152,9 @@ export const actions: Actions = {
         });
       }
     } else {
-      const email = String(form.get("email") ?? "").trim().toLowerCase();
+      const email = String(form.get("email") ?? "")
+        .trim()
+        .toLowerCase();
       const first_name = String(form.get("first_name") ?? "").trim();
       const last_name = String(form.get("last_name") ?? "").trim();
       if (!email || !email.includes("@")) {
@@ -189,21 +191,25 @@ export const actions: Actions = {
     const form = await evento.request.formData();
     const bruto = String(form.get("candidatos_json") ?? "");
 
-    let candidatos: CandidatoMatricula[] = [];
+    let candidatos: CandidatoMatricula[];
     try {
       const lido = JSON.parse(bruto) as unknown;
-      if (Array.isArray(lido)) {
-        candidatos = lido
-          .map((item) => {
-            const obj = item as Record<string, unknown>;
-            return {
-              email: String(obj.email ?? "").trim(),
-              first_name: String(obj.first_name ?? "").trim(),
-              last_name: String(obj.last_name ?? "").trim(),
-            };
-          })
-          .filter((c) => c.email.length > 0);
+      if (!Array.isArray(lido)) {
+        return fail(422, {
+          erroAlunos: "Lista de confirmação inválida.",
+          abrirModalAlunos: true,
+        });
       }
+      candidatos = lido
+        .map((item) => {
+          const obj = item as Record<string, unknown>;
+          return {
+            email: String(obj.email ?? "").trim(),
+            first_name: String(obj.first_name ?? "").trim(),
+            last_name: String(obj.last_name ?? "").trim(),
+          };
+        })
+        .filter((c) => c.email.length > 0);
     } catch {
       return fail(422, {
         erroAlunos: "Lista de confirmação inválida.",
@@ -265,7 +271,12 @@ export const actions: Actions = {
     if (!Number.isInteger(alunoID) || alunoID < 1) {
       return fail(422, { erro: "Identificador de aluno inválido." });
     }
-    const r = await reenviarConviteAluno(evento.request, token, turmaID, alunoID);
+    const r = await reenviarConviteAluno(
+      evento.request,
+      token,
+      turmaID,
+      alunoID,
+    );
     if (r.status === 401) redirect(303, "/");
     if (!r.ok) {
       return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
@@ -359,7 +370,9 @@ export const actions: Actions = {
     const form = await evento.request.formData();
     const atividadeID = Number(form.get("atividade_id"));
     if (!Number.isInteger(atividadeID) || atividadeID < 1) {
-      return fail(422, { erro: "Selecione uma atividade do grid para atribuir." });
+      return fail(422, {
+        erro: "Selecione uma atividade do grid para atribuir.",
+      });
     }
     const cad: {
       turma_id: number;

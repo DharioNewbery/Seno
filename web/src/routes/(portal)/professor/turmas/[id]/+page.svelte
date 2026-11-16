@@ -652,7 +652,7 @@
                   name="lote"
                   rows="6"
                   bind:value={textoCsv}
-                  placeholder={"carla@ufpa.br,Carla,Souza\njoao@ufpa.br,João,Silva"}
+                  placeholder="carla@ufpa.br,Carla,Souza&#10;joao@ufpa.br,João,Silva"
                   required
                 ></textarea>
               </label>

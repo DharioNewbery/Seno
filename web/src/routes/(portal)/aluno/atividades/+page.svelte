@@ -33,8 +33,10 @@
     return query ? `/aluno/atividades?${query}` : "/aluno/atividades";
   }
 
-  function aoMudarTurma(e: Event) {
-    const valor = (e.currentTarget as HTMLSelectElement).value;
+  function aoMudarTurma(
+    e: Event & { currentTarget: EventTarget & { value: string } },
+  ) {
+    const valor = e.currentTarget.value;
     const turmaId = valor ? Number(valor) : null;
     goto(montarUrl(turmaId, 1));
   }
