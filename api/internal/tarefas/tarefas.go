@@ -520,8 +520,8 @@ func (s *Service) Editar(ctx context.Context, actor domain.User, id int64, cad C
 	}
 	s.audit.Record(ctx, platform.LogEntry{
 		ActorID: &actor.ID, Actor: actor.Email,
-		Kind:    LogKindTarefaUpdate,
-		Detail:  fmt.Sprintf("tarefa=%d tipo=%s testes=%d", id, val.Tipo, lenOrKeep(cad.Testes, testes)),
+		Kind:   LogKindTarefaUpdate,
+		Detail: fmt.Sprintf("tarefa=%d tipo=%s testes=%d", id, val.Tipo, lenOrKeep(cad.Testes, testes)),
 	})
 	return s.Ver(ctx, actor, id)
 }
@@ -566,8 +566,8 @@ func (s *Service) Duplicar(ctx context.Context, actor domain.User, id int64) (Ta
 	}
 	s.audit.Record(ctx, platform.LogEntry{
 		ActorID: &actor.ID, Actor: actor.Email,
-		Kind:    LogKindTarefaDuplicar,
-		Detail:  fmt.Sprintf("tarefa=%d → %d", id, copia.ID),
+		Kind:   LogKindTarefaDuplicar,
+		Detail: fmt.Sprintf("tarefa=%d → %d", id, copia.ID),
 	})
 	return copia, nil
 }
@@ -593,8 +593,8 @@ func (s *Service) Excluir(ctx context.Context, actor domain.User, id int64) erro
 		}
 		s.audit.Record(ctx, platform.LogEntry{
 			ActorID: &actor.ID, Actor: actor.Email,
-			Kind:    LogKindTarefaDelete,
-			Detail:  fmt.Sprintf("tarefa=%d (soft: usada por atividade)", id),
+			Kind:   LogKindTarefaDelete,
+			Detail: fmt.Sprintf("tarefa=%d (soft: usada por atividade)", id),
 		})
 		return nil
 	}
@@ -607,8 +607,8 @@ func (s *Service) Excluir(ctx context.Context, actor domain.User, id int64) erro
 	}
 	s.audit.Record(ctx, platform.LogEntry{
 		ActorID: &actor.ID, Actor: actor.Email,
-		Kind:    LogKindTarefaDelete,
-		Detail:  fmt.Sprintf("tarefa=%d", id),
+		Kind:   LogKindTarefaDelete,
+		Detail: fmt.Sprintf("tarefa=%d", id),
 	})
 	return nil
 }

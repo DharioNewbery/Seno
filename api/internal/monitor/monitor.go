@@ -699,12 +699,12 @@ type DetalhesSubmissao struct {
 }
 
 type SubmissaoDetalhe struct {
-	ID         int64                                     `json:"id"`
-	AlunoID    int64                                     `json:"aluno_id"`
-	NT         int                                       `json:"n_t"`
-	EntregueEm time.Time                                 `json:"entregue_em"`
-	Atrasada   bool                                      `json:"atrasada"`
-	Respostas  map[string]string                         `json:"respostas"`
+	ID         int64                                       `json:"id"`
+	AlunoID    int64                                       `json:"aluno_id"`
+	NT         int                                         `json:"n_t"`
+	EntregueEm time.Time                                   `json:"entregue_em"`
+	Atrasada   bool                                        `json:"atrasada"`
+	Respostas  map[string]string                           `json:"respostas"`
 	Arquivos   map[string]contract.ArquivoSubmetidoMonitor `json:"arquivos,omitempty"`
 }
 

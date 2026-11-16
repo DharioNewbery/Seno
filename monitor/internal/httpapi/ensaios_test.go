@@ -353,4 +353,3 @@ func TestEnsaioHistorico(t *testing.T) {
 		t.Fatalf("resultados do run: %+v", novo.Resultados)
 	}
 }
-

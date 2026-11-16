@@ -99,7 +99,6 @@ func (d *Dependencies) reexecutarCorrecao(c *gin.Context) {
 	c.JSON(http.StatusOK, visao)
 }
 
-
 // publicarCorrecoesLote: POST /v1/atribuicoes/:id/correcoes/publicar —
 // publica de uma vez as correções confirmadas e não publicadas.
 func (d *Dependencies) publicarCorrecoesLote(c *gin.Context) {

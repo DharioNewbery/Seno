@@ -79,7 +79,6 @@ type Entrega struct {
 	CorrecaoMonitor string   `json:"correcao_monitor,omitempty"`
 }
 
-
 func indisponivel(msg string) error {
 	return platform.NewAPIError(
 		http.StatusUnprocessableEntity, platform.CodeUnprocessable, msg)
@@ -596,7 +595,6 @@ func (s *Service) Coletar(ctx context.Context, actor domain.User, atribuicaoID i
 	})
 	return nova, nil
 }
-
 
 // helpers -----------------------------------------------------------
 

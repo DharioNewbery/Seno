@@ -332,7 +332,6 @@ func TestAcoesProfessorEntregas(t *testing.T) {
 	aceitarConvite(t, r, tokConvite, "senha-aluno-acoes")
 	tokAluno := logar(t, r, "aluno.acoes@seno.dev", "senha-aluno-acoes")
 
-
 	// Tarefa + Atividade
 	_, tarefa := chama(t, r, "POST", "/v1/tarefas", `{"nome":"Tarefa1","enunciado":"enunciado"}`, autenticado(tokProf))
 	idTarefa := int64(tarefa["id"].(float64))
@@ -564,5 +563,3 @@ func TestIngestaoMonitorHMAC(t *testing.T) {
 		t.Errorf("esperava 1 publicada, obteve %v", pub["publicadas"])
 	}
 }
-
-

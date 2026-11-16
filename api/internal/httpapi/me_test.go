@@ -234,4 +234,3 @@ func lenOf(body map[string]any, chave string) int {
 	lista, _ := body[chave].([]any)
 	return len(lista)
 }
-

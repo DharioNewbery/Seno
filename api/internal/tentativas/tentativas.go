@@ -1,4 +1,4 @@
-﻿// Package tentativas — rascunho da atividade para o aluno (PROJETO
+// Package tentativas — rascunho da atividade para o aluno (PROJETO
 // §Tentativa): única por (aluno, atribuição), `comecou_em` do primeiro
 // acesso, revisão incrementada a cada gravação de autosave — gravação
 // com revisão antiga é rejeitada (duas abas). Excluída quando a

@@ -55,7 +55,6 @@ func RegisterRoutes(r *gin.Engine, d *Dependencies) {
 	r.GET("/interna/v1/atividades/:monitor_id/alunos/:aluno_id/submissao", d.ObterSubmissao)
 	r.POST("/interna/v1/atividades/:monitor_id/alunos/:aluno_id/coletar", d.ColetarTentativa)
 
-
 	// rotas de aluno: sessão obrigatória + bloqueio final + guarda de Origin
 	// (as mutações /a são tudo POST/PUT — SameSite Lax + origem conhecida).
 	a := r.Group("/a", d.RequireSessao, d.guardaOrigin, d.BloquearFinalizado)

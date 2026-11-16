@@ -221,7 +221,6 @@ func (s *Service) ObterTurmaAluno(
 	}, nil
 }
 
-
 // MinhasAtribuicoes: atribuições das turmas com matrícula ativa
 // (filtro opcional por turma), com o estado do rascunho.
 func (s *Service) MinhasAtribuicoes(

@@ -10,8 +10,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/seno-project/seno/contract"
 	"github.com/seno-project/seno/api/internal/platform"
+	"github.com/seno-project/seno/contract"
 )
 
 // EntregarSubmissao: POST /v1/atribuicoes/:id/submissao — aluno entrega
@@ -41,8 +41,8 @@ func (d *Dependencies) EntregarSubmissao(c *gin.Context) {
 		c.Request.Context(), sub.ID, user.ID, user.Email,
 	); corErr != nil {
 		c.JSON(http.StatusCreated, gin.H{
-			"submissao":   sub,
-			"correcao":    map[string]any{"erro": "não iniciada"},
+			"submissao": sub,
+			"correcao":  map[string]any{"erro": "não iniciada"},
 		})
 		return
 	}
@@ -81,7 +81,7 @@ func (d *Dependencies) ListarSubmissoes(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"total":       len(lista),
+		"total":      len(lista),
 		"submissoes": lista,
 	})
 }
@@ -326,6 +326,3 @@ func (d *Dependencies) ingerirSubmissaoMonitor(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true, "submissao_id": subID})
 }
-
-
-

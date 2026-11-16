@@ -249,7 +249,7 @@ func (s *Service) Criar(ctx context.Context, actor domain.User, cad CadastroAtiv
 		}
 		nova = Atividade{
 			ID: row.ID, ProfessorID: row.ProfessorID, Nome: row.Nome,
-			Conteudo: row.Conteudo,
+			Conteudo:  row.Conteudo,
 			DeletedAt: horaPtr(row.DeletedAt), CreatedAt: horaDe(row.CreatedAt),
 		}
 		return nil
@@ -259,8 +259,8 @@ func (s *Service) Criar(ctx context.Context, actor domain.User, cad CadastroAtiv
 	}
 	s.audit.Record(ctx, platform.LogEntry{
 		ActorID: &actor.ID, Actor: actor.Email,
-		Kind:    LogKindAtividadeCreate,
-		Detail:  fmt.Sprintf("atividade=%d tarefas=%d", nova.ID, len(lista)),
+		Kind:   LogKindAtividadeCreate,
+		Detail: fmt.Sprintf("atividade=%d tarefas=%d", nova.ID, len(lista)),
 	})
 	return nova, nil
 }
@@ -450,8 +450,8 @@ func (s *Service) Editar(ctx context.Context, actor domain.User, id int64, cad C
 	}
 	s.audit.Record(ctx, platform.LogEntry{
 		ActorID: &actor.ID, Actor: actor.Email,
-		Kind:    LogKindAtividadeUpdate,
-		Detail:  fmt.Sprintf("atividade=%d tarefas=%d", id, len(lista)),
+		Kind:   LogKindAtividadeUpdate,
+		Detail: fmt.Sprintf("atividade=%d tarefas=%d", id, len(lista)),
 	})
 	return s.Ver(ctx, actor, id)
 }
@@ -482,7 +482,7 @@ func (s *Service) Duplicar(ctx context.Context, actor domain.User, id int64) (At
 		}
 		copia = Atividade{
 			ID: row.ID, ProfessorID: row.ProfessorID, Nome: row.Nome,
-			Conteudo: row.Conteudo,
+			Conteudo:  row.Conteudo,
 			DeletedAt: horaPtr(row.DeletedAt), CreatedAt: horaDe(row.CreatedAt),
 		}
 		return nil
@@ -492,8 +492,8 @@ func (s *Service) Duplicar(ctx context.Context, actor domain.User, id int64) (At
 	}
 	s.audit.Record(ctx, platform.LogEntry{
 		ActorID: &actor.ID, Actor: actor.Email,
-		Kind:    LogKindAtividadeDuplicar,
-		Detail:  fmt.Sprintf("atividade=%d → %d", id, copia.ID),
+		Kind:   LogKindAtividadeDuplicar,
+		Detail: fmt.Sprintf("atividade=%d → %d", id, copia.ID),
 	})
 	return copia, nil
 }
@@ -513,8 +513,8 @@ func (s *Service) Excluir(ctx context.Context, actor domain.User, id int64) erro
 	}
 	s.audit.Record(ctx, platform.LogEntry{
 		ActorID: &actor.ID, Actor: actor.Email,
-		Kind:    LogKindAtividadeDelete,
-		Detail:  fmt.Sprintf("atividade=%d", id),
+		Kind:   LogKindAtividadeDelete,
+		Detail: fmt.Sprintf("atividade=%d", id),
 	})
 	return nil
 }

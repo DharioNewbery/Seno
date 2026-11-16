@@ -91,7 +91,7 @@ func atribuicaoDe(row gen.InsertAtribuicaoRow) Atribuicao {
 	return Atribuicao{
 		ID: row.ID, TurmaID: row.TurmaID, AtividadeID: row.AtividadeID,
 		Autocomplete: row.Autocomplete,
-		Inicio: horaPtr(row.Inicio), Prazo: horaPtr(row.Prazo),
+		Inicio:       horaPtr(row.Inicio), Prazo: horaPtr(row.Prazo),
 		DuracaoSeg: intPtr(row.DuracaoSeg), PodeAtrasado: row.PodeAtrasado,
 		CreatedAt: horaDe(row.CreatedAt),
 	}
@@ -196,14 +196,14 @@ func (s *Service) Criar(ctx context.Context, actor domain.User, cad CadastroAtri
 	}
 
 	row, err := s.store.Q.InsertAtribuicao(ctx, gen.InsertAtribuicaoParams{
-		TurmaID:     cad.TurmaID,
-		AtividadeID: cad.AtividadeID,
+		TurmaID:      cad.TurmaID,
+		AtividadeID:  cad.AtividadeID,
 		Autocomplete: autocompletePadrao(cad),
-		Inicio:      tsOrNull(cad.Inicio),
-		Prazo:       tsOrNull(cad.Prazo),
-		DuracaoSeg:  intOrNull(cad.DuracaoSeg),
+		Inicio:       tsOrNull(cad.Inicio),
+		Prazo:        tsOrNull(cad.Prazo),
+		DuracaoSeg:   intOrNull(cad.DuracaoSeg),
 		PodeAtrasado: podeAtrasadoPadrao(cad),
-		CreatedBy:   int8Ptr(actor.ID),
+		CreatedBy:    int8Ptr(actor.ID),
 	})
 	if err != nil {
 		if eDuplicado(err) {
@@ -260,7 +260,7 @@ func atribuicaoDeGet(row gen.GetAtribuicaoRow) Atribuicao {
 		Autocomplete: row.Autocomplete,
 		Inicio:       horaPtr(row.Inicio), Prazo: horaPtr(row.Prazo),
 		DuracaoSeg: intPtr(row.DuracaoSeg), PodeAtrasado: row.PodeAtrasado,
-		CreatedAt: horaDe(row.CreatedAt),
+		CreatedAt:        horaDe(row.CreatedAt),
 		TurmaProfessorID: row.TurmaProfessorID,
 		TurmaTitulo:      tituloDe(row.TurmaTitulo),
 		AtividadeNome:    row.AtividadeNome,
@@ -286,15 +286,15 @@ func (s *Service) Ver(ctx context.Context, actor domain.User, id int64) (Atribui
 // atribuição + atividade (nome/JSON) com tarefas e enunciados + rascunho
 // (quando aberto). Filtragem de dados privados fica sempre neste lado.
 type VisaoAluno struct {
-	Atribuicao Atribuicao       `json:"atribuicao"`
-	Atividade  AtividadeDoAluno `json:"atividade"`
+	Atribuicao Atribuicao        `json:"atribuicao"`
+	Atividade  AtividadeDoAluno  `json:"atividade"`
 	Tentativa  *TentativaDoAluno `json:"tentativa,omitempty"`
 }
 
 // AtividadeDoAluno é o conteúdo renderizável da atividade.
 type AtividadeDoAluno struct {
-	ID      int64              `json:"id"`
-	Nome    string             `json:"nome"`
+	ID      int64               `json:"id"`
+	Nome    string              `json:"nome"`
 	Tarefas []TarefaDeAtividade `json:"tarefas"`
 }
 
@@ -314,8 +314,8 @@ type TarefaDeAtividade struct {
 
 // TentativaDoAluno é o rascunho (escondido até abrir).
 type TentativaDoAluno struct {
-	Revisao   int32           `json:"revisao"`
-	Snapshot  json.RawMessage `json:"snapshot"`
+	Revisao  int32           `json:"revisao"`
+	Snapshot json.RawMessage `json:"snapshot"`
 }
 
 // VerParaAluno devolve a visão do aluno: exige cargo student e
@@ -451,9 +451,9 @@ func (s *Service) Listar(ctx context.Context, actor domain.User, f FiltroAtribui
 			Autocomplete: row.Autocomplete,
 			Inicio:       horaPtr(row.Inicio), Prazo: horaPtr(row.Prazo),
 			DuracaoSeg: intPtr(row.DuracaoSeg), PodeAtrasado: row.PodeAtrasado,
-			CreatedAt: horaDe(row.CreatedAt),
-			TurmaTitulo:   tituloDe(row.TurmaTitulo),
-			AtividadeNome: row.AtividadeNome,
+			CreatedAt:        horaDe(row.CreatedAt),
+			TurmaTitulo:      tituloDe(row.TurmaTitulo),
+			AtividadeNome:    row.AtividadeNome,
 			TurmaProfessorID: row.TurmaProfessorID,
 		}
 		// Escopo §5.4: professor não vê atribuição de turma alheia.
@@ -496,7 +496,7 @@ func (s *Service) Editar(ctx context.Context, actor domain.User, id int64, cad C
 		return Atribuicao{}, err
 	}
 	row, err := s.store.Q.UpdateAtribuicao(ctx, gen.UpdateAtribuicaoParams{
-		ID: id,
+		ID:           id,
 		Autocomplete: *cad.Autocomplete,
 		Inicio:       tsOrNull(cad.Inicio),
 		Prazo:        tsOrNull(cad.Prazo),
@@ -519,7 +519,7 @@ func (s *Service) Editar(ctx context.Context, actor domain.User, id int64, cad C
 		Autocomplete: row.Autocomplete,
 		Inicio:       horaPtr(row.Inicio), Prazo: horaPtr(row.Prazo),
 		DuracaoSeg: intPtr(row.DuracaoSeg), PodeAtrasado: row.PodeAtrasado,
-		CreatedAt: horaDe(row.CreatedAt),
+		CreatedAt:        horaDe(row.CreatedAt),
 		TurmaTitulo:      atual.TurmaTitulo,
 		AtividadeNome:    atual.AtividadeNome,
 		TurmaProfessorID: atual.TurmaProfessorID,

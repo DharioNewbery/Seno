@@ -42,12 +42,12 @@ func New(st *store.Store, audit *platform.Audit, cli *judge0.Client, cfg judge0.
 
 // Tipos de evento do Log (PROJETO §Log).
 const (
-	LogKindCorrecaoCreate  = "correcao.create"
-	LogKindCorrecaoUpdate  = "correcao.update"
-	LogKindCorrecaoConfirm   = "correcao.confirmar"
-	LogKindCorrecaoPublish   = "correcao.publicar"
+	LogKindCorrecaoCreate     = "correcao.create"
+	LogKindCorrecaoUpdate     = "correcao.update"
+	LogKindCorrecaoConfirm    = "correcao.confirmar"
+	LogKindCorrecaoPublish    = "correcao.publicar"
 	LogKindCorrecaoReexecutar = "correcao.reexecutar"
-	LogKindCallback          = "correcao.callback"
+	LogKindCallback           = "correcao.callback"
 )
 
 // Status da correção (PROJETO §Correção).
@@ -235,8 +235,8 @@ func (s *Service) montarDeRow(
 		porCT[r.CorrecaoTarefaID] = append(porCT[r.CorrecaoTarefaID], Resultado{
 			TesteID: r.TesteID, Status: textoPtr(r.Status),
 			Stdout: textoPtr(r.Stdout), Stderr: textoPtr(r.Stderr),
-			CompileOutput:  textoPtr(r.CompileOutput),
-			Tempo:          textoPtr(r.Tempo), Memoria: textoPtr(r.Memoria),
+			CompileOutput: textoPtr(r.CompileOutput),
+			Tempo:         textoPtr(r.Tempo), Memoria: textoPtr(r.Memoria),
 			CPU:            textoPtr(r.Cpu),
 			Stdin:          r.Stdin,
 			StdoutEsperado: r.StdoutEsperado,
@@ -485,7 +485,6 @@ func (s *Service) Reexecutar(
 
 	return s.VerProfessor(ctx, actor, submissaoID)
 }
-
 
 // criarCT numa transaçãozinha própria (idempotente).
 func (s *Service) criarCT(

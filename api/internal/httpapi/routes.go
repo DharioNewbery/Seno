@@ -166,7 +166,6 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	sub.GET("/monitor/alunos/:aluno_id/submissao", deps.MonitorObterSubmissao)
 	sub.GET("/monitor/alunos/:aluno_id/tarefas/:ordem/arquivo", deps.MonitorBaixarArquivo)
 
-
 	// Correção: professor dono|staff no serviço (§5.4); aluno vê o
 	// enviado depois de publicar (§Visibilidade).
 	submissoesCorrecao := v1.Group("/submissoes/:id")
@@ -180,7 +179,6 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	submissoesCorrecao.POST("/correcao/reexecutar", deps.reexecutarCorrecao)
 	submissoesCorrecao.GET("/minha", deps.minhaCorrecao)
 	submissoesCorrecao.GET("/tarefas/:tarefa_id/arquivo", deps.baixarArquivoSubmissao)
-
 
 	// Callback do Judge0 (rede interna; chave compartilhada validada no
 	// handler — config em SENO_JUDGE0_CALLBACK_KEY).
