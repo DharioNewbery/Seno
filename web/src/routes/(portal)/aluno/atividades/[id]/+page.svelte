@@ -1,8 +1,9 @@
 <script lang="ts">
+  import { invalidateAll } from "$app/navigation";
   import { calcularTotaisCorrecao } from "#lib/correcao-aluno";
   import { dataHora, prazoRelativo } from "#lib/formato";
-  // Tela da atividade do aluno: prazo, tempo limite, iniciar (se pendente)
-  // e resumo da entrega/publicação com notas sob demanda e link para os detalhes.
+  // Tela da atividade do aluno: prazo, tempo limite, iniciar (com modal
+  // de confirmação abrindo em nova aba), status em andamento e resumo de notas.
   import type { PageProps } from "./$types";
 
   let { data }: PageProps = $props();
@@ -13,6 +14,27 @@
   const totais = $derived(cor ? calcularTotaisCorrecao(cor.tarefas) : null);
 
   let mostrarNota = $state(false);
+  let modalConfirmarInicio = $state(false);
+  let iniciadaLocal = $state<string | null>(null);
+
+  const emAndamento = $derived(
+    Boolean(a && !a.entregue && (a.em_andamento || iniciadaLocal)),
+  );
+  const iniciadaEm = $derived(
+    a?.iniciada_em ?? a?.gravado_em ?? iniciadaLocal ?? null,
+  );
+
+  function confirmarInicioAtividade() {
+    if (!a) return;
+    window.open(`/aluno/monitor/${a.id}`, "_blank", "noopener");
+    modalConfirmarInicio = false;
+    if (!iniciadaLocal) {
+      iniciadaLocal = new Date().toISOString();
+    }
+    setTimeout(() => {
+      void invalidateAll();
+    }, 800);
+  }
 
   const relPrazo = $derived(
     a && !a.entregue ? prazoRelativo(a.prazo) : null,
@@ -73,14 +95,38 @@
           <span class="nota">Após abrir, você tem esse tempo para entregar</span>
         {/if}
       </div>
+      {#if emAndamento}
+        <div class="cartao em-andamento-card">
+          <span class="subrotulo">Progresso</span>
+          <p class="valor">Atividade em andamento</p>
+          {#if iniciadaEm}
+            <span class="nota">Iniciada em {dataHora(iniciadaEm)}</span>
+          {/if}
+        </div>
+      {/if}
     </div>
 
     {#if !a.entregue}
       <div class="iniciar">
         {#if podeIniciar}
-          <a class="botao" href={`/aluno/monitor/${a.id}`}>
-            {a.em_andamento ? `Continuar (rev. ${a.minha_revisao})` : "Iniciar atividade"} →
-          </a>
+          {#if emAndamento}
+            <a
+              class="botao"
+              href={`/aluno/monitor/${a.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Continuar a atividade →
+            </a>
+          {:else}
+            <button
+              type="button"
+              class="botao"
+              onclick={() => (modalConfirmarInicio = true)}
+            >
+              Iniciar atividade →
+            </button>
+          {/if}
         {:else if encerrada}
           <span class="estado encerrada">Prazo encerrado</span>
         {:else if a.inicio && new Date(a.inicio) > new Date()}
@@ -159,6 +205,53 @@
     </div>
 
     <a class="voltar" href="/aluno/atividades">← Atividades</a>
+
+    {#if modalConfirmarInicio}
+      <div
+        class="modal-fundo"
+        role="presentation"
+        onclick={() => (modalConfirmarInicio = false)}
+      >
+        <div
+          class="modal-caixa"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="titulo-modal-iniciar"
+          tabindex="-1"
+          onclick={(e) => e.stopPropagation()}
+          onkeydown={(e) => e.key === "Escape" && (modalConfirmarInicio = false)}
+        >
+          <h3 id="titulo-modal-iniciar">Iniciar atividade?</h3>
+          <p class="modal-texto">
+            Ao confirmar, <strong>{a.atividade_nome}</strong> será aberta em uma nova página para realização.
+          </p>
+          {#if tempoLimite}
+            <p class="modal-aviso">
+              Esta atividade possui tempo limite de <strong>{tempoLimite}</strong>, contado a partir do início.
+            </p>
+          {/if}
+          {#if a.prazo}
+            <p class="modal-meta">Prazo de entrega: {dataHora(a.prazo)}</p>
+          {/if}
+          <div class="modal-acoes">
+            <button
+              type="button"
+              class="botao-toggle"
+              onclick={() => (modalConfirmarInicio = false)}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="botao"
+              onclick={confirmarInicioAtividade}
+            >
+              Confirmar e iniciar →
+            </button>
+          </div>
+        </div>
+      </div>
+    {/if}
   {/if}
 </section>
 
@@ -237,11 +330,74 @@
     display: inline-block;
     background: var(--seno-blue-600);
     color: var(--seno-white);
+    border: none;
     border-radius: var(--raio-pill);
     padding: 0.55rem 1.2rem;
     text-decoration: none;
     font-weight: 600;
     font-size: 0.9rem;
+    cursor: pointer;
+  }
+  .botao:hover {
+    background: var(--seno-blue-700);
+  }
+  .em-andamento-card {
+    background: var(--seno-blue-50);
+    border-color: var(--seno-blue-200);
+  }
+  .modal-fundo {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 80;
+  }
+  .modal-caixa {
+    width: 100%;
+    max-width: 440px;
+    background: var(--seno-white);
+    border: 1px solid var(--seno-gray-300);
+    border-radius: var(--raio-lg);
+    padding: 1.35rem 1.45rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.2);
+  }
+  .modal-caixa h3 {
+    margin: 0;
+    color: var(--seno-blue-900);
+    font-size: 1.15rem;
+  }
+  .modal-texto,
+  .modal-aviso,
+  .modal-meta {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--seno-gray-700);
+    line-height: 1.45;
+  }
+  .modal-aviso {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+    border-radius: var(--raio-sm);
+    padding: 0.55rem 0.75rem;
+    font-size: 0.85rem;
+  }
+  .modal-meta {
+    color: var(--seno-gray-500);
+    font-size: 0.84rem;
+  }
+  .modal-acoes {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    margin-top: 0.45rem;
+    flex-wrap: wrap;
   }
   .botao.secundario {
     background: var(--seno-blue-100);

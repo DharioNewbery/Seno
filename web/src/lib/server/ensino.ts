@@ -706,6 +706,7 @@ export interface AtribuicaoDoAluno {
   turma_ativa: boolean;
   atividade_nome: string;
   em_andamento: boolean;
+  iniciada_em?: string;
   minha_revisao?: number;
   gravado_em?: string;
   entregue: boolean;
