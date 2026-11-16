@@ -1,11 +1,17 @@
 <script lang="ts">
-  // Minhas turmas (aluno): matrículas ativas (e encerradas marcadas);
-  // cada turma abre a lista de atividades dela.
+  // Minhas turmas (aluno): apenas turmas ativas, sem tag de status e com
+  // botões de ação por ícone visíveis ao passar o mouse sobre o card.
+  import Icone from "#lib/components/Icone.svelte";
+  import {
+    filtrarTurmasAtivasAluno,
+    formatarSubtituloCardTurmaAluno,
+    formatarTituloCardTurmaAluno,
+  } from "#lib/turmas-aluno";
   import type { PageProps } from "./$types";
 
   let { data }: PageProps = $props();
 
-  const turmas = $derived(data.turmas);
+  const turmas = $derived(filtrarTurmasAtivasAluno(data.turmas));
 </script>
 
 <section class="minhas-turmas">
@@ -19,33 +25,37 @@
 
   <ul class="lista">
     {#each turmas as t (t.id)}
-      <li>
+      <li class="card-turma">
         <div class="identidade">
           <a class="titulo-link" href={`/aluno/turmas/${t.id}`}>
-            <strong>{t.materia_codigo} — {t.materia_nome}</strong>
+            <strong>{formatarTituloCardTurmaAluno(t)}</strong>
           </a>
           <span class="meta">
-            {t.titulo || "Sem título"} · {t.trimestre}T/{t.ano} ·
-            {t.professor}
+            {formatarSubtituloCardTurmaAluno(t)}
           </span>
         </div>
         <div class="acao-area">
-          {#if t.ativa}
-            <span class="estado ativa">Ativa</span>
-          {:else}
-            <span class="estado encerrada">Encerrada</span>
-          {/if}
-          <a class="abrir secundario" href={`/aluno/turmas/${t.id}`}>
-            Ver turma
+          <a
+            class="btn-icone secundario"
+            href={`/aluno/turmas/${t.id}`}
+            title="Ver turma"
+            aria-label="Ver turma"
+          >
+            <Icone nome="eye" tamanho={18} />
           </a>
-          <a class="abrir" href={`/aluno/atividades?turma_id=${t.id}`}>
-            Atividades →
+          <a
+            class="btn-icone primario"
+            href={`/aluno/atividades?turma_id=${t.id}`}
+            title="Atividades"
+            aria-label="Atividades"
+          >
+            <Icone nome="clipboard-list" tamanho={18} />
           </a>
         </div>
       </li>
     {:else}
       <li class="vazio">
-        Você ainda não está matriculado em nenhuma turma.
+        Você ainda não está matriculado em nenhuma turma ativa.
       </li>
     {/each}
   </ul>
@@ -65,20 +75,22 @@
   .cabeca h2 {
     margin: 0;
   }
-          .identidade {
+  .card-turma {
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  }
+  .card-turma:hover {
+    border-color: var(--seno-blue-300, #93c5fd);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  }
+  .identidade {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.22rem;
   }
   .identidade strong {
     color: var(--seno-blue-900);
   }
-    .acao-area {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-        .titulo-link {
+  .titulo-link {
     text-decoration: none;
     color: inherit;
   }
@@ -86,12 +98,47 @@
     text-decoration: underline;
     color: var(--seno-blue-700);
   }
-      .abrir.secundario {
+  .acao-area {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(4px);
+    transition: opacity 0.16s ease, transform 0.16s ease;
+  }
+  .card-turma:hover .acao-area,
+  .card-turma:focus-within .acao-area {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
+  }
+  .btn-icone {
+    width: 2.15rem;
+    height: 2.15rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--raio-md);
+    text-decoration: none;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .btn-icone.secundario {
     background: var(--seno-gray-100);
     color: var(--seno-gray-700);
     border: 1px solid var(--seno-gray-300);
   }
-  .abrir.secundario:hover {
+  .btn-icone.secundario:hover {
     background: var(--seno-gray-200);
+    color: var(--seno-blue-900);
   }
-  </style>
+  .btn-icone.primario {
+    background: var(--seno-blue-600);
+    color: var(--seno-white);
+    border: 1px solid var(--seno-blue-600);
+  }
+  .btn-icone.primario:hover {
+    background: var(--seno-blue-700);
+    border-color: var(--seno-blue-700);
+  }
+</style>

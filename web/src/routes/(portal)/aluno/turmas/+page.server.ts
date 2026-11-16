@@ -3,6 +3,7 @@ import {
   mensagemDaApi,
   type TurmaDoAluno,
 } from "#lib/server/ensino";
+import { filtrarTurmasAtivasAluno } from "#lib/turmas-aluno";
 import { redirect } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 import { tokenDaSessao } from "#lib/server/sessao";
@@ -14,8 +15,9 @@ export const load: PageServerLoad = async ({ locals, cookies, request }) => {
     const r = await listarMinhasTurmas(request, token);
     if (r.status === 401) redirect(303, "/");
     if (r.status === 403) redirect(303, "/aluno");
+    const lista = (r.body as { turmas?: TurmaDoAluno[] } | null)?.turmas ?? [];
     return {
-      turmas: (r.body as { turmas?: TurmaDoAluno[] } | null)?.turmas ?? [],
+      turmas: filtrarTurmasAtivasAluno(lista),
       erro: r.ok ? null : mensagemDaApi(r.body),
     };
   } catch {
