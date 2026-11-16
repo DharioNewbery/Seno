@@ -1,13 +1,19 @@
 <script lang="ts">
+  import { calcularTotaisCorrecao } from "#lib/correcao-aluno";
   import { dataHora, prazoRelativo } from "#lib/formato";
-  import VisaoSubmissaoAluno from "#lib/components/VisaoSubmissaoAluno.svelte";
   // Tela da atividade do aluno: prazo, tempo limite, iniciar (se pendente)
-  // e exibição das próprias respostas e notas (quando corrigidas e publicadas).
+  // e resumo da entrega/publicação com notas sob demanda e link para os detalhes.
   import type { PageProps } from "./$types";
 
   let { data }: PageProps = $props();
 
   const a = $derived(data.a);
+  const visao = $derived(data.visao);
+  const cor = $derived(visao?.publicada ? visao.correcao ?? null : null);
+  const totais = $derived(cor ? calcularTotaisCorrecao(cor.tarefas) : null);
+
+  let mostrarNota = $state(false);
+
   const relPrazo = $derived(
     a && !a.entregue ? prazoRelativo(a.prazo) : null,
   );
@@ -29,7 +35,11 @@
     !!a?.prazo && new Date(a.prazo) < new Date() && !a.pode_atrasado,
   );
   const podeIniciar = $derived(
-    !!a && a.turma_ativa && !a.entregue && !encerrada && (!a.inicio || new Date(a.inicio) <= new Date()),
+    !!a &&
+      a.turma_ativa &&
+      !a.entregue &&
+      !encerrada &&
+      (!a.inicio || new Date(a.inicio) <= new Date()),
   );
 </script>
 
@@ -85,31 +95,68 @@
       <span class="subrotulo">Sua entrega</span>
       {#if a.entregue}
         <div class="entrega">
-          <span>
-            Entregue em {a.entregue_em ? dataHora(a.entregue_em) : ""}
-            {#if a.atrasada}<b class="rel vencido">(atrasada)</b>{/if}
-            {#if a.publicada_em}
-              · <strong class="destaque-publicada">correção publicada{a.nota_final !== null && a.nota_final !== undefined ? ` — nota ${a.nota_final} pts` : ""}</strong>
+          <div class="entrega-texto">
+            <span>
+              Entregue em {a.entregue_em ? dataHora(a.entregue_em) : ""}
+              {#if a.atrasada}<b class="rel vencido">(atrasada)</b>{/if}
+            </span>
+            {#if a.publicada_em || visao?.publicada}
+              <span class="publicacao-info">
+                Correção publicada em {dataHora((visao?.publicada_em ?? a.publicada_em) || "")}
+              </span>
+            {:else if visao?.confirmada}
+              <span class="nota">Atividade corrigida — aguardando publicação.</span>
+            {:else}
+              <span class="nota">Aguardando correção e publicação pelo professor.</span>
             {/if}
-          </span>
-          {#if a.submissao_id}
-            <a class="botao secundario" href={`/aluno/submissao/${a.submissao_id}`}>
-              {a.publicada_em ? "Abrir página exclusiva da correção →" : "Abrir comprovante de entrega →"}
-            </a>
-          {/if}
+          </div>
+
+          <div class="entrega-acoes">
+            {#if (a.publicada_em || visao?.publicada) && cor}
+              <button
+                type="button"
+                class="botao-toggle"
+                onclick={() => (mostrarNota = !mostrarNota)}
+              >
+                {mostrarNota ? "Ocultar nota" : "Mostrar nota"}
+              </button>
+            {/if}
+
+            {#if a.submissao_id}
+              <a class="botao secundario" href={`/aluno/submissao/${a.submissao_id}`}>
+                {a.publicada_em || visao?.publicada
+                  ? "Mostrar detalhes da correção →"
+                  : "Abrir comprovante de entrega →"}
+              </a>
+            {/if}
+          </div>
         </div>
+
+        {#if mostrarNota && cor}
+          <div class="resumo-notas">
+            <ul class="lista-notas">
+              {#each cor.tarefas ?? [] as t, idx (t.id)}
+                {@const notaQ = t.nota_final ?? t.nota_auto ?? 0}
+                <li>
+                  <span class="questao-nome">
+                    Questão {t.ordem ?? idx + 1}: {t.tarefa_nome}
+                  </span>
+                  <strong class="questao-nota">{notaQ}/{t.valor_pts}</strong>
+                </li>
+              {/each}
+            </ul>
+            {#if totais}
+              <div class="nota-total">
+                <span>Nota total</span>
+                <strong>{totais.notaObtida}/{totais.valorTotal}</strong>
+              </div>
+            {/if}
+          </div>
+        {/if}
       {:else}
         <span class="nota">Nenhuma entrega ainda.</span>
       {/if}
     </div>
-
-    {#if a.entregue && data.visao}
-      <VisaoSubmissaoAluno
-        visao={data.visao}
-        entrega={data.entrega}
-        mostrarCabecalhoEntrega={false}
-      />
-    {/if}
 
     <a class="voltar" href="/aluno/atividades">← Atividades</a>
   {/if}
@@ -200,6 +247,19 @@
     background: var(--seno-blue-100);
     color: var(--seno-blue-800);
   }
+  .botao-toggle {
+    background: var(--seno-gray-100);
+    color: var(--seno-gray-800);
+    border: 1px solid var(--seno-gray-300);
+    border-radius: var(--raio-pill);
+    padding: 0.5rem 1.05rem;
+    font-weight: 600;
+    font-size: 0.88rem;
+    cursor: pointer;
+  }
+  .botao-toggle:hover {
+    background: var(--seno-gray-200);
+  }
   .estado {
     border-radius: var(--raio-pill);
     padding: 0.3rem 0.8rem;
@@ -217,13 +277,69 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.75rem;
     flex-wrap: wrap;
     font-size: 0.92rem;
     color: var(--seno-gray-800);
   }
-  .destaque-publicada {
+  .entrega-texto {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .entrega-acoes {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+  }
+  .publicacao-info {
+    font-weight: 600;
     color: var(--seno-green);
+    font-size: 0.88rem;
+  }
+  .resumo-notas {
+    margin-top: 0.65rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid var(--seno-gray-200);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .lista-notas {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .lista-notas li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.35rem 0.6rem;
+    background: var(--seno-gray-50);
+    border: 1px solid var(--seno-gray-200);
+    border-radius: var(--raio-sm);
+    font-size: 0.88rem;
+  }
+  .questao-nome {
+    color: var(--seno-gray-800);
+  }
+  .questao-nota {
+    color: var(--seno-blue-900);
+    font-variant-numeric: tabular-nums;
+  }
+  .nota-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.45rem 0.6rem;
+    border-top: 1px dashed var(--seno-gray-300);
+    font-size: 0.94rem;
+    color: var(--seno-blue-900);
   }
   .voltar {
     color: var(--seno-blue-600);
