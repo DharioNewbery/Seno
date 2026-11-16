@@ -520,11 +520,13 @@ func (s *Service) gravaEstado(ctx context.Context, atribuicaoID int64, al *contr
 		prazo = pgtype.Timestamptz{Time: *al.PrazoEfetivo, Valid: true}
 	}
 	const q = `INSERT INTO monitor_estado_aluno
-	    (atribuicao_id, aluno_id, estado, n_t, entregue_em, nota_auto, correcao_status, prazo_efetivo, atualizado_em)
-	    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+	    (atribuicao_id, aluno_id, estado, n_t, entregue_em, nota_auto, correcao_status, prazo_efetivo, iniciada_em, atualizado_em)
+	    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $3 IN ('aberta', 'entregue') THEN now() ELSE NULL END, now())
 	    ON CONFLICT (atribuicao_id, aluno_id) DO UPDATE SET
 	      estado = $3, n_t = $4, entregue_em = $5, nota_auto = $6,
-	      correcao_status = $7, prazo_efetivo = $8, atualizado_em = now()`
+	      correcao_status = $7, prazo_efetivo = $8,
+	      iniciada_em = COALESCE(monitor_estado_aluno.iniciada_em, CASE WHEN $3 IN ('aberta', 'entregue') THEN now() ELSE NULL END),
+	      atualizado_em = now()`
 	if _, err := s.st.Pool.Exec(ctx, q, atribuicaoID, al.AlunoAPIID, al.Estado,
 		nt, entrega, nota, al.CorrecaoStatus, prazo); err != nil {
 		return fmt.Errorf("poll: upsert de estado aluno=%d: %w", al.AlunoAPIID, err)
@@ -602,6 +604,13 @@ func (s *Service) Entrar(ctx context.Context, aluno domain.User, atribuicaoID in
 	if err != nil {
 		return "", err
 	}
+	_, _ = s.st.Pool.Exec(ctx, `
+		INSERT INTO monitor_estado_aluno (atribuicao_id, aluno_id, estado, iniciada_em, atualizado_em)
+		VALUES ($1, $2, 'aberta', now(), now())
+		ON CONFLICT (atribuicao_id, aluno_id) DO UPDATE SET
+		  estado = CASE WHEN monitor_estado_aluno.estado = 'pendente' THEN 'aberta' ELSE monitor_estado_aluno.estado END,
+		  iniciada_em = COALESCE(monitor_estado_aluno.iniciada_em, now()),
+		  atualizado_em = now()`, atribuicaoID, aluno.ID)
 	return strings.TrimSuffix(s.publicURL, "/") + "/entrar?st=" + st, nil
 }
 

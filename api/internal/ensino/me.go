@@ -35,6 +35,7 @@ type AtribuicaoDoAluno struct {
 	TurmaAtiva    bool       `json:"turma_ativa"`
 	AtividadeNome string     `json:"atividade_nome"`
 	EmAndamento   bool       `json:"em_andamento"`
+	IniciadaEm    *time.Time `json:"iniciada_em,omitempty"`
 	MinhaRevisao  int32      `json:"minha_revisao,omitempty"`
 	GravadoEm     *time.Time `json:"gravado_em,omitempty"`
 	Entregue      bool       `json:"entregue"`
@@ -281,9 +282,11 @@ func aplicaEstadoMonitor(ctx context.Context, st *store.Store, alunoID int64, it
 		AtribuicaoID  int64
 		Estado        string
 		UltimaEntrega pgtype.Timestamptz
+		IniciadaEm    pgtype.Timestamptz
+		AtualizadoEm  pgtype.Timestamptz
 	}
 	rows, err := st.Pool.Query(ctx, `
-		SELECT atribuicao_id, estado, entregue_em
+		SELECT atribuicao_id, estado, entregue_em, iniciada_em, atualizado_em
 		FROM monitor_estado_aluno
 		WHERE aluno_id = $1`, alunoID)
 	if err != nil {
@@ -293,18 +296,26 @@ func aplicaEstadoMonitor(ctx context.Context, st *store.Store, alunoID int64, it
 	pair := map[int64]Estado{}
 	for rows.Next() {
 		var est Estado
-		if err := rows.Scan(&est.AtribuicaoID, &est.Estado, &est.UltimaEntrega); err != nil {
+		if err := rows.Scan(&est.AtribuicaoID, &est.Estado, &est.UltimaEntrega, &est.IniciadaEm, &est.AtualizadoEm); err != nil {
 			return
 		}
 		pair[est.AtribuicaoID] = est
 	}
 	for i := range itens {
+		if itens[i].EmAndamento && itens[i].IniciadaEm == nil {
+			itens[i].IniciadaEm = itens[i].GravadoEm
+		}
 		est, ok := pair[itens[i].ID]
 		if !ok {
 			continue
 		}
 		if est.Estado == "aberta" {
 			itens[i].EmAndamento = true
+			if est.IniciadaEm.Valid {
+				itens[i].IniciadaEm = horaPtr(est.IniciadaEm)
+			} else if est.AtualizadoEm.Valid && itens[i].IniciadaEm == nil {
+				itens[i].IniciadaEm = horaPtr(est.AtualizadoEm)
+			}
 		}
 		if est.Estado == "entregue" {
 			itens[i].Entregue = true
