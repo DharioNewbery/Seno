@@ -69,6 +69,10 @@
   {#if data.erro}
     <p class="aviso erro" role="alert">{data.erro}</p>
   {:else if a}
+    <div class="navegacao">
+      <a class="voltar" href="/aluno/atividades">Voltar para Atividades</a>
+    </div>
+
     <div class="cabeca">
       <h2>{a.atividade_nome}</h2>
       <span class="meta">
@@ -203,8 +207,6 @@
         <span class="nota">Nenhuma entrega ainda.</span>
       {/if}
     </div>
-
-    <a class="voltar" href="/aluno/atividades">← Atividades</a>
 
     {#if modalConfirmarInicio}
       <div
@@ -497,9 +499,7 @@
     font-size: 0.94rem;
     color: var(--seno-blue-900);
   }
-  .voltar {
-    color: var(--seno-blue-600);
-    text-decoration: none;
-    font-size: 0.88rem;
+  .navegacao {
+    margin-bottom: -0.25rem;
   }
 </style>

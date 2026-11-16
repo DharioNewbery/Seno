@@ -61,11 +61,6 @@
           {/if}
         </span>
       </div>
-      {#if visao.atribuicao_id}
-        <a class="link-atividade" href={`/aluno/atividades/${visao.atribuicao_id}`}>
-          Ir para a página da atividade →
-        </a>
-      {/if}
     </div>
   {/if}
 
@@ -314,15 +309,6 @@
   .cabeca-entrega h2 {
     margin: 0 0 0.2rem;
     color: var(--seno-blue-900);
-  }
-  .link-atividade {
-    color: var(--seno-blue-600);
-    text-decoration: none;
-    font-size: 0.88rem;
-    font-weight: 500;
-  }
-  .link-atividade:hover {
-    text-decoration: underline;
   }
   .meta {
     color: var(--seno-gray-500);

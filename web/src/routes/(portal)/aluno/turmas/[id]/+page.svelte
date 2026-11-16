@@ -1,6 +1,8 @@
 <script lang="ts">
+  import Icone from "#lib/components/Icone.svelte";
   import { dataHora } from "#lib/formato";
   import { resumirEstadoAtribuicaoAluno } from "#lib/correcao-aluno";
+  import { formatarTituloCardTurmaAluno } from "#lib/turmas-aluno";
   import type { PageProps } from "./$types";
 
   let { data }: PageProps = $props();
@@ -29,45 +31,40 @@
 
   {#if turma}
     <div class="navegacao">
-      <a class="voltar" href="/aluno/turmas">← Voltar para Minhas Turmas</a>
+      <a class="voltar" href="/aluno/turmas">Voltar para Minhas Turmas</a>
     </div>
 
-    <header class="cabecalho-turma">
-      <div class="info-principal">
-        <div class="tags">
-          <span class="tag codigo">{turma.materia_codigo}</span>
-          {#if turma.ativa}
-            <span class="tag ativa">Ativa</span>
-          {:else}
-            <span class="tag encerrada">Encerrada</span>
-          {/if}
-        </div>
-        <h1>{turma.materia_nome}</h1>
-        {#if turma.titulo}
-          <p class="subtitulo">{turma.titulo}</p>
-        {/if}
-      </div>
+    <section class="painel sobre-painel">
+      <header class="painel-topo">
+        <h2>Sobre</h2>
+      </header>
 
-      <div class="metadados">
-        <div class="dado">
-          <span class="rotulo">Período</span>
-          <span class="valor">{turma.trimestre}º Trimestre / {turma.ano}</span>
+      <div class="cabecalho-turma">
+        <div class="info-principal">
+          <h1>{formatarTituloCardTurmaAluno(turma)}</h1>
         </div>
-        <div class="dado">
-          <span class="rotulo">Professor</span>
-          <span class="valor">{turma.professor}</span>
-          {#if turma.professor_email}
-            <span class="email">{turma.professor_email}</span>
-          {/if}
+
+        <div class="metadados">
+          <div class="dado">
+            <span class="rotulo">Período</span>
+            <span class="valor">{turma.trimestre}º Trimestre / {turma.ano}</span>
+          </div>
+          <div class="dado">
+            <span class="rotulo">Professor</span>
+            <span class="valor">{turma.professor}</span>
+            {#if turma.professor_email}
+              <span class="email">{turma.professor_email}</span>
+            {/if}
+          </div>
         </div>
       </div>
-    </header>
+    </section>
 
     <div class="grade-conteudo">
       <section class="painel atividades-painel">
-        <div class="painel-topo">
+        <header class="painel-topo">
           <h2>Atividades da Turma <span class="contador">({atribuicoes.length})</span></h2>
-        </div>
+        </header>
 
         <ul class="lista-atividades">
           {#each atribuicoes as a (a.id)}
@@ -75,11 +72,7 @@
               <div class="identidade">
                 <strong>{a.atividade_nome}</strong>
                 <span class="meta">
-                  {paraTexto(a.prazo)}
-                  {#if a.duracao_seg}
-                    · {Math.round(a.duracao_seg / 60)} min
-                  {/if}
-                  {#if a.pode_atrasado}· atraso permitido{/if}
+                  {paraTexto(a.prazo)}{#if a.duracao_seg}, {Math.round(a.duracao_seg / 60)} min{/if}{#if a.pode_atrasado}, atraso permitido{/if}
                 </span>
               </div>
               <div class="acao-area">
@@ -87,19 +80,44 @@
                 {#if turma.ativa && !a.entregue}
                   <!-- Tela pré-atividade: inspeção; o início (Monitor/editor, Fase
                        9.4) acontece lá. -->
-                  <a class="abrir" href={`/aluno/atividades/${a.id}`}>
-                    {a.em_andamento ? `Continuar (rev. ${a.minha_revisao})` : "Abrir"} →
+                  <a
+                    class="btn-icone primario"
+                    href={`/aluno/atividades/${a.id}`}
+                    title={a.em_andamento ? `Continuar (rev. ${a.minha_revisao})` : "Abrir atividade"}
+                    aria-label={a.em_andamento ? `Continuar (rev. ${a.minha_revisao})` : "Abrir atividade"}
+                  >
+                    <Icone nome="eye" tamanho={18} />
                   </a>
                 {:else if a.entregue}
                   <span class="meta">
                     Entregue em {a.entregue_em ? dataHora(a.entregue_em) : ""}
                   </span>
                   {#if a.submissao_id}
-                    <a class="abrir" href={`/aluno/submissao/${a.submissao_id}`}>
-                      {a.publicada_em ? "Ver respostas e nota →" : "Ver submissão →"}
+                    <a
+                      class="btn-icone secundario"
+                      href={`/aluno/atividades/${a.id}`}
+                      title="Ver atividade"
+                      aria-label="Ver atividade"
+                    >
+                      <Icone nome="eye" tamanho={18} />
+                    </a>
+                    <a
+                      class="btn-icone primario"
+                      href={`/aluno/submissao/${a.submissao_id}`}
+                      title={a.publicada_em ? "Ver respostas e nota" : "Ver submissão"}
+                      aria-label={a.publicada_em ? "Ver respostas e nota" : "Ver submissão"}
+                    >
+                      <Icone nome="file-text" tamanho={18} />
                     </a>
                   {:else}
-                    <a class="abrir secundario" href={`/aluno/atividades/${a.id}`}>Inspecionar →</a>
+                    <a
+                      class="btn-icone secundario"
+                      href={`/aluno/atividades/${a.id}`}
+                      title="Inspecionar"
+                      aria-label="Inspecionar"
+                    >
+                      <Icone nome="eye" tamanho={18} />
+                    </a>
                   {/if}
                 {:else}
                   <span class="estado encerrada">Turma encerrada</span>
@@ -115,14 +133,13 @@
       </section>
 
       <section class="painel colegas-painel">
-        <div class="painel-topo">
+        <header class="painel-topo">
           <h2>Colegas de Turma <span class="contador">({colegas.length})</span></h2>
-        </div>
+        </header>
 
         <ul class="lista-colegas">
           {#each colegas as c, idx (idx)}
             <li class="item-colega">
-              <span class="icone-aluno">👤</span>
               <span class="nome">{c.first_name} {c.last_name}</span>
             </li>
           {:else}
@@ -143,14 +160,11 @@
   .navegacao {
     margin-bottom: -0.25rem;
   }
-      .cabecalho-turma {
-    background: var(--seno-white);
-    border: 1px solid var(--seno-gray-300);
-    border-radius: var(--raio-lg);
-    padding: 1.25rem 1.5rem;
+  .cabecalho-turma {
+    padding: 1.25rem 1.2rem;
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     gap: 1.5rem;
     flex-wrap: wrap;
   }
@@ -159,45 +173,14 @@
     flex-direction: column;
     gap: 0.4rem;
   }
-  .tags {
-    display: flex;
-    gap: 0.5rem;
-  }
-  .tag {
-    font-size: 0.75rem;
-    padding: 0.2rem 0.5rem;
-    border-radius: var(--raio-sm);
-    font-weight: 600;
-  }
-  .tag.codigo {
-    background: var(--seno-blue-100);
-    color: #3730a3;
-  }
-  .tag.ativa {
-    background: var(--seno-green-50);
-    color: var(--seno-green);
-  }
-  .tag.encerrada {
-    background: var(--seno-gray-100);
-    color: var(--seno-gray-500);
-  }
   .cabecalho-turma h1 {
     margin: 0;
     font-size: 1.4rem;
     color: var(--seno-text);
   }
-  .subtitulo {
-    margin: 0;
-    color: var(--seno-gray-500);
-    font-size: 1rem;
-  }
   .metadados {
     display: flex;
     gap: 2rem;
-    background: var(--seno-gray-50);
-    padding: 0.8rem 1.2rem;
-    border-radius: var(--raio-md);
-    border: 1px solid var(--seno-gray-200);
   }
   .dado {
     display: flex;
@@ -233,55 +216,83 @@
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
     border-radius: var(--raio-lg);
-    padding: 1.2rem;
+    overflow: hidden;
   }
   .painel-topo {
-    margin-bottom: 0.9rem;
-    border-bottom: 1px solid var(--seno-gray-200);
-    padding-bottom: 0.6rem;
+    background: var(--seno-blue-900);
+    color: var(--seno-white);
+    padding: 0.85rem 1.2rem;
   }
   .painel-topo h2 {
     margin: 0;
-    font-size: 1.15rem;
+    font-size: 1.05rem;
+    color: var(--seno-white);
     display: flex;
     align-items: center;
     gap: 0.4rem;
   }
   .contador {
-    color: var(--seno-gray-500);
+    color: var(--seno-blue-200);
     font-size: 0.85rem;
     font-weight: 400;
   }
   .lista-atividades {
     list-style: none;
-    padding: 0;
+    padding: 0.75rem 1.2rem 1.2rem;
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
   }
   .lista-atividades li {
-    border: 1px solid var(--seno-gray-200);
-    background: var(--seno-gray-50);
-    border-radius: var(--raio-md);
-    padding: 0.85rem 1rem;
+    padding: 0.85rem 0.2rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 0.8rem;
     flex-wrap: wrap;
   }
+  .lista-atividades li + li {
+    border-top: 1px solid var(--seno-gray-200);
+  }
   .identidade {
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
   }
-    .acao-area {
+  .acao-area {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.45rem;
   }
-    .estado.nota {
+  .btn-icone {
+    width: 2.15rem;
+    height: 2.15rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--raio-md);
+    text-decoration: none;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .btn-icone.secundario {
+    background: var(--seno-gray-100);
+    color: var(--seno-gray-700);
+    border: 1px solid var(--seno-gray-300);
+  }
+  .btn-icone.secundario:hover {
+    background: var(--seno-gray-200);
+    color: var(--seno-blue-900);
+  }
+  .btn-icone.primario {
+    background: var(--seno-blue-600);
+    color: var(--seno-white);
+    border: 1px solid var(--seno-blue-600);
+  }
+  .btn-icone.primario:hover {
+    background: var(--seno-blue-700);
+    border-color: var(--seno-blue-700);
+  }
+  .estado.nota {
     background: var(--seno-blue-100);
     color: #1967d2;
   }
@@ -293,39 +304,26 @@
     background: var(--seno-amber-50);
     color: var(--seno-amber);
   }
-    .estado.nao {
+  .estado.nao {
     background: var(--seno-gray-100);
     color: var(--seno-gray-500);
   }
-      .lista-colegas {
+  .lista-colegas {
     list-style: none;
-    padding: 0;
+    padding: 0.75rem 1.2rem 1.2rem;
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
     max-height: 400px;
     overflow-y: auto;
-  }
-  .abrir.secundario {
-    background: var(--seno-gray-100);
-    color: var(--seno-gray-700);
-    border: 1px solid var(--seno-gray-300);
-  }
-  .abrir.secundario:hover {
-    background: var(--seno-gray-200);
   }
   .item-colega {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
-    padding: 0.45rem 0.6rem;
-    border-radius: var(--raio-sm);
-    background: var(--seno-gray-50);
+    padding: 0.6rem 0.2rem;
     font-size: 0.9rem;
   }
-  .icone-aluno {
-    font-size: 0.9rem;
-    opacity: 0.7;
+  .item-colega + .item-colega {
+    border-top: 1px solid var(--seno-gray-200);
   }
-    </style>
+</style>

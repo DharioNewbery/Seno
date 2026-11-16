@@ -1,14 +1,14 @@
 <script lang="ts">
   // Template único dos portais: barra lateral com navegação (grupos com
-  // subopções), cartão do usuário e versões no rodapé da barra. Em telas
-  // estreitas a barra vira uma gaveta aberta por um botão no topo.
+  // subopções) e cartão do usuário. Em telas estreitas a barra vira uma
+  // gaveta aberta por um botão no topo.
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import type { Snippet } from "svelte";
 
   import Logo from "./Logo.svelte";
   import NavIcon from "./NavIcon.svelte";
-  import { APP_VERSION, API_VERSION, modoDev, NOME_SISTEMA } from "#lib/config";
+  import { NOME_SISTEMA } from "#lib/config";
   import { iconeDoItem, type NavItem, type PortalDef } from "#lib/portais";
   import {
     portaisDisponiveis,
@@ -178,12 +178,6 @@
         {/if}
         <button class="acao" onclick={sair} title="Encerrar sessão">Sair</button>
       </div>
-      <p class="versao">
-        <span>{NOME_SISTEMA} v{APP_VERSION} · API v{API_VERSION}</span>
-        {#if modoDev}
-          <span class="dev" title="Build de desenvolvimento">DEV</span>
-        {/if}
-      </p>
     </div>
   </aside>
 
@@ -427,25 +421,6 @@
   .acao:hover {
     background: rgb(255 255 255 / 0.1);
     color: var(--seno-white);
-  }
-
-  .versao {
-    margin: 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    color: var(--seno-blue-300);
-    font-size: 0.72rem;
-  }
-
-  .dev {
-    padding: 0.05rem 0.4rem;
-    border: 1px solid var(--seno-blue-400);
-    border-radius: var(--raio-sm);
-    color: var(--seno-blue-100);
-    font-weight: 600;
-    letter-spacing: 0.04em;
   }
 
   /* ---- Conteúdo ---- */

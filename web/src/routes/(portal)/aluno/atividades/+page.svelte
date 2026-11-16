@@ -8,7 +8,6 @@
     paginarAtribuicoesAluno,
   } from "#lib/atividades-aluno";
   import { resumirEstadoAtribuicaoAluno } from "#lib/correcao-aluno";
-  import { dataHora, prazoRelativo } from "#lib/formato";
   import type { PageProps } from "./$types";
 
   let { data }: PageProps = $props();
@@ -40,15 +39,6 @@
     const turmaId = valor ? Number(valor) : null;
     goto(montarUrl(turmaId, 1));
   }
-
-  function paraTexto(iso: string | undefined): string {
-    if (!iso) return "Sem prazo";
-    return `Prazo ${dataHora(iso)}`;
-  }
-
-  const turmaFiltrada = $derived(
-    data.turmas.find((t) => t.id === data.filtroTurma),
-  );
 </script>
 
 <section class="minhas-atividades">
@@ -60,9 +50,6 @@
     <h2>
       Atividades
       <span class="total">({paginacao.total})</span>
-      {#if turmaFiltrada}
-        <span class="filtro">— {turmaFiltrada.materia_codigo} {turmaFiltrada.titulo || ""}</span>
-      {/if}
     </h2>
 
     <div class="filtro-turma">
@@ -75,7 +62,7 @@
         <option value="">Todas as turmas</option>
         {#each turmasAtivas as t (t.id)}
           <option value={String(t.id)}>
-            {t.materia_codigo} · {t.titulo || "Sem título"}
+            {t.materia_codigo} ({t.titulo || `#${t.id}`})
           </option>
         {/each}
       </select>
@@ -84,28 +71,28 @@
 
   <ul class="lista">
     {#each atribuicoesVisiveis as a (a.id)}
-      {@const rel = a.entregue ? null : prazoRelativo(a.prazo)}
       {@const est = resumirEstadoAtribuicaoAluno(a)}
       <li class="item-atividade">
-        <a class="link-atividade" href={`/aluno/atividades/${a.id}`}>
-          <div class="identidade">
-            <strong class="titulo-atividade">{a.atividade_nome}</strong>
-            <span class="meta">
-              {a.materia_codigo} · {a.turma_titulo || `Turma ${a.turma_id}`}
-            </span>
-            <span class="meta">
-              {paraTexto(a.prazo)}
-              {#if rel}<b class="rel">{rel.rotulo}</b>{/if}
-              {#if a.pode_atrasado}· atraso permitido{/if}
-            </span>
-          </div>
-          <div class="acao-area">
-            <span class="estado">{est.rotulo}</span>
-            {#if !a.turma_ativa && !a.entregue}
-              <span class="estado">Turma encerrada</span>
-            {/if}
-          </div>
-        </a>
+        <div class="identidade">
+          <strong class="titulo-atividade">{a.atividade_nome}</strong>
+          <span class="meta">
+            {a.materia_codigo} ({a.turma_titulo || `#${a.turma_id}`})
+          </span>
+        </div>
+        <div class="acao-area">
+          <span class="estado">{est.rotulo}</span>
+          {#if !a.turma_ativa && !a.entregue}
+            <span class="estado">Turma encerrada</span>
+          {/if}
+          <a
+            class="btn-icone primario"
+            href={`/aluno/atividades/${a.id}`}
+            title="Ver atividade"
+            aria-label="Ver atividade"
+          >
+            <Icone nome="eye" tamanho={18} />
+          </a>
+        </div>
       </li>
     {:else}
       <li class="vazio">
@@ -157,31 +144,27 @@
   }
   .cabeca {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: flex-start;
     gap: 0.75rem;
   }
   .cabeca h2 {
     margin: 0;
   }
-  .filtro {
-    color: var(--seno-gray-500);
-    font-size: 0.85rem;
-    font-weight: 400;
-  }
   .filtro-turma {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
   }
   .filtro-turma label {
-    font-size: 0.85rem;
+    font-size: 0.78rem;
     font-weight: 600;
     color: var(--seno-gray-700);
   }
   .filtro-turma select {
-    padding: 0.42rem 0.7rem;
+    min-width: 12rem;
+    padding: 0.45rem 0.65rem;
     border: 1px solid var(--seno-gray-300);
     border-radius: var(--raio-md);
     background: var(--seno-white);
@@ -189,26 +172,11 @@
     font-size: 0.88rem;
   }
   .lista > li.item-atividade {
-    padding: 0;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
   .lista > li.item-atividade:hover {
     border-color: var(--seno-blue-300, #93c5fd);
     box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
-  }
-  .link-atividade {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 0.6rem 1rem;
-    width: 100%;
-    padding: 0.9rem 1.15rem;
-    color: inherit;
-    text-decoration: none;
-  }
-  .link-atividade:hover .titulo-atividade {
-    color: var(--seno-blue-700);
   }
   .identidade {
     display: flex;
@@ -218,15 +186,30 @@
   .identidade strong {
     color: var(--seno-blue-900);
   }
-  .rel {
-    font-weight: 600;
-    color: var(--seno-gray-700);
-  }
   .acao-area {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     flex-wrap: wrap;
+  }
+  .btn-icone {
+    width: 2.15rem;
+    height: 2.15rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--raio-md);
+    text-decoration: none;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .btn-icone.primario {
+    background: var(--seno-blue-600);
+    color: var(--seno-white);
+    border: 1px solid var(--seno-blue-600);
+  }
+  .btn-icone.primario:hover {
+    background: var(--seno-blue-700);
+    border-color: var(--seno-blue-700);
   }
   .estado {
     background: var(--seno-gray-100);

@@ -1,6 +1,6 @@
 <script lang="ts">
   // Minhas turmas (aluno): apenas turmas ativas, sem tag de status e com
-  // botões de ação por ícone visíveis ao passar o mouse sobre o card.
+  // botões de ação por ícone.
   import Icone from "#lib/components/Icone.svelte";
   import {
     filtrarTurmasAtivasAluno,
@@ -102,16 +102,6 @@
     display: flex;
     align-items: center;
     gap: 0.45rem;
-    opacity: 0;
-    pointer-events: none;
-    transform: translateX(4px);
-    transition: opacity 0.16s ease, transform 0.16s ease;
-  }
-  .card-turma:hover .acao-area,
-  .card-turma:focus-within .acao-area {
-    opacity: 1;
-    pointer-events: auto;
-    transform: translateX(0);
   }
   .btn-icone {
     width: 2.15rem;

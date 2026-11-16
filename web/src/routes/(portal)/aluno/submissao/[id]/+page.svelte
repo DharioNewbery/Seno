@@ -8,18 +8,28 @@
 
   const visao = $derived(data.visao);
   const entrega = $derived(data.entrega);
+  const atribuicaoId = $derived(visao?.atribuicao_id ?? entrega?.atribuicao_id);
 </script>
 
 <section class="correcao">
   {#if data.erro}
     <p class="aviso erro" role="alert">{data.erro}</p>
   {:else if visao}
+    <div class="navegacao">
+      <a
+        class="voltar"
+        href={atribuicaoId
+          ? `/aluno/atividades/${atribuicaoId}`
+          : "/aluno/atividades"}
+      >
+        Voltar para a atividade
+      </a>
+    </div>
     <VisaoSubmissaoAluno
       {visao}
       {entrega}
       mostrarCabecalhoEntrega={true}
     />
-    <a class="voltar" href="/aluno/atividades">← Atividades</a>
   {/if}
 </section>
 
@@ -30,9 +40,7 @@
     flex-direction: column;
     gap: 0.9rem;
   }
-  .voltar {
-    color: var(--seno-blue-600);
-    text-decoration: none;
-    font-size: 0.88rem;
+  .navegacao {
+    margin-bottom: -0.25rem;
   }
 </style>

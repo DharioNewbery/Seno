@@ -5,9 +5,9 @@
   // .entrar) recebem o estilo daqui — as páginas só fornecem o conteúdo.
   import type { Snippet } from "svelte";
   import Logo from "./Logo.svelte";
-  import { DESCRICAO_SISTEMA, NOME_SISTEMA } from "#lib/config";
+  import { APP_VERSION, API_VERSION, modoDev, NOME_SISTEMA } from "#lib/config";
 
-  let { destaques = false, children }: { destaques?: boolean; children: Snippet } = $props();
+  let { children }: { children: Snippet } = $props();
 
   // Duas senoides sobre papel quadriculado: a marca do Seno, desenhada em grande.
   const L = 800;
@@ -43,17 +43,9 @@
 
     <div class="texto">
       <div class="marca">
-        <Logo tamanho={40} />
+        <Logo tamanho={64} />
         <h1>{NOME_SISTEMA}</h1>
       </div>
-      <p class="lema">{DESCRICAO_SISTEMA}</p>
-      {#if destaques}
-        <ul class="pontos">
-          <li>Turmas, tarefas e atividades por professor</li>
-          <li>Editor de código com backup automático</li>
-          <li>Correção automática e notas na hora</li>
-        </ul>
-      {/if}
     </div>
   </section>
 
@@ -61,6 +53,12 @@
     <div class="conteudo">
       {@render children()}
     </div>
+    <p class="versao" aria-label="Versão do sistema">
+      <span>{NOME_SISTEMA} v{APP_VERSION} · API v{API_VERSION}</span>
+      {#if modoDev}
+        <span class="dev" title="Build de desenvolvimento">DEV</span>
+      {/if}
+    </p>
   </section>
 </main>
 
@@ -120,57 +118,48 @@
   .marca {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: 1rem;
   }
 
   .marca h1 {
     margin: 0;
     color: var(--seno-white);
-    font-size: 2.4rem;
+    font-size: 3.4rem;
     letter-spacing: -0.02em;
-  }
-
-  .lema {
-    margin: 0;
-    font-size: 1.15rem;
-    line-height: 1.45;
-    color: var(--seno-blue-100);
-  }
-
-  .pontos {
-    margin: 0.4rem 0 0;
-    padding: 0;
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    color: var(--seno-blue-200);
-  }
-
-  .pontos li {
-    padding-left: 1.4rem;
-    position: relative;
-  }
-
-  .pontos li::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 0.5em;
-    width: 0.6rem;
-    height: 0.35rem;
-    border-left: 2px solid var(--seno-blue-300);
-    border-bottom: 2px solid var(--seno-blue-300);
-    transform: rotate(-45deg);
   }
 
   /* ---- Formulário ---- */
   .painel {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 2rem;
+    padding: 2rem 2rem 3rem;
     background: var(--seno-white);
+  }
+
+  .versao {
+    position: absolute;
+    bottom: 0.75rem;
+    left: 0;
+    right: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    color: var(--seno-gray-500);
+    opacity: 0.5;
+    font-size: 0.68rem;
+    user-select: none;
+  }
+
+  .dev {
+    padding: 0.02rem 0.3rem;
+    border: 1px solid var(--seno-gray-300);
+    border-radius: var(--raio-sm);
+    font-weight: 600;
+    letter-spacing: 0.04em;
   }
 
   .conteudo {
@@ -295,15 +284,7 @@
     }
 
     .marca h1 {
-      font-size: 1.7rem;
-    }
-
-    .lema {
-      font-size: 1rem;
-    }
-
-    .pontos {
-      display: none;
+      font-size: 2.2rem;
     }
 
     .painel {

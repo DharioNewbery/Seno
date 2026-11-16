@@ -42,7 +42,7 @@
 
 <svelte:head><title>Entrar — Seno</title></svelte:head>
 
-<TelaAcesso destaques>
+<TelaAcesso>
   <form class="formulario" onsubmit={entrar}>
     <h2>Entrar</h2>
     <label>
@@ -81,6 +81,6 @@
       {enviando ? "Entrando..." : "Entrar"}
     </button>
     <a class="voltar" href="/recuperar-senha">Esqueci minha senha</a>
-    <p class="nota">Não há autocadastro: a conta é criada pela coordenação.</p>
+    <p class="nota">Ainda não tem uma conta? Consulte o professor.</p>
   </form>
 </TelaAcesso>

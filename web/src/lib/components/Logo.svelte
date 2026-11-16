@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Marca do Seno: SVG placeholder (onda senoidal em quadro arredondado).
+  // Marca do Seno: eixos do plano cartesiano e função seno de 0 até pi/2.
   let { tamanho = 28 }: { tamanho?: number } = $props();
 </script>
 
@@ -12,10 +12,28 @@
   aria-label="Logo do Seno"
 >
   <rect x="1" y="1" width="30" height="30" rx="7" fill="var(--seno-blue-600)" />
+  <line
+    x1="9"
+    y1="6"
+    x2="9"
+    y2="26"
+    stroke="var(--seno-blue-200)"
+    stroke-width="1.5"
+    stroke-linecap="round"
+  />
+  <line
+    x1="6"
+    y1="23"
+    x2="26"
+    y2="23"
+    stroke="var(--seno-blue-200)"
+    stroke-width="1.5"
+    stroke-linecap="round"
+  />
   <path
-    d="M5 17.5 C7.5 11, 10.5 11, 13 17.5 S18.5 24, 21 17.5 S26 11.5, 27 14"
+    d="M9 23 C14.46 15, 18.54 9, 24 9"
     stroke="var(--seno-white)"
-    stroke-width="2.2"
+    stroke-width="2.4"
     stroke-linecap="round"
     fill="none"
   />
