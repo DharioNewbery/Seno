@@ -125,8 +125,8 @@
             {#if a.submissao_id}
               <a class="botao secundario" href={`/aluno/submissao/${a.submissao_id}`}>
                 {a.publicada_em || visao?.publicada
-                  ? "Mostrar detalhes da correção →"
-                  : "Abrir comprovante de entrega →"}
+                  ? "Detalhes da correção"
+                  : "Comprovante de entrega"}
               </a>
             {/if}
           </div>
