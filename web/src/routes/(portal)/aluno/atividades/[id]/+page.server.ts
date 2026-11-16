@@ -14,7 +14,12 @@ import { redirect } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 import { tokenDaSessao } from "#lib/server/sessao";
 
-export const load: PageServerLoad = async ({ locals, cookies, request, params }) => {
+export const load: PageServerLoad = async ({
+  locals,
+  cookies,
+  request,
+  params,
+}) => {
   if (!locals.usuario) redirect(303, "/");
   const token = tokenDaSessao(cookies);
   const id = Number(params.id);
@@ -31,7 +36,8 @@ export const load: PageServerLoad = async ({ locals, cookies, request, params })
     };
   }
   if (r.status === 401 || r.status === 403) redirect(303, "/");
-  const lista = (r.body as { atribuicoes?: AtribuicaoDoAluno[] } | null)?.atribuicoes ?? [];
+  const lista =
+    (r.body as { atribuicoes?: AtribuicaoDoAluno[] } | null)?.atribuicoes ?? [];
   const a = lista.find((x) => x.id === id) ?? null;
   if (!a) redirect(303, "/aluno/atividades");
 

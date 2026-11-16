@@ -126,7 +126,8 @@ export type IconeNav =
 
 /** Ícone de um item da navegação, pelo trecho da rota depois de `/<portal>`. */
 export function iconeDoItem(portal: PortalId, href: string): IconeNav {
-  const trecho = href.replace(`/${portal}`, "").split("/").filter(Boolean)[0] ?? "";
+  const trecho =
+    href.replace(`/${portal}`, "").split("/").filter(Boolean)[0] ?? "";
   const mapa: Record<string, IconeNav> = {
     turmas: "turmas",
     tarefas: "tarefas",

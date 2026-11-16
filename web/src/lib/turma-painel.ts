@@ -77,7 +77,11 @@ export function parseCsvAlunos(bruto: string): CandidatoMatricula[] {
 
     // Ignora linha de cabeçalho se a primeira coluna for "email"/"e-mail" sem "@"
     const p0 = partes[0] ?? "";
-    if (i === 0 && !p0.includes("@") && CABECALHOS_EMAIL.has(p0.toLowerCase())) {
+    if (
+      i === 0 &&
+      !p0.includes("@") &&
+      CABECALHOS_EMAIL.has(p0.toLowerCase())
+    ) {
       continue;
     }
 

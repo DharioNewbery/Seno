@@ -14,7 +14,12 @@ import { fail, redirect, type Actions } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 import { tokenDaSessao } from "#lib/server/sessao";
 
-export const load: PageServerLoad = async ({ locals, cookies, request, params }) => {
+export const load: PageServerLoad = async ({
+  locals,
+  cookies,
+  request,
+  params,
+}) => {
   if (!locals.usuario) redirect(303, "/");
   const token = tokenDaSessao(cookies);
   const id = Number(params.id);
@@ -47,7 +52,12 @@ export const actions: Actions = {
     const form = await evento.request.formData();
     const alunoID = Number(form.get("aluno_id"));
     if (!alunoID) return fail(422, { erro: "Aluno inválido." });
-    const r = await coletarRascunho(evento.request, token, atribuicaoID, alunoID);
+    const r = await coletarRascunho(
+      evento.request,
+      token,
+      atribuicaoID,
+      alunoID,
+    );
     if (r.status === 401) redirect(303, "/");
     if (!r.ok) return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
     return { ok: "Rascunho coletado com sucesso." };
@@ -72,7 +82,9 @@ export const actions: Actions = {
 
     if (r.status === 401) redirect(303, "/");
     if (!r.ok) return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
-    return { ok: "Submissão excluída. Uma nova tentativa pré-preenchida foi liberada ao aluno." };
+    return {
+      ok: "Submissão excluída. Uma nova tentativa pré-preenchida foi liberada ao aluno.",
+    };
   },
   reexecutar_monitor: async (evento) => {
     const token = tokenDaSessao(evento.cookies);
@@ -81,7 +93,12 @@ export const actions: Actions = {
     const form = await evento.request.formData();
     const alunoID = Number(form.get("aluno_id"));
     if (!alunoID) return fail(422, { erro: "Aluno inválido." });
-    const r = await reexecutarMonitor(evento.request, token, atribuicaoID, alunoID);
+    const r = await reexecutarMonitor(
+      evento.request,
+      token,
+      atribuicaoID,
+      alunoID,
+    );
     if (r.status === 401) redirect(303, "/");
     if (!r.ok) return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
     return { ok: "Correção reenviada para execução no Monitor." };
@@ -100,4 +117,3 @@ export const actions: Actions = {
     return { ok: `${n} correção(ões) publicada(s) para os alunos.` };
   },
 };
-

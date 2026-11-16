@@ -47,7 +47,10 @@ export const actions: Actions = {
     const r = await duplicarAtividade(evento.request, token, id);
     if (r.status === 401) redirect(303, "/");
     if (r.ok) {
-      redirect(303, `/professor/atividades/${(r.body as { id?: number } | null)?.id}`);
+      redirect(
+        303,
+        `/professor/atividades/${(r.body as { id?: number } | null)?.id}`,
+      );
     }
     return fail(r.status || 500, {
       erro: mensagemDaApi(r.body, "NÃ£o foi possÃ­vel duplicar."),

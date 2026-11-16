@@ -35,7 +35,10 @@ export function adicionarAoWorkspace(
 /**
  * Remove uma tarefa do workspace.
  */
-export function removerDoWorkspace(workspace: number[], tarefaId: number): number[] {
+export function removerDoWorkspace(
+  workspace: number[],
+  tarefaId: number,
+): number[] {
   return workspace.filter((id) => id !== tarefaId);
 }
 
@@ -132,9 +135,7 @@ export function serializarAtributos(atributos: AtributoAtividade[]): string {
   const validos = atributos
     .filter(
       (a) =>
-        a.tarefa_id != null &&
-        Number.isInteger(a.tarefa_id) &&
-        a.tarefa_id > 0,
+        a.tarefa_id != null && Number.isInteger(a.tarefa_id) && a.tarefa_id > 0,
     )
     .map((a) => {
       const numPts = Number(a.valor_pts);

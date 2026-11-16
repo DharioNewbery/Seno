@@ -14,19 +14,27 @@ import { tokenDaSessao } from "#lib/server/sessao";
 import type { TesteFormulario } from "#lib/tarefas-testes";
 
 // Banco de tarefas do professor: listagem + modal de criação de tarefa e testes.
-export const load: PageServerLoad = async ({ locals, cookies, request, url }) => {
+export const load: PageServerLoad = async ({
+  locals,
+  cookies,
+  request,
+  url,
+}) => {
   if (!locals.usuario) redirect(303, "/");
   const token = tokenDaSessao(cookies);
   const pagina = Number(url.searchParams.get("pagina")) || 1;
   try {
     const r = await listarTarefas(request, token);
     if (r.status === 401) redirect(303, "/");
-    const lista = r.body as
-      | { total?: number; por?: number; tarefas?: unknown[] }
-      | null;
+    const lista = r.body as {
+      total?: number;
+      por?: number;
+      tarefas?: unknown[];
+    } | null;
     return {
       tarefas: r.ok ? listaDeTarefas(r) : [],
-      total: r.ok && lista?.total != null ? lista.total : listaDeTarefas(r).length,
+      total:
+        r.ok && lista?.total != null ? lista.total : listaDeTarefas(r).length,
       por: lista?.por ?? 50,
       pagina: pagina > 1 ? pagina : 1,
       erro: r.ok ? null : mensagemDaApi(r.body),
@@ -50,9 +58,13 @@ export const actions: Actions = {
     const nome = String(form.get("nome") ?? "").trim();
     const enunciado = String(form.get("enunciado") ?? "").trim();
     const tipoRaw = String(form.get("tipo") ?? "programacao").trim();
-    const tipo = tipoRaw === "arquivo_submissao" ? "arquivo_submissao" : "programacao";
+    const tipo =
+      tipoRaw === "arquivo_submissao" ? "arquivo_submissao" : "programacao";
     if (!nome || !enunciado) {
-      return fail(422, { acao: "criar", erro: "Informe nome e enunciado da tarefa." });
+      return fail(422, {
+        acao: "criar",
+        erro: "Informe nome e enunciado da tarefa.",
+      });
     }
 
     if (tipo === "arquivo_submissao") {
@@ -81,9 +93,15 @@ export const actions: Actions = {
       });
       if (r.status === 401) redirect(303, "/");
       if (!r.ok) {
-        return fail(r.status || 500, { acao: "criar", erro: mensagemDaApi(r.body) });
+        return fail(r.status || 500, {
+          acao: "criar",
+          erro: mensagemDaApi(r.body),
+        });
       }
-      redirect(303, `/professor/tarefas/${(r.body as { id?: number } | null)?.id}`);
+      redirect(
+        303,
+        `/professor/tarefas/${(r.body as { id?: number } | null)?.id}`,
+      );
     }
 
     let testes: TesteFormulario[] = [];
@@ -124,9 +142,15 @@ export const actions: Actions = {
     });
     if (r.status === 401) redirect(303, "/");
     if (!r.ok) {
-      return fail(r.status || 500, { acao: "criar", erro: mensagemDaApi(r.body) });
+      return fail(r.status || 500, {
+        acao: "criar",
+        erro: mensagemDaApi(r.body),
+      });
     }
-    redirect(303, `/professor/tarefas/${(r.body as { id?: number } | null)?.id}`);
+    redirect(
+      303,
+      `/professor/tarefas/${(r.body as { id?: number } | null)?.id}`,
+    );
   },
   excluir: async (evento) => {
     const token = tokenDaSessao(evento.cookies);

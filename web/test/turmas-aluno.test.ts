@@ -26,7 +26,9 @@ function criarTurmaMock(parcial: Partial<TurmaDoAluno> = {}): TurmaDoAluno {
 
 describe("Portal do Aluno — Minhas turmas", () => {
   it("remove a subnavegação 'Listar turmas' e mantém apenas o item 'Minhas turmas'", () => {
-    const itemTurmas = PORTAIS.aluno.nav.find((n) => n.href === "/aluno/turmas");
+    const itemTurmas = PORTAIS.aluno.nav.find(
+      (n) => n.href === "/aluno/turmas",
+    );
     expect(itemTurmas).toBeDefined();
     expect(itemTurmas?.rotulo).toBe("Minhas turmas");
     expect(itemTurmas?.sub).toBeUndefined();

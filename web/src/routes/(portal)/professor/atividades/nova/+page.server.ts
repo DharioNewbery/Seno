@@ -21,15 +21,16 @@ export const load: PageServerLoad = async ({ locals, cookies, request }) => {
     const r = await listarTarefas(request, token);
     if (r.status === 401) redirect(303, "/");
     return {
-      tarefas: (
-        r.body as {
-          tarefas?: {
-            id: number;
-            nome: string;
-            tipo?: "programacao" | "arquivo_submissao";
-          }[];
-        } | null
-      )?.tarefas ?? [],
+      tarefas:
+        (
+          r.body as {
+            tarefas?: {
+              id: number;
+              nome: string;
+              tipo?: "programacao" | "arquivo_submissao";
+            }[];
+          } | null
+        )?.tarefas ?? [],
       erro: r.ok ? null : mensagemDaApi(r.body),
     };
   } catch {
@@ -87,6 +88,9 @@ export const actions: Actions = {
     });
     if (r.status === 401) redirect(303, "/");
     if (!r.ok) return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
-    redirect(303, `/professor/atividades/${(r.body as { id?: number } | null)?.id}`);
+    redirect(
+      303,
+      `/professor/atividades/${(r.body as { id?: number } | null)?.id}`,
+    );
   },
 };

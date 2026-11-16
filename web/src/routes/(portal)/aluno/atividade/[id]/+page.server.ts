@@ -11,7 +11,12 @@ import { fail, redirect, type Actions } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 import { tokenDaSessao } from "#lib/server/sessao";
 
-export const load: PageServerLoad = async ({ locals, cookies, request, params }) => {
+export const load: PageServerLoad = async ({
+  locals,
+  cookies,
+  request,
+  params,
+}) => {
   if (!locals.usuario) redirect(303, "/");
   const token = tokenDaSessao(cookies);
   const id = Number(params.id);
@@ -63,7 +68,8 @@ export const load: PageServerLoad = async ({ locals, cookies, request, params })
 
 /** Autosave: recebe revisão + snapshot (JSON) via form-urlencoded. */
 export const actions: Actions = {
-  gravar: async (evento) => {    const token = tokenDaSessao(evento.cookies);
+  gravar: async (evento) => {
+    const token = tokenDaSessao(evento.cookies);
     if (!token) return fail(401, { erro: "Sessão encerrada." });
     const id = Number(evento.params.id);
     const form = await evento.request.formData();
@@ -119,7 +125,10 @@ export const actions: Actions = {
     });
     if (r.status === 401) return fail(401, { erro: "Sessão encerrada." });
     if (r.ok) {
-      const corpo = r.body as { resultados?: ResultadoExec[]; criado_em?: string };
+      const corpo = r.body as {
+        resultados?: ResultadoExec[];
+        criado_em?: string;
+      };
       return {
         testado: tarefaID,
         resultados: (corpo.resultados ?? []) as ResultadoExec[],

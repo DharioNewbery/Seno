@@ -33,7 +33,9 @@ export function extrairCodigoRespostaAluno(
   if (typeof t.codigo === "string" && t.codigo.length > 0) {
     return t.codigo;
   }
-  const snapTask = entrega?.snapshot?.tasks?.find((tk) => tk.id === t.tarefa_id);
+  const snapTask = entrega?.snapshot?.tasks?.find(
+    (tk) => tk.id === t.tarefa_id,
+  );
   return snapTask?.text ?? "";
 }
 
@@ -42,11 +44,23 @@ export function extrairCodigoRespostaAluno(
  * Quando corrigida e publicada, exibe a nota obtida.
  */
 export function resumirEstadoAtribuicaoAluno(
-  a: Pick<
-    AtribuicaoDoAluno,
-    "entregue" | "atrasada" | "publicada_em" | "nota_final" | "em_andamento" | "prazo" | "pode_atrasado"
-  > | null | undefined,
-): { rotulo: string; classe: "nota" | "entregue" | "andamento" | "encerrada" | "nao" } {
+  a:
+    | Pick<
+        AtribuicaoDoAluno,
+        | "entregue"
+        | "atrasada"
+        | "publicada_em"
+        | "nota_final"
+        | "em_andamento"
+        | "prazo"
+        | "pode_atrasado"
+      >
+    | null
+    | undefined,
+): {
+  rotulo: string;
+  classe: "nota" | "entregue" | "andamento" | "encerrada" | "nao";
+} {
   if (!a) return { rotulo: "Não começou", classe: "nao" };
   if (a.entregue) {
     if (a.publicada_em) {

@@ -27,7 +27,9 @@ async function run() {
     },
     configFile: false,
   });
-  console.log("Monitor editor bundled successfully to monitor/internal/httpapi/assets/editor.js");
+  console.log(
+    "Monitor editor bundled successfully to monitor/internal/httpapi/assets/editor.js",
+  );
 }
 
 run().catch((err) => {

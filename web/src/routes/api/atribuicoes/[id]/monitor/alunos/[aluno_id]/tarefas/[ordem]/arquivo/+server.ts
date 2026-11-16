@@ -8,7 +8,9 @@ export const GET: RequestHandler = async ({ params, cookies, request }) => {
   const token = tokenDaSessao(cookies);
   if (!token) {
     return new Response(
-      JSON.stringify({ erro: { codigo: "SESSAO_INVALIDA", mensagem: "Sessão encerrada." } }),
+      JSON.stringify({
+        erro: { codigo: "SESSAO_INVALIDA", mensagem: "Sessão encerrada." },
+      }),
       { status: 401, headers: { "Content-Type": "application/json" } },
     );
   }
@@ -17,12 +19,20 @@ export const GET: RequestHandler = async ({ params, cookies, request }) => {
   const alunoID = Number(params.aluno_id);
   const ordem = Number(params.ordem);
   if (
-    !Number.isInteger(atribuicaoID) || atribuicaoID < 1 ||
-    !Number.isInteger(alunoID) || alunoID < 1 ||
-    !Number.isInteger(ordem) || ordem < 1
+    !Number.isInteger(atribuicaoID) ||
+    atribuicaoID < 1 ||
+    !Number.isInteger(alunoID) ||
+    alunoID < 1 ||
+    !Number.isInteger(ordem) ||
+    ordem < 1
   ) {
     return new Response(
-      JSON.stringify({ erro: { codigo: "PARAMETRO_INVALIDO", mensagem: "Identificador inválido." } }),
+      JSON.stringify({
+        erro: {
+          codigo: "PARAMETRO_INVALIDO",
+          mensagem: "Identificador inválido.",
+        },
+      }),
       { status: 400, headers: { "Content-Type": "application/json" } },
     );
   }
@@ -54,7 +64,9 @@ export const GET: RequestHandler = async ({ params, cookies, request }) => {
     });
   } catch {
     return new Response(
-      JSON.stringify({ erro: { codigo: "REDE", mensagem: "Sem comunicação com a API." } }),
+      JSON.stringify({
+        erro: { codigo: "REDE", mensagem: "Sem comunicação com a API." },
+      }),
       { status: 502, headers: { "Content-Type": "application/json" } },
     );
   }

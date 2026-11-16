@@ -65,8 +65,12 @@ describe("Visualização de respostas e notas do aluno (correcao-aluno)", () => 
       },
     };
 
-    expect(extrairCodigoRespostaAluno(tComCodigo, entrega)).toBe("print('direto')");
-    expect(extrairCodigoRespostaAluno(tSemCodigo, entrega)).toBe("print('snap2')");
+    expect(extrairCodigoRespostaAluno(tComCodigo, entrega)).toBe(
+      "print('direto')",
+    );
+    expect(extrairCodigoRespostaAluno(tSemCodigo, entrega)).toBe(
+      "print('snap2')",
+    );
     expect(extrairCodigoRespostaAluno(tSemCodigo, null)).toBe("");
   });
 

@@ -9,7 +9,12 @@ import { redirect } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 import { tokenDaSessao } from "#lib/server/sessao";
 
-export const load: PageServerLoad = async ({ locals, cookies, request, url }) => {
+export const load: PageServerLoad = async ({
+  locals,
+  cookies,
+  request,
+  url,
+}) => {
   if (!locals.usuario) redirect(303, "/");
   const token = tokenDaSessao(cookies);
   const turmaParam = Number(url.searchParams.get("turma_id")) || undefined;
@@ -23,7 +28,8 @@ export const load: PageServerLoad = async ({ locals, cookies, request, url }) =>
     if (ra.status === 403) redirect(303, "/");
     return {
       atribuicoes:
-        (ra.body as { atribuicoes?: AtribuicaoDoAluno[] } | null)?.atribuicoes ?? [],
+        (ra.body as { atribuicoes?: AtribuicaoDoAluno[] } | null)
+          ?.atribuicoes ?? [],
       turmas: (rt.body as { turmas?: TurmaDoAluno[] } | null)?.turmas ?? [],
       filtroTurma: turmaParam,
       pagina: paginaParam,

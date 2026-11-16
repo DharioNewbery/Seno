@@ -1,4 +1,8 @@
-import { execucoesDe, historicoTestes, mensagemDaApi } from "#lib/server/ensino";
+import {
+  execucoesDe,
+  historicoTestes,
+  mensagemDaApi,
+} from "#lib/server/ensino";
 import { redirect } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 import { tokenDaSessao } from "#lib/server/sessao";

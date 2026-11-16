@@ -14,7 +14,12 @@ import {
 import { tokenDaSessao } from "#lib/server/sessao";
 import type { TesteFormulario } from "#lib/tarefas-testes";
 
-export const load: PageServerLoad = async ({ locals, cookies, request, params }) => {
+export const load: PageServerLoad = async ({
+  locals,
+  cookies,
+  request,
+  params,
+}) => {
   if (!locals.usuario) redirect(303, "/");
   const token = tokenDaSessao(cookies);
   const id = Number(params.id);
@@ -48,7 +53,8 @@ export const actions: Actions = {
     const nome = String(form.get("nome") ?? "").trim();
     const enunciado = String(form.get("enunciado") ?? "").trim();
     const tipoRaw = String(form.get("tipo") ?? "programacao").trim();
-    const tipo = tipoRaw === "arquivo_submissao" ? "arquivo_submissao" : "programacao";
+    const tipo =
+      tipoRaw === "arquivo_submissao" ? "arquivo_submissao" : "programacao";
     if (!nome || !enunciado) {
       return fail(422, { erro: "Informe nome e enunciado da tarefa." });
     }
@@ -95,7 +101,9 @@ export const actions: Actions = {
       try {
         testes = JSON.parse(bruto);
       } catch {
-        return fail(422, { erro: "Não entendi os testes: recarregue a página." });
+        return fail(422, {
+          erro: "Não entendi os testes: recarregue a página.",
+        });
       }
     }
     const num = (campo: string): number | undefined => {
@@ -113,9 +121,15 @@ export const actions: Actions = {
         stdout_esperado: t.stdout,
         publico: Boolean(t.publico),
       })),
-      ...(num("tempo_cpu_ms") !== undefined ? { tempo_cpu_ms: num("tempo_cpu_ms") } : {}),
-      ...(num("tempo_total_ms") !== undefined ? { tempo_total_ms: num("tempo_total_ms") } : {}),
-      ...(num("memoria_mb") !== undefined ? { memoria_mb: num("memoria_mb") } : {}),
+      ...(num("tempo_cpu_ms") !== undefined
+        ? { tempo_cpu_ms: num("tempo_cpu_ms") }
+        : {}),
+      ...(num("tempo_total_ms") !== undefined
+        ? { tempo_total_ms: num("tempo_total_ms") }
+        : {}),
+      ...(num("memoria_mb") !== undefined
+        ? { memoria_mb: num("memoria_mb") }
+        : {}),
     });
     if (r.status === 401) redirect(303, "/");
     if (r.status === 409) {
@@ -133,10 +147,17 @@ export const actions: Actions = {
   duplicar: async (evento) => {
     const token = tokenDaSessao(evento.cookies);
     if (!token) return fail(401, { erro: "Sessão encerrada." });
-    const r = await duplicarTarefa(evento.request, token, Number(evento.params.id));
+    const r = await duplicarTarefa(
+      evento.request,
+      token,
+      Number(evento.params.id),
+    );
     if (r.status === 401) redirect(303, "/");
     if (r.ok) {
-      redirect(303, `/professor/tarefas/${(r.body as { id?: number } | null)?.id}`);
+      redirect(
+        303,
+        `/professor/tarefas/${(r.body as { id?: number } | null)?.id}`,
+      );
     }
     return fail(r.status || 500, {
       erro: mensagemDaApi(r.body, "Não foi possível duplicar."),
@@ -145,7 +166,11 @@ export const actions: Actions = {
   excluir: async (evento) => {
     const token = tokenDaSessao(evento.cookies);
     if (!token) return fail(401, { erro: "Sessão encerrada." });
-    const r = await excluirTarefa(evento.request, token, Number(evento.params.id));
+    const r = await excluirTarefa(
+      evento.request,
+      token,
+      Number(evento.params.id),
+    );
     if (r.status === 401) redirect(303, "/");
     if (r.ok) redirect(303, "/professor/tarefas");
     return fail(r.status || 500, {

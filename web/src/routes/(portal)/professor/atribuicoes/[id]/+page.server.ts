@@ -10,7 +10,12 @@ import {
 } from "#lib/server/ensino";
 import { tokenDaSessao } from "#lib/server/sessao";
 
-export const load: PageServerLoad = async ({ locals, cookies, request, params }) => {
+export const load: PageServerLoad = async ({
+  locals,
+  cookies,
+  request,
+  params,
+}) => {
   if (!locals.usuario) redirect(303, "/");
   const token = tokenDaSessao(cookies);
   const id = Number(params.id);
@@ -61,13 +66,19 @@ export const actions: Actions = {
   excluir: async (evento) => {
     const token = tokenDaSessao(evento.cookies);
     if (!token) return fail(401, { erro: "Sessão encerrada." });
-    const r = await excluirAtribuicao(evento.request, token, Number(evento.params.id));
+    const r = await excluirAtribuicao(
+      evento.request,
+      token,
+      Number(evento.params.id),
+    );
     if (r.status === 401) redirect(303, "/");
     if (r.ok) {
       const turma = evento.url.searchParams.get("turma");
       redirect(
         303,
-        turma && /^\d+$/.test(turma) ? `/professor/turmas/${turma}` : "/professor/turmas",
+        turma && /^\d+$/.test(turma)
+          ? `/professor/turmas/${turma}`
+          : "/professor/turmas",
       );
     }
     return fail(r.status || 500, {

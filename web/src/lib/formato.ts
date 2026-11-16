@@ -26,13 +26,17 @@ function valida(valor: string | number | Date | null | undefined): Date | null {
 }
 
 /** "22/10/2026 19:43" — sem segundos. */
-export function dataHora(valor: string | number | Date | null | undefined): string {
+export function dataHora(
+  valor: string | number | Date | null | undefined,
+): string {
   const d = valida(valor);
   return d ? fmtDataHora.format(d).replace(",", "") : "—";
 }
 
 /** "22/10/2026". */
-export function soData(valor: string | number | Date | null | undefined): string {
+export function soData(
+  valor: string | number | Date | null | undefined,
+): string {
   const d = valida(valor);
   return d ? fmtData.format(d) : "—";
 }
@@ -63,7 +67,11 @@ export function prazoRelativo(
 
   if (quanto === "agora") return { rotulo: "agora", tom: "breve" };
   const rotulo = futuro ? `em ${quanto}` : `há ${quanto}`;
-  const tom: TomPrazo = !futuro ? "vencido" : ms < 48 * 3_600_000 ? "breve" : "folga";
+  const tom: TomPrazo = !futuro
+    ? "vencido"
+    : ms < 48 * 3_600_000
+      ? "breve"
+      : "folga";
   return { rotulo, tom };
 }
 

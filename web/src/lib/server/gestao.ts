@@ -47,7 +47,8 @@ async function corpoJSON(res: Response): Promise<unknown> {
 function guardaStaff(evento: LoadEvento): Usuario {
   const usuario = evento.locals.usuario;
   if (!usuario) redirect(303, "/");
-  const éStaff = usuario.roles.includes("admin") || usuario.roles.includes("super");
+  const éStaff =
+    usuario.roles.includes("admin") || usuario.roles.includes("super");
   if (!éStaff) redirect(303, "/");
   return usuario;
 }
@@ -155,12 +156,7 @@ function acaoPorId(
     if ("falha" in pronto) return pronto.falha;
     let res: Response;
     try {
-      res = await acaoUsuario(
-        evento.request,
-        pronto.token,
-        pronto.id,
-        rotulo,
-      );
+      res = await acaoUsuario(evento.request, pronto.token, pronto.id, rotulo);
     } catch {
       return fail(502, { erro: "Sem comunicação com a API." });
     }
@@ -221,12 +217,7 @@ export const cargosAction = async (evento: AcaoEvento) => {
   const cargos = rotulados.filter((cargo) => form.has(`cargo_${cargo}`));
   let res: Response;
   try {
-    res = await alterarCargos(
-      evento.request,
-      pronto.token,
-      pronto.id,
-      cargos,
-    );
+    res = await alterarCargos(evento.request, pronto.token, pronto.id, cargos);
   } catch {
     return fail(502, { erro: "Sem comunicação com a API." });
   }

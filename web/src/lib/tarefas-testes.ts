@@ -8,7 +8,10 @@ export interface TesteFormulario {
  * Garante que o índice ativo aponte para um teste válido da lista
  * (ou 0 quando a lista estiver vazia).
  */
-export function ajustarIndiceTeste(indiceAtual: number, totalTestes: number): number {
+export function ajustarIndiceTeste(
+  indiceAtual: number,
+  totalTestes: number,
+): number {
   if (totalTestes <= 0) return 0;
   if (indiceAtual < 0) return 0;
   if (indiceAtual >= totalTestes) return totalTestes - 1;

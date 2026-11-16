@@ -7,7 +7,12 @@ import { error, redirect } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 import { tokenDaSessao } from "#lib/server/sessao";
 
-export const load: PageServerLoad = async ({ locals, cookies, request, params }) => {
+export const load: PageServerLoad = async ({
+  locals,
+  cookies,
+  request,
+  params,
+}) => {
   if (!locals.usuario) redirect(303, "/");
   const turmaID = Number(params.id);
   if (!Number.isInteger(turmaID) || turmaID <= 0) {
@@ -20,7 +25,10 @@ export const load: PageServerLoad = async ({ locals, cookies, request, params })
     if (r.status === 401) redirect(303, "/");
     if (r.status === 403) redirect(303, "/aluno");
     if (r.status === 404) {
-      throw error(404, "Turma não encontrada ou você não possui matrícula ativa.");
+      throw error(
+        404,
+        "Turma não encontrada ou você não possui matrícula ativa.",
+      );
     }
     if (!r.ok) {
       return {

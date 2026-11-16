@@ -10,7 +10,12 @@ import {
 } from "#lib/server/ensino";
 import { tokenDaSessao } from "#lib/server/sessao";
 
-export const load: PageServerLoad = async ({ locals, cookies, request, params }) => {
+export const load: PageServerLoad = async ({
+  locals,
+  cookies,
+  request,
+  params,
+}) => {
   if (!locals.usuario) redirect(303, "/");
   const token = tokenDaSessao(cookies);
   const id = Number(params.id);
@@ -38,7 +43,9 @@ async function extrairEdicao(request: Request) {
     if (!Number.isInteger(id2) || id2 < 1) continue;
     const telaNota = String(form.get(`nota_${id2}`) ?? "").trim();
     const fb = String(form.get(`fb_${id2}`) ?? "").trim();
-    const item: { id: number; nota_final?: number; feedback?: string } = { id: id2 };
+    const item: { id: number; nota_final?: number; feedback?: string } = {
+      id: id2,
+    };
     if (telaNota !== "") {
       const n = Number(telaNota);
       if (!Number.isFinite(n) || n < 0) {
@@ -65,7 +72,12 @@ export const actions: Actions = {
     const id = Number(evento.params.id);
     const parse = await extrairEdicao(evento.request);
     if ("erro" in parse && parse.erro) return fail(422, { erro: parse.erro });
-    const r = await editarCorrecao(evento.request, token, id, parse.dados ?? {});
+    const r = await editarCorrecao(
+      evento.request,
+      token,
+      id,
+      parse.dados ?? {},
+    );
     if (r.status === 401) redirect(303, "/");
     if (!r.ok) return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
     return { ok: "Correção salva com sucesso." };
@@ -77,9 +89,15 @@ export const actions: Actions = {
     const parse = await extrairEdicao(evento.request);
     if ("erro" in parse && parse.erro) return fail(422, { erro: parse.erro });
     if (parse.temCampos) {
-      const rEdit = await editarCorrecao(evento.request, token, id, parse.dados ?? {});
+      const rEdit = await editarCorrecao(
+        evento.request,
+        token,
+        id,
+        parse.dados ?? {},
+      );
       if (rEdit.status === 401) redirect(303, "/");
-      if (!rEdit.ok) return fail(rEdit.status || 500, { erro: mensagemDaApi(rEdit.body) });
+      if (!rEdit.ok)
+        return fail(rEdit.status || 500, { erro: mensagemDaApi(rEdit.body) });
     }
     const r = await acaoCorrecao(evento.request, token, id, "confirmar");
     if (r.status === 401) redirect(303, "/");
@@ -93,25 +111,37 @@ export const actions: Actions = {
     const parse = await extrairEdicao(evento.request);
     if ("erro" in parse && parse.erro) return fail(422, { erro: parse.erro });
     if (parse.temCampos) {
-      const rEdit = await editarCorrecao(evento.request, token, id, parse.dados ?? {});
+      const rEdit = await editarCorrecao(
+        evento.request,
+        token,
+        id,
+        parse.dados ?? {},
+      );
       if (rEdit.status === 401) redirect(303, "/");
-      if (!rEdit.ok) return fail(rEdit.status || 500, { erro: mensagemDaApi(rEdit.body) });
+      if (!rEdit.ok)
+        return fail(rEdit.status || 500, { erro: mensagemDaApi(rEdit.body) });
     }
     const rConf = await acaoCorrecao(evento.request, token, id, "confirmar");
     if (rConf.status === 401) redirect(303, "/");
-    if (!rConf.ok) return fail(rConf.status || 500, { erro: mensagemDaApi(rConf.body) });
+    if (!rConf.ok)
+      return fail(rConf.status || 500, { erro: mensagemDaApi(rConf.body) });
     const rPub = await acaoCorrecao(evento.request, token, id, "publicar");
     if (rPub.status === 401) redirect(303, "/");
-    if (!rPub.ok) return fail(rPub.status || 500, { erro: mensagemDaApi(rPub.body) });
+    if (!rPub.ok)
+      return fail(rPub.status || 500, { erro: mensagemDaApi(rPub.body) });
     return { ok: "Correção confirmada e publicada para o aluno." };
   },
   reexecutar: async (evento) => {
     const token = tokenDaSessao(evento.cookies);
     if (!token) return fail(401, { erro: "Sessão encerrada." });
-    const r = await acaoCorrecao(evento.request, token, Number(evento.params.id), "reexecutar");
+    const r = await acaoCorrecao(
+      evento.request,
+      token,
+      Number(evento.params.id),
+      "reexecutar",
+    );
     if (r.status === 401) redirect(303, "/");
     if (!r.ok) return fail(r.status || 500, { erro: mensagemDaApi(r.body) });
     return { ok: "Correção reenviada para execução automática." };
   },
 };
-

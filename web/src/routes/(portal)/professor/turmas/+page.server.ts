@@ -173,7 +173,8 @@ export const actions: Actions = {
       return fail(422, {
         erro: "Selecione uma matéria.",
         materia_id: "",
-        periodo_id: Number.isInteger(periodo_id) && periodo_id > 0 ? periodo_id : "",
+        periodo_id:
+          Number.isInteger(periodo_id) && periodo_id > 0 ? periodo_id : "",
         titulo,
       });
     }

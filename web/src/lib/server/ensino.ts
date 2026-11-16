@@ -373,9 +373,10 @@ export async function verTarefaBruta(
 }
 
 /** Detalhe da tarefa: {tarefa, testes}. */
-export function detalhesDoVerTarefa(
-  r: Resultado,
-): { tarefa: Tarefa | null; testes: Teste[] } {
+export function detalhesDoVerTarefa(r: Resultado): {
+  tarefa: Tarefa | null;
+  testes: Teste[];
+} {
   const corpo = r.body as { tarefa?: Tarefa; testes?: Teste[] } | null;
   return { tarefa: corpo?.tarefa ?? null, testes: corpo?.testes ?? [] };
 }
@@ -584,7 +585,9 @@ export async function listarAtribuicoes(
   const qs = new URLSearchParams();
   if (filtro.turma_id) qs.set("turma_id", String(filtro.turma_id));
   if (filtro.atividade_id) qs.set("atividade_id", String(filtro.atividade_id));
-  return chamar(request, token, `/v1/atribuicoes${param(qs)}`, { method: "GET" });
+  return chamar(request, token, `/v1/atribuicoes${param(qs)}`, {
+    method: "GET",
+  });
 }
 
 export async function criarAtribuicao(
@@ -664,7 +667,10 @@ export interface VisaoAluno {
       excluida: boolean;
     }[];
   };
-  tentativa?: { revisao: number; snapshot: { tasks?: { id: number; text: string }[] } };
+  tentativa?: {
+    revisao: number;
+    snapshot: { tasks?: { id: number; text: string }[] };
+  };
 }
 
 export async function visaoAluno(
@@ -771,7 +777,10 @@ export async function gravarTentativa(
   request: Request,
   token: string,
   id: number,
-  grav: { revisao: number; snapshot: { tasks: { id: number; text: string }[] } },
+  grav: {
+    revisao: number;
+    snapshot: { tasks: { id: number; text: string }[] };
+  },
 ): Promise<Resultado> {
   return chamar(request, token, `/v1/atribuicoes/${id}/tentativa`, {
     method: "PUT",
@@ -881,7 +890,7 @@ export async function excluirMonitor(
     request,
     token,
     `/v1/atribuicoes/${atribuicaoID}/monitor/alunos/${alunoID}/submissao`,
-    { method: "DELETE", body: "{}", },
+    { method: "DELETE", body: "{}" },
   );
 }
 
@@ -1097,7 +1106,6 @@ export async function acaoCorrecao(
     { method: "POST", body: "{}" },
   );
 }
-
 
 // ------------------ Execução de teste (§ modalidade) -------------------
 
@@ -1353,26 +1361,56 @@ export interface AdminMetricas {
   falhas_ultimos_7_dias: number;
 }
 
-export async function obterAnalyticsTurma(request: Request, token: string, turmaID: number): Promise<Resultado> {
-  return chamar(request, token, `/v1/turmas/${turmaID}/analytics`, { method: "GET" });
+export async function obterAnalyticsTurma(
+  request: Request,
+  token: string,
+  turmaID: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/turmas/${turmaID}/analytics`, {
+    method: "GET",
+  });
 }
 
-export async function obterAnalyticsAtribuicao(request: Request, token: string, atribuicaoID: number): Promise<Resultado> {
-  return chamar(request, token, `/v1/atribuicoes/${atribuicaoID}/analytics`, { method: "GET" });
+export async function obterAnalyticsAtribuicao(
+  request: Request,
+  token: string,
+  atribuicaoID: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/atribuicoes/${atribuicaoID}/analytics`, {
+    method: "GET",
+  });
 }
 
-export async function obterAnalyticsAlunoTurma(request: Request, token: string, turmaID: number, alunoID: number): Promise<Resultado> {
-  return chamar(request, token, `/v1/turmas/${turmaID}/alunos/${alunoID}/analytics`, { method: "GET" });
+export async function obterAnalyticsAlunoTurma(
+  request: Request,
+  token: string,
+  turmaID: number,
+  alunoID: number,
+): Promise<Resultado> {
+  return chamar(
+    request,
+    token,
+    `/v1/turmas/${turmaID}/alunos/${alunoID}/analytics`,
+    { method: "GET" },
+  );
 }
 
-export async function obterAnalyticsTarefa(request: Request, token: string, tarefaID: number): Promise<Resultado> {
-  return chamar(request, token, `/v1/tarefas/${tarefaID}/analytics`, { method: "GET" });
+export async function obterAnalyticsTarefa(
+  request: Request,
+  token: string,
+  tarefaID: number,
+): Promise<Resultado> {
+  return chamar(request, token, `/v1/tarefas/${tarefaID}/analytics`, {
+    method: "GET",
+  });
 }
 
-export async function obterAdminMetricas(request: Request, token: string): Promise<Resultado> {
+export async function obterAdminMetricas(
+  request: Request,
+  token: string,
+): Promise<Resultado> {
   return chamar(request, token, `/v1/admin/metricas`, { method: "GET" });
 }
 
 /** Guarda de tipos reexportada para o portal professor. */
 export type { Usuario };
-

@@ -7,11 +7,7 @@ import {
   montarConteudo,
   verAtividadePorId,
 } from "#lib/server/ensino";
-import {
-  fail,
-  redirect,
-  type Actions,
-} from "@sveltejs/kit";
+import { fail, redirect, type Actions } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 
 import { tokenDaSessao } from "#lib/server/sessao";
@@ -22,7 +18,12 @@ interface Atributo {
   linguagem: string;
 }
 
-export const load: PageServerLoad = async ({ locals, cookies, request, params }) => {
+export const load: PageServerLoad = async ({
+  locals,
+  cookies,
+  request,
+  params,
+}) => {
   if (!locals.usuario) redirect(303, "/");
   const token = tokenDaSessao(cookies);
   const id = Number(params.id);
@@ -35,16 +36,18 @@ export const load: PageServerLoad = async ({ locals, cookies, request, params })
     if (rt.status === 401) redirect(303, "/");
     return {
       id,
-      atividade: (ra.body as { nome?: string; tarefas?: unknown[] } | null) ?? null,
-      tarefas: (
-        rt.body as {
-          tarefas?: {
-            id: number;
-            nome: string;
-            tipo?: "programacao" | "arquivo_submissao";
-          }[];
-        } | null
-      )?.tarefas ?? [],
+      atividade:
+        (ra.body as { nome?: string; tarefas?: unknown[] } | null) ?? null,
+      tarefas:
+        (
+          rt.body as {
+            tarefas?: {
+              id: number;
+              nome: string;
+              tipo?: "programacao" | "arquivo_submissao";
+            }[];
+          } | null
+        )?.tarefas ?? [],
       erro: ra.ok ? null : mensagemDaApi(ra.body),
     };
   } catch {
@@ -76,7 +79,9 @@ export const actions: Actions = {
           ["python", "c", "cpp", ""].includes(a?.linguagem ?? ""),
       )
     ) {
-      return fail(422, { erro: "Tarefas inválidas: verifique linguagem/pontos." });
+      return fail(422, {
+        erro: "Tarefas inválidas: verifique linguagem/pontos.",
+      });
     }
     const ordemAtributos = atributos.map((a, i) => ({ ...a, ordem: i + 1 }));
     const r = await editarAtividade(evento.request, token, id, {
@@ -105,7 +110,10 @@ export const actions: Actions = {
     );
     if (r.status === 401) redirect(303, "/");
     if (r.ok) {
-      redirect(303, `/professor/atividades/${(r.body as { id?: number } | null)?.id}`);
+      redirect(
+        303,
+        `/professor/atividades/${(r.body as { id?: number } | null)?.id}`,
+      );
     }
     return fail(r.status || 500, {
       erro: mensagemDaApi(r.body, "Não foi possível duplicar."),

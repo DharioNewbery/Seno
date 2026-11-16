@@ -18,7 +18,10 @@ export function paginarAtribuicoesAluno<T>(
 ): PaginacaoResultado<T> {
   const itensLista = lista ?? [];
   const total = itensLista.length;
-  const limite = Math.max(1, Math.floor(porPagina) || POR_PAGINA_ATIVIDADES_ALUNO);
+  const limite = Math.max(
+    1,
+    Math.floor(porPagina) || POR_PAGINA_ATIVIDADES_ALUNO,
+  );
   const totalPaginas = Math.max(1, Math.ceil(total / limite));
   const paginaLimpa = Number.isFinite(pagina) ? Math.floor(pagina) : 1;
   const paginaAtual = Math.min(Math.max(1, paginaLimpa), totalPaginas);
