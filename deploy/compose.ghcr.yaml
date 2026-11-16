@@ -1,0 +1,16 @@
+# compose.ghcr.yaml — override de produção para puxar imagens pré-compiladas do GHCR
+# geradas pelo workflow .github/workflows/release.yml.
+#
+# Uso:
+#   docker compose -f deploy/compose.yaml -f deploy/compose.ghcr.yaml --env-file deploy/.env pull
+#   docker compose -f deploy/compose.yaml -f deploy/compose.ghcr.yaml --env-file deploy/.env up -d
+
+services:
+  api:
+    image: ghcr.io/${GHCR_OWNER:-dharionewbery}/seno-api:${SENO_VERSION:-latest}
+
+  monitor:
+    image: ghcr.io/${GHCR_OWNER:-dharionewbery}/seno-monitor:${SENO_VERSION:-latest}
+
+  web:
+    image: ghcr.io/${GHCR_OWNER:-dharionewbery}/seno-web:${SENO_VERSION:-latest}
