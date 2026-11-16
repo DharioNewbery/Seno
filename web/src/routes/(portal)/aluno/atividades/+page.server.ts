@@ -13,6 +13,7 @@ export const load: PageServerLoad = async ({ locals, cookies, request, url }) =>
   if (!locals.usuario) redirect(303, "/");
   const token = tokenDaSessao(cookies);
   const turmaParam = Number(url.searchParams.get("turma_id")) || undefined;
+  const paginaParam = Math.max(1, Number(url.searchParams.get("pagina")) || 1);
   try {
     const [ra, rt] = await Promise.all([
       listarMinhasAtribuicoes(request, token, turmaParam),
@@ -25,6 +26,7 @@ export const load: PageServerLoad = async ({ locals, cookies, request, url }) =>
         (ra.body as { atribuicoes?: AtribuicaoDoAluno[] } | null)?.atribuicoes ?? [],
       turmas: (rt.body as { turmas?: TurmaDoAluno[] } | null)?.turmas ?? [],
       filtroTurma: turmaParam,
+      pagina: paginaParam,
       erro: ra.ok ? null : mensagemDaApi(ra.body),
     };
   } catch {
@@ -32,6 +34,7 @@ export const load: PageServerLoad = async ({ locals, cookies, request, url }) =>
       atribuicoes: [],
       turmas: [],
       filtroTurma: turmaParam,
+      pagina: paginaParam,
       erro: "Sem comunicação com a API.",
     };
   }

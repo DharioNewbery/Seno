@@ -1,22 +1,42 @@
 <script lang="ts">
-  import { dataHora, prazoRelativo } from "#lib/formato";
-  import { resumirEstadoAtribuicaoAluno } from "#lib/correcao-aluno";
-  // Atividades do aluno (atribuições das minhas turmas): filtro por
-  // turma, estado do rascunho e prazo; correção publicada com nota e respostas no portal.
+  import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { SvelteURLSearchParams } from "svelte/reactivity";
+  import Icone from "#lib/components/Icone.svelte";
+  import {
+    POR_PAGINA_ATIVIDADES_ALUNO,
+    paginarAtribuicoesAluno,
+  } from "#lib/atividades-aluno";
+  import { resumirEstadoAtribuicaoAluno } from "#lib/correcao-aluno";
+  import { dataHora, prazoRelativo } from "#lib/formato";
   import type { PageProps } from "./$types";
 
   let { data }: PageProps = $props();
 
-  const atribuicoes = $derived(data.atribuicoes);
+  const paginacao = $derived(
+    paginarAtribuicoesAluno(
+      data.atribuicoes,
+      data.pagina ?? 1,
+      POR_PAGINA_ATIVIDADES_ALUNO,
+    ),
+  );
+  const atribuicoesVisiveis = $derived(paginacao.itens);
+  const turmasAtivas = $derived(data.turmas.filter((t) => t.ativa));
 
-  function filtroTurma(id: number | null): string {
+  function montarUrl(turmaId: number | null, pagina = 1): string {
     const qs = new SvelteURLSearchParams(page.url.searchParams.toString());
-    if (id === null) qs.delete("turma_id");
-    else qs.set("turma_id", String(id));
+    if (turmaId === null) qs.delete("turma_id");
+    else qs.set("turma_id", String(turmaId));
+    if (pagina <= 1) qs.delete("pagina");
+    else qs.set("pagina", String(pagina));
     const query = qs.toString();
-    return query ? `?${query}` : "";
+    return query ? `/aluno/atividades?${query}` : "/aluno/atividades";
+  }
+
+  function aoMudarTurma(e: Event) {
+    const valor = (e.currentTarget as HTMLSelectElement).value;
+    const turmaId = valor ? Number(valor) : null;
+    goto(montarUrl(turmaId, 1));
   }
 
   function paraTexto(iso: string | undefined): string {
@@ -37,60 +57,53 @@
   <div class="cabeca">
     <h2>
       Atividades
-      <span class="total">({atribuicoes.length})</span>
+      <span class="total">({paginacao.total})</span>
       {#if turmaFiltrada}
         <span class="filtro">— {turmaFiltrada.materia_codigo} {turmaFiltrada.titulo || ""}</span>
       {/if}
     </h2>
-    {#if data.filtroTurma}
-      <a class="limpar" href={filtroTurma(null)}>Ver de todas as turmas</a>
-    {/if}
+
+    <div class="filtro-turma">
+      <label for="filtro-turma-select">Turma</label>
+      <select
+        id="filtro-turma-select"
+        value={data.filtroTurma ? String(data.filtroTurma) : ""}
+        onchange={aoMudarTurma}
+      >
+        <option value="">Todas as turmas</option>
+        {#each turmasAtivas as t (t.id)}
+          <option value={String(t.id)}>
+            {t.materia_codigo} · {t.titulo || "Sem título"}
+          </option>
+        {/each}
+      </select>
+    </div>
   </div>
 
-  <nav class="turmas" aria-label="Filtrar por turma">
-    <a href={filtroTurma(null)} class:y={data.filtroTurma == null}>Todas</a>
-    {#each data.turmas.filter((t) => t.ativa) as t (t.id)}
-      <a href={filtroTurma(t.id)} class:y={data.filtroTurma === t.id}>
-        {t.materia_codigo} · {t.titulo || "Sem título"}
-      </a>
-    {/each}
-  </nav>
-
   <ul class="lista">
-    {#each atribuicoes as a (a.id)}
+    {#each atribuicoesVisiveis as a (a.id)}
       {@const rel = a.entregue ? null : prazoRelativo(a.prazo)}
       {@const est = resumirEstadoAtribuicaoAluno(a)}
-      <li>
-        <div class="identidade">
-          <strong>{a.atividade_nome}</strong>
-          <span class="meta">
-            {a.materia_codigo} · {a.turma_titulo || `Turma ${a.turma_id}`}
-          </span>
-          <span class="meta">
-            {paraTexto(a.prazo)}
-            {#if rel}<b class="rel {rel.tom}">{rel.rotulo}</b>{/if}
-            {#if a.pode_atrasado}· atraso permitido{/if}
-          </span>
-        </div>
-        <div class="acao-area">
-          <span class="estado {est.classe}">{est.rotulo}</span>
-          {#if a.turma_ativa && !a.entregue}
-            <a class="abrir" href={`/aluno/atividades/${a.id}`}>
-              {a.em_andamento ? `Continuar (rev. ${a.minha_revisao})` : "Abrir"} →
-            </a>
-          {:else if a.entregue}
-            <span class="meta">Entregue em {a.entregue_em ? dataHora(a.entregue_em) : ""}</span>
-            {#if a.submissao_id}
-              <a class="abrir" href={`/aluno/submissao/${a.submissao_id}`}>
-                {a.publicada_em ? "Ver respostas e notas →" : "Ver submissão →"}
-              </a>
-            {:else}
-              <a class="abrir secundario" href={`/aluno/atividades/${a.id}`}>Inspecionar →</a>
+      <li class="item-atividade">
+        <a class="link-atividade" href={`/aluno/atividades/${a.id}`}>
+          <div class="identidade">
+            <strong class="titulo-atividade">{a.atividade_nome}</strong>
+            <span class="meta">
+              {a.materia_codigo} · {a.turma_titulo || `Turma ${a.turma_id}`}
+            </span>
+            <span class="meta">
+              {paraTexto(a.prazo)}
+              {#if rel}<b class="rel">{rel.rotulo}</b>{/if}
+              {#if a.pode_atrasado}· atraso permitido{/if}
+            </span>
+          </div>
+          <div class="acao-area">
+            <span class="estado">{est.rotulo}</span>
+            {#if !a.turma_ativa && !a.entregue}
+              <span class="estado">Turma encerrada</span>
             {/if}
-          {:else}
-            <span class="estado encerrada">Turma encerrada</span>
-          {/if}
-        </div>
+          </div>
+        </a>
       </li>
     {:else}
       <li class="vazio">
@@ -100,10 +113,38 @@
     {/each}
   </ul>
 
-  <p class="nota">
-    Quando o professor publicar as notas, suas respostas, notas por questão,
-    feedback e resultados por teste ficam disponíveis em "Ver respostas e notas".
-  </p>
+  {#if paginacao.totalPaginas > 1}
+    <nav class="paginacao" aria-label="Paginação de atividades">
+      <a
+        class="btn-pag"
+        class:desabilitado={paginacao.paginaAtual <= 1}
+        aria-disabled={paginacao.paginaAtual <= 1}
+        href={paginacao.paginaAtual <= 1
+          ? undefined
+          : montarUrl(data.filtroTurma ?? null, paginacao.paginaAtual - 1)}
+      >
+        <Icone nome="chevron-left" tamanho={16} />
+        <span>Anterior</span>
+      </a>
+
+      <span class="pag-info">
+        Página <strong>{paginacao.paginaAtual}</strong> de
+        <strong>{paginacao.totalPaginas}</strong>
+      </span>
+
+      <a
+        class="btn-pag"
+        class:desabilitado={paginacao.paginaAtual >= paginacao.totalPaginas}
+        aria-disabled={paginacao.paginaAtual >= paginacao.totalPaginas}
+        href={paginacao.paginaAtual >= paginacao.totalPaginas
+          ? undefined
+          : montarUrl(data.filtroTurma ?? null, paginacao.paginaAtual + 1)}
+      >
+        <span>Próxima</span>
+        <Icone nome="chevron-right" tamanho={16} />
+      </a>
+    </nav>
+  {/if}
 </section>
 
 <style>
@@ -114,8 +155,10 @@
   }
   .cabeca {
     display: flex;
-    align-items: end;
+    align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
   }
   .cabeca h2 {
     margin: 0;
@@ -125,30 +168,45 @@
     font-size: 0.85rem;
     font-weight: 400;
   }
-  .limpar {
-    color: var(--seno-blue-600);
-    text-decoration: none;
+  .filtro-turma {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .filtro-turma label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--seno-gray-700);
+  }
+  .filtro-turma select {
+    padding: 0.42rem 0.7rem;
+    border: 1px solid var(--seno-gray-300);
+    border-radius: var(--raio-md);
+    background: var(--seno-white);
+    color: var(--seno-text);
     font-size: 0.88rem;
   }
-  .turmas {
+  .lista > li.item-atividade {
+    padding: 0;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .lista > li.item-atividade:hover {
+    border-color: var(--seno-blue-300, #93c5fd);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  }
+  .link-atividade {
     display: flex;
-    gap: 0.4rem;
+    align-items: center;
+    justify-content: space-between;
     flex-wrap: wrap;
-  }
-  .turmas a {
-    border: 1px solid var(--seno-gray-300);
-    border-radius: var(--raio-pill);
-    padding: 0.25rem 0.8rem;
-    color: var(--seno-gray-700);
-    font-size: 0.83rem;
+    gap: 0.6rem 1rem;
+    width: 100%;
+    padding: 0.9rem 1.15rem;
+    color: inherit;
     text-decoration: none;
-    background: var(--seno-white);
   }
-  .turmas a.y {
-    background: var(--seno-blue-100);
-    border-color: var(--seno-blue-500);
-    color: var(--seno-blue-800);
-    font-weight: 600;
+  .link-atividade:hover .titulo-atividade {
+    color: var(--seno-blue-700);
   }
   .identidade {
     display: flex;
@@ -160,15 +218,7 @@
   }
   .rel {
     font-weight: 600;
-  }
-  .rel.folga {
     color: var(--seno-gray-700);
-  }
-  .rel.breve {
-    color: var(--seno-amber);
-  }
-  .rel.vencido {
-    color: var(--seno-red);
   }
   .acao-area {
     display: flex;
@@ -176,39 +226,42 @@
     gap: 0.5rem;
     flex-wrap: wrap;
   }
-  .estado.nao {
-    background: var(--seno-gray-100);
-    color: var(--seno-gray-700);
-  }
-  .estado.andamento {
-    background: var(--seno-green-50);
-    color: var(--seno-green);
-  }
-  .estado.entregue {
-    background: var(--seno-blue-100);
-    color: var(--seno-blue-800);
-  }
-  .estado.nota {
-    background: var(--seno-green-50);
-    color: var(--seno-green);
-    border: 1px solid #bbf7d0;
-    font-weight: 700;
-  }
-  .estado.encerrada {
-    background: var(--seno-red-50);
-    color: var(--seno-red);
-  }
-  .nota {
-    color: var(--seno-gray-500);
-    font-size: 0.82rem;
-    margin: 0;
-  }
-  .abrir.secundario {
+  .estado {
     background: var(--seno-gray-100);
     color: var(--seno-gray-700);
     border: 1px solid var(--seno-gray-300);
+    font-weight: 600;
   }
-  .abrir.secundario:hover {
-    background: var(--seno-gray-200);
+  .paginacao {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.85rem;
+    margin-top: 0.25rem;
+  }
+  .btn-pag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--seno-gray-300);
+    border-radius: var(--raio-md);
+    background: var(--seno-white);
+    color: var(--seno-gray-700);
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .btn-pag:hover:not(.desabilitado) {
+    background: var(--seno-gray-100);
+    color: var(--seno-blue-900);
+  }
+  .btn-pag.desabilitado {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .pag-info {
+    font-size: 0.85rem;
+    color: var(--seno-gray-600);
   }
 </style>

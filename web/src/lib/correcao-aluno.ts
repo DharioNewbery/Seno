@@ -50,8 +50,7 @@ export function resumirEstadoAtribuicaoAluno(
   if (!a) return { rotulo: "Não começou", classe: "nao" };
   if (a.entregue) {
     if (a.publicada_em) {
-      const nota = a.nota_final ?? 0;
-      return { rotulo: `Corrigida · Nota: ${nota} pts`, classe: "nota" };
+      return { rotulo: "Corrigida", classe: "nota" };
     }
     return a.atrasada
       ? { rotulo: "Entregue atrasada", classe: "entregue" }
