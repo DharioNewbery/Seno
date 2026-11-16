@@ -70,7 +70,7 @@ describe("Visualização de respostas e notas do aluno (correcao-aluno)", () => 
     expect(extrairCodigoRespostaAluno(tSemCodigo, null)).toBe("");
   });
 
-  it("resume o estado da atribuição exibindo a nota quando corrigida e publicada", () => {
+  it("resume o estado da atribuição exibindo 'Corrigida' quando corrigida e publicada", () => {
     expect(
       resumirEstadoAtribuicaoAluno({
         entregue: true,
@@ -81,7 +81,7 @@ describe("Visualização de respostas e notas do aluno (correcao-aluno)", () => 
         pode_atrasado: false,
       }),
     ).toEqual({
-      rotulo: "Corrigida · Nota: 85 pts",
+      rotulo: "Corrigida",
       classe: "nota",
     });
 
