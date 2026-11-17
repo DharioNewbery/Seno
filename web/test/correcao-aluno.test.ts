@@ -100,5 +100,44 @@ describe("Visualização de respostas e notas do aluno (correcao-aluno)", () => 
       rotulo: "Entregue",
       classe: "entregue",
     });
+
+    expect(
+      resumirEstadoAtribuicaoAluno({
+        entregue: true,
+        atrasada: true,
+        em_andamento: false,
+        pode_atrasado: true,
+      }),
+    ).toEqual({
+      rotulo: "Entregue atrasada",
+      classe: "entregue",
+    });
+
+    const ontem = new Date(Date.now() - 86_400_000).toISOString();
+    expect(
+      resumirEstadoAtribuicaoAluno({
+        entregue: false,
+        atrasada: false,
+        em_andamento: false,
+        prazo: ontem,
+        pode_atrasado: false,
+      }),
+    ).toEqual({
+      rotulo: "Prazo encerrado",
+      classe: "encerrada",
+    });
+
+    expect(
+      resumirEstadoAtribuicaoAluno({
+        entregue: false,
+        atrasada: false,
+        em_andamento: false,
+        prazo: ontem,
+        pode_atrasado: true,
+      }),
+    ).toEqual({
+      rotulo: "Não começou",
+      classe: "nao",
+    });
   });
 });

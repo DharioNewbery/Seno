@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/seno-project/seno/api/internal/judge0"
 	"github.com/seno-project/seno/api/internal/testar"
@@ -82,8 +83,9 @@ func TestTestar(t *testing.T) {
 		"tarefas":[{"tarefa_id":`+intStr(idTarefa)+`,"ordem":1,"valor_pts":5,"linguagem":"python"}]}`,
 		autenticado(tokPaula))
 	idAtv := int64(atv["id"].(float64))
+	prazo := time.Now().Add(7 * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
 	w, atrib := chama(t, r, "POST", "/v1/atribuicoes",
-		`{"turma_id":`+intStr(idTurma)+`,"atividade_id":`+intStr(idAtv)+`}`,
+		`{"turma_id":`+intStr(idTurma)+`,"atividade_id":`+intStr(idAtv)+`,"prazo":"`+prazo+`"}`,
 		autenticado(tokPaula))
 	idAtr := int64(atrib["id"].(float64))
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 )
 
 // TestCorrecoes valida o ciclo (PROJETO §Correção/§Visibilidade): nasce
@@ -54,8 +55,9 @@ func TestCorrecoes(t *testing.T) {
 		           {"tarefa_id":`+intStr(idTarefaB)+`,"ordem":2,"valor_pts":3,"linguagem":"python"}]}`,
 		autenticado(tokPaula))
 	idAtv := int64(atv["id"].(float64))
+	prazo := time.Now().Add(7 * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
 	w, atrib := chama(t, r, "POST", "/v1/atribuicoes",
-		`{"turma_id":`+intStr(idTurma)+`,"atividade_id":`+intStr(idAtv)+`}`,
+		`{"turma_id":`+intStr(idTurma)+`,"atividade_id":`+intStr(idAtv)+`,"prazo":"`+prazo+`"}`,
 		autenticado(tokPaula))
 	idAtr := int64(atrib["id"].(float64))
 

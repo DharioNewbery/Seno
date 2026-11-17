@@ -434,8 +434,8 @@
 
                 <div class="campos-atribuir">
                   <label class="mini">
-                    <span>Prazo</span>
-                    <input type="datetime-local" name="prazo" />
+                    <span>Prazo de entrega *</span>
+                    <input type="datetime-local" name="prazo" required />
                   </label>
                   <label class="mini">
                     <span>Duração (h)</span>

@@ -123,16 +123,21 @@ func escopoAtribuicao(actor domain.User, professorID int64) error {
 	return nil
 }
 
-// validaConf valida as marcações: duração 1..7d; prazo não anterior ao
-// início; pode_atrasado no § (marcado) só interage com o prazo efetivo.
+// validaConf valida as marcações: prazo obrigatório; duração 1..7d; prazo não
+// anterior ao início; pode_atrasado no § (marcado) só interage com o prazo efetivo.
 func validaConf(cad CadastroAtribuicao) error {
+	if cad.Prazo == nil || cad.Prazo.IsZero() {
+		return platform.NewAPIError(
+			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+			"Prazo de entrega é obrigatório.")
+	}
 	if cad.DuracaoSeg != nil &&
 		(*cad.DuracaoSeg < 1 || int(*cad.DuracaoSeg) > tetoDuracao) {
 		return platform.NewAPIError(
 			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
 			"Duração inválida (1 seg a 7 dias).")
 	}
-	if cad.Inicio != nil && cad.Prazo != nil && cad.Prazo.Before(*cad.Inicio) {
+	if cad.Inicio != nil && cad.Prazo.Before(*cad.Inicio) {
 		return platform.NewAPIError(
 			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
 			"Prazo não pode ser anterior ao início.")

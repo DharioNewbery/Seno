@@ -127,8 +127,9 @@ func TestArquivoSubmissaoCicloAPI(t *testing.T) {
 		`{"materia_id":`+intStr(idMat)+`,"periodo_id":`+intStr(idPer)+`,"titulo":"T1"}`,
 		autenticado(tokClara))
 	idTurma := int64(turma["id"].(float64))
+	prazo := time.Now().Add(7 * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
 	_, atrib := chama(t, r, "POST", "/v1/atribuicoes",
-		`{"turma_id":`+intStr(idTurma)+`,"atividade_id":`+intStr(idAtv)+`}`,
+		`{"turma_id":`+intStr(idTurma)+`,"atividade_id":`+intStr(idAtv)+`,"prazo":"`+prazo+`"}`,
 		autenticado(tokClara))
 	idAtr := int64(atrib["id"].(float64))
 

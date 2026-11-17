@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 	"testing"
+	"time"
 )
 
 // TestMe valida as visões do aluno (PROJETO §Portal Aluno):
@@ -61,8 +62,9 @@ func TestMe(t *testing.T) {
 		"tarefas":[{"tarefa_id":`+intStr(idTarefa)+`,"ordem":1,"valor_pts":1,"linguagem":"c"}]}`,
 		autenticado(tokPaula))
 	idAtv := int64(atv["id"].(float64))
+	prazo := time.Now().Add(7 * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
 	w, _ = chama(t, r, "POST", "/v1/atribuicoes",
-		`{"turma_id":`+intStr(idT1)+`,"atividade_id":`+intStr(idAtv)+`}`,
+		`{"turma_id":`+intStr(idT1)+`,"atividade_id":`+intStr(idAtv)+`,"prazo":"`+prazo+`"}`,
 		autenticado(tokPaula))
 	if w.Code != http.StatusCreated {
 		t.Fatalf("atribuição A: %d", w.Code)

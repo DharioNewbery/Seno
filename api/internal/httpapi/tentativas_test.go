@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 	"testing"
+	"time"
 )
 
 // TestTentativas valida o rascunho do aluno (PROJETO §Tentativa):
@@ -42,8 +43,9 @@ func TestTentativas(t *testing.T) {
 		"tarefas":[{"tarefa_id":`+intStr(idTarefa)+`,"ordem":1,"valor_pts":5,"linguagem":"python"}]}`,
 		autenticado(tokPaula))
 	idAtiv := int64(atividade["id"].(float64))
+	prazo := time.Now().Add(7 * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
 	w, atrib := chama(t, r, "POST", "/v1/atribuicoes",
-		`{"turma_id":`+intStr(idTurma)+`,"atividade_id":`+intStr(idAtiv)+`}`,
+		`{"turma_id":`+intStr(idTurma)+`,"atividade_id":`+intStr(idAtiv)+`,"prazo":"`+prazo+`"}`,
 		autenticado(tokPaula))
 	if w.Code != http.StatusCreated {
 		t.Fatalf("atribuição: %d corpo %v", w.Code, atrib)

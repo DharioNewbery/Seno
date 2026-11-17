@@ -1,0 +1,6 @@
+BEGIN;
+
+ALTER TABLE atribuicoes
+    ALTER COLUMN prazo DROP NOT NULL;
+
+COMMIT;

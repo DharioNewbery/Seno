@@ -374,17 +374,26 @@ export const actions: Actions = {
         erro: "Selecione uma atividade do grid para atribuir.",
       });
     }
+    const prazoBruto = String(form.get("prazo") ?? "").trim();
+    const prazoData = prazoBruto !== "" ? new Date(prazoBruto) : null;
+    if (!prazoData || Number.isNaN(prazoData.getTime())) {
+      return fail(422, {
+        erro: "Informe a data máxima de entrega.",
+      });
+    }
     const cad: {
       turma_id: number;
       atividade_id: number;
       autocomplete?: boolean;
       inicio?: string;
-      prazo?: string;
+      prazo: string;
       duracao_seg?: number;
       pode_atrasado?: boolean;
-    } = { turma_id: turmaID, atividade_id: atividadeID };
-    const prazo = String(form.get("prazo") ?? "").trim();
-    if (prazo !== "") cad.prazo = new Date(prazo).toISOString();
+    } = {
+      turma_id: turmaID,
+      atividade_id: atividadeID,
+      prazo: prazoData.toISOString(),
+    };
     const duracaoHoras = Number(form.get("duracao_horas"));
     if (Number.isFinite(duracaoHoras) && duracaoHoras > 0) {
       cad.duracao_seg = Math.floor(duracaoHoras * 3600);

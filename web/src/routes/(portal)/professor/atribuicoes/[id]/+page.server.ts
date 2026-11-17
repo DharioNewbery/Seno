@@ -44,11 +44,21 @@ export const actions: Actions = {
     if (!token) return fail(401, { erro: "Sessão encerrada." });
     const id = Number(evento.params.id);
     const form = await evento.request.formData();
+    const prazoBruto = texto(form, "prazo");
+    const prazoData = prazoBruto ? new Date(prazoBruto) : null;
+    if (!prazoData || Number.isNaN(prazoData.getTime())) {
+      return fail(422, { erro: "Informe a data máxima de entrega." });
+    }
+    const inicioBruto = texto(form, "inicio");
+    const inicioData = inicioBruto ? new Date(inicioBruto) : null;
+    if (inicioData && Number.isNaN(inicioData.getTime())) {
+      return fail(422, { erro: "Data de início inválida." });
+    }
     const auto = String(form.get("autocomplete") ?? "");
     const cad: Parameters<typeof editarAtribuicao>[3] = {
       autocomplete: auto === "on" ? true : auto === "off" ? false : undefined,
-      inicio: texto(form, "inicio") ?? null,
-      prazo: texto(form, "prazo") ?? null,
+      inicio: inicioData ? inicioData.toISOString() : null,
+      prazo: prazoData.toISOString(),
       duracao_seg: null,
       pode_atrasado: form.get("pode_atrasado") === "on",
     };

@@ -448,9 +448,11 @@ func TestIngestaoMonitorHMAC(t *testing.T) {
 	}`, autenticado(tokProf))
 	idAtv := int64(atv["id"].(float64))
 
+	prazoMon := time.Now().Add(7 * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
 	w, atrib := chama(t, r, "POST", "/v1/atribuicoes", `{
 		"turma_id":`+intStr(idTurma)+`,
-		"atividade_id":`+intStr(idAtv)+`
+		"atividade_id":`+intStr(idAtv)+`,
+		"prazo":"`+prazoMon+`"
 	}`, autenticado(tokProf))
 	idAtr := int64(atrib["id"].(float64))
 

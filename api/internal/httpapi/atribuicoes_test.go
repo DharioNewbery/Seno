@@ -61,15 +61,24 @@ func TestAtribuicoes(t *testing.T) {
 	}
 	idAtiv := int64(atividade["id"].(float64))
 
-	// -------- Criação com padrão (sem prazo/duração): autocomplete ON --------
-	w, atrib := chama(t, r, "POST", "/v1/atribuicoes",
+	// -------- Criação sem prazo → 422 --------
+	w, semPrazo := chama(t, r, "POST", "/v1/atribuicoes",
 		`{"turma_id":`+intStr(idTurma)+`,"atividade_id":`+intStr(idAtiv)+`}`,
+		autenticado(tokPaula))
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("atribuição sem prazo: 422 → %d corpo %v", w.Code, semPrazo)
+	}
+
+	// -------- Criação com prazo padrão (sem duração): autocomplete OFF --------
+	prazoInicial := time.Now().Add(14 * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
+	w, atrib := chama(t, r, "POST", "/v1/atribuicoes",
+		`{"turma_id":`+intStr(idTurma)+`,"atividade_id":`+intStr(idAtiv)+`,"prazo":"`+prazoInicial+`"}`,
 		autenticado(tokPaula))
 	if w.Code != http.StatusCreated {
 		t.Fatalf("criar atribuição: %d corpo %v", w.Code, atrib)
 	}
-	if aut, _ := atrib["autocomplete"].(bool); !aut {
-		t.Errorf("sem prazo/duração: autocomplete ligado: %v", atrib)
+	if aut, _ := atrib["autocomplete"].(bool); aut {
+		t.Errorf("com prazo padrão: autocomplete desligado: %v", atrib)
 	}
 	idAtrib := int64(atrib["id"].(float64))
 
@@ -86,7 +95,7 @@ func TestAtribuicoes(t *testing.T) {
 
 	// Duplicado → 409.
 	w, _ = chama(t, r, "POST", "/v1/atribuicoes",
-		`{"turma_id":`+intStr(idTurma)+`,"atividade_id":`+intStr(idAtiv)+`}`,
+		`{"turma_id":`+intStr(idTurma)+`,"atividade_id":`+intStr(idAtiv)+`,"prazo":"`+prazoInicial+`"}`,
 		autenticado(tokPaula))
 	if w.Code != http.StatusConflict {
 		t.Errorf("atribuição duplicada: %d", w.Code)
@@ -104,7 +113,7 @@ func TestAtribuicoes(t *testing.T) {
 		autenticado(tokHugo))
 	idAtvHugo := int64(atvHugo["id"].(float64))
 	w, falha := chama(t, r, "POST", "/v1/atribuicoes",
-		`{"turma_id":`+intStr(idTurma)+`,"atividade_id":`+intStr(idAtvHugo)+`}`,
+		`{"turma_id":`+intStr(idTurma)+`,"atividade_id":`+intStr(idAtvHugo)+`,"prazo":"`+prazoInicial+`"}`,
 		autenticado(tokPaula))
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Errorf("atividade de outro professor: %d corpo %v", w.Code, falha)

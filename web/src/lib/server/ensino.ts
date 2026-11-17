@@ -598,7 +598,7 @@ export async function criarAtribuicao(
     atividade_id: number;
     autocomplete?: boolean;
     inicio?: string | null;
-    prazo?: string | null;
+    prazo: string;
     duracao_seg?: number | null;
     pode_atrasado?: boolean;
   },

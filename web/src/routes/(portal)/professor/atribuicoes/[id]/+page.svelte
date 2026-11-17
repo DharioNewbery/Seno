@@ -63,16 +63,16 @@
         <input type="datetime-local" name="inicio" bind:value={inicio} />
       </label>
       <label>
-        <span>Prazo (vazio = aberto até encerrar a turma)</span>
-        <input type="datetime-local" name="prazo" bind:value={prazo} />
+        <span>Prazo de entrega *</span>
+        <input type="datetime-local" name="prazo" bind:value={prazo} required />
       </label>
       <label>
         <span>Duração (h; vazio = só o prazo)</span>
         <input type="number" name="duracao_horas" bind:value={duracao} min="0" max="168" step="0.25" />
       </label>
       <label class="linha">
-        <input type="checkbox" name="pode_atrasado" bind:value={atraso} />
-        <span>Pode ser entregue atrasado (marcado)</span>
+        <input type="checkbox" name="pode_atrasado" bind:checked={atraso} />
+        <span>Permitir entrega com atraso</span>
       </label>
 
       <div class="botoes">

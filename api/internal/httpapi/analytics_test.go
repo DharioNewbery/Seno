@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 	"testing"
+	"time"
 )
 
 // TestAnalyticsRotasEPermissoes valida as permissões e retornos dos endpoints de analytics:
@@ -49,8 +50,9 @@ func TestAnalyticsRotasEPermissoes(t *testing.T) {
 		autenticado(tokProf1))
 	idAtv := int64(atv["id"].(float64))
 
+	prazo := time.Now().Add(7 * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
 	_, atr := chama(t, r, "POST", "/v1/atribuicoes",
-		`{"turma_id":`+intStr(idTurma)+`,"atividade_id":`+intStr(idAtv)+`}`,
+		`{"turma_id":`+intStr(idTurma)+`,"atividade_id":`+intStr(idAtv)+`,"prazo":"`+prazo+`"}`,
 		autenticado(tokProf1))
 	idAtr := int64(atr["id"].(float64))
 
