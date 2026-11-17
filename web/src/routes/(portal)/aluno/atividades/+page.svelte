@@ -1,33 +1,96 @@
 <script lang="ts">
+  import type { ComponentProps } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { SvelteURLSearchParams } from "svelte/reactivity";
-  import Icone from "#lib/components/Icone.svelte";
-  import {
-    POR_PAGINA_ATIVIDADES_ALUNO,
-    paginarAtribuicoesAluno,
-  } from "#lib/atividades-aluno";
+  import ListaDados from "#lib/components/ListaDados.svelte";
+  import { POR_PAGINA_ATIVIDADES_ALUNO } from "#lib/atividades-aluno";
   import { resumirEstadoAtribuicaoAluno } from "#lib/correcao-aluno";
+  import { dataHora, prazoRelativo } from "#lib/formato";
+  import type { AtribuicaoDoAluno } from "#lib/server/ensino";
   import type { PageProps } from "./$types";
+
+  type ListaAtividadesProps = ComponentProps<
+    typeof ListaDados<AtribuicaoDoAluno>
+  >;
 
   let { data }: PageProps = $props();
 
-  const paginacao = $derived(
-    paginarAtribuicoesAluno(
-      data.atribuicoes,
-      data.pagina ?? 1,
-      POR_PAGINA_ATIVIDADES_ALUNO,
-    ),
-  );
-  const atribuicoesVisiveis = $derived(paginacao.itens);
   const turmasAtivas = $derived(data.turmas.filter((t) => t.ativa));
 
-  function montarUrl(turmaId: number | null, pagina = 1): string {
+  const colunas: ListaAtividadesProps["columns"] = [
+    {
+      key: "atividade_nome",
+      label: "Atividade",
+      sortable: true,
+      primary: true,
+      value: (a) => a.atividade_nome,
+    },
+    {
+      key: "turma",
+      label: "Turma",
+      sortable: true,
+      value: (a) => `${a.materia_codigo} (${a.turma_titulo || `#${a.turma_id}`})`,
+    },
+    {
+      key: "prazo",
+      label: "Prazo",
+      sortable: true,
+      custom: true,
+      value: (a) => (a.prazo ? dataHora(a.prazo) : "Sem prazo"),
+    },
+    {
+      key: "estado",
+      label: "Situação",
+      sortable: true,
+      custom: true,
+      value: (a) => resumirEstadoAtribuicaoAluno(a).rotulo,
+    },
+  ];
+
+  const filtros: ListaAtividadesProps["filters"] = [
+    { id: "todas", label: "Todas" },
+    {
+      id: "pendentes",
+      label: "Pendentes",
+      predicate: (a) => !a.entregue && a.turma_ativa,
+    },
+    {
+      id: "entregues",
+      label: "Entregues",
+      predicate: (a) => a.entregue,
+    },
+    {
+      id: "corrigidas",
+      label: "Corrigidas",
+      predicate: (a) => Boolean(a.entregue && a.publicada_em),
+    },
+  ];
+
+  const acoes: ListaAtividadesProps["actions"] = [
+    {
+      id: "view",
+      label: "Ver atividade",
+      onselect: (a) => goto(`/aluno/atividades/${a.id}`),
+    },
+  ];
+
+  function tomEstado(
+    classe: ReturnType<typeof resumirEstadoAtribuicaoAluno>["classe"],
+    atrasada: boolean,
+  ): "success" | "info" | "warning" | "danger" | undefined {
+    if (classe === "nota") return "success";
+    if (classe === "entregue") return atrasada ? "warning" : "info";
+    if (classe === "andamento") return "warning";
+    if (classe === "encerrada") return "danger";
+    return undefined;
+  }
+
+  function montarUrl(turmaId: number | null): string {
     const qs = new SvelteURLSearchParams(page.url.searchParams.toString());
     if (turmaId === null) qs.delete("turma_id");
     else qs.set("turma_id", String(turmaId));
-    if (pagina <= 1) qs.delete("pagina");
-    else qs.set("pagina", String(pagina));
+    qs.delete("pagina");
     const query = qs.toString();
     return query ? `/aluno/atividades?${query}` : "/aluno/atividades";
   }
@@ -37,7 +100,7 @@
   ) {
     const valor = e.currentTarget.value;
     const turmaId = valor ? Number(valor) : null;
-    goto(montarUrl(turmaId, 1));
+    goto(montarUrl(turmaId));
   }
 </script>
 
@@ -46,94 +109,68 @@
     <p class="aviso erro" role="alert">{data.erro}</p>
   {/if}
 
-  <div class="cabeca">
-    <h2>
-      Atividades
-      <span class="total">({paginacao.total})</span>
-    </h2>
+  <ListaDados
+    title="Atividades"
+    subtitle={`${data.atribuicoes.length} ${data.atribuicoes.length === 1 ? "atividade" : "atividades"}`}
+    columns={colunas}
+    rows={data.atribuicoes}
+    rowKey={(a) => a.id}
+    filters={filtros}
+    actions={acoes}
+    searchPlaceholder="Buscar atividade ou turma..."
+    pageSize={POR_PAGINA_ATIVIDADES_ALUNO}
+    onrowclick={(a) => goto(`/aluno/atividades/${a.id}`)}
+    emptyTitle="Nenhuma atividade disponível"
+    emptyText="As atribuições aparecem quando o professor anexa uma atividade à sua turma."
+  >
+    {#snippet toolbar()}
+      <div class="filtro-turma">
+        <label for="filtro-turma-select">Turma</label>
+        <select
+          id="filtro-turma-select"
+          value={data.filtroTurma ? String(data.filtroTurma) : ""}
+          onchange={aoMudarTurma}
+        >
+          <option value="">Todas as turmas</option>
+          {#each turmasAtivas as t (t.id)}
+            <option value={String(t.id)}>
+              {t.materia_codigo} ({t.titulo || `#${t.id}`})
+            </option>
+          {/each}
+        </select>
+      </div>
+    {/snippet}
 
-    <div class="filtro-turma">
-      <label for="filtro-turma-select">Turma</label>
-      <select
-        id="filtro-turma-select"
-        value={data.filtroTurma ? String(data.filtroTurma) : ""}
-        onchange={aoMudarTurma}
-      >
-        <option value="">Todas as turmas</option>
-        {#each turmasAtivas as t (t.id)}
-          <option value={String(t.id)}>
-            {t.materia_codigo} ({t.titulo || `#${t.id}`})
-          </option>
-        {/each}
-      </select>
-    </div>
-  </div>
-
-  <ul class="lista">
-    {#each atribuicoesVisiveis as a (a.id)}
-      {@const est = resumirEstadoAtribuicaoAluno(a)}
-      <li class="item-atividade">
-        <div class="identidade">
-          <strong class="titulo-atividade">{a.atividade_nome}</strong>
-          <span class="meta">
-            {a.materia_codigo} ({a.turma_titulo || `#${a.turma_id}`})
-          </span>
-        </div>
-        <div class="acao-area">
-          <span class="estado">{est.rotulo}</span>
-          {#if !a.turma_ativa && !a.entregue}
-            <span class="estado">Turma encerrada</span>
+    {#snippet cell(row, col)}
+      {#if col.key === "prazo"}
+        {#if row.prazo}
+          {@const rel = !row.entregue ? prazoRelativo(row.prazo) : null}
+          <span class="dl-main">{dataHora(row.prazo)}</span>
+          {#if rel}
+            <span
+              class="dl-sub"
+              class:prazo-breve={rel.tom === "breve"}
+              class:prazo-vencido={rel.tom === "vencido"}
+            >
+              {rel.rotulo}
+            </span>
           {/if}
-          <a
-            class="btn-icone primario"
-            href={`/aluno/atividades/${a.id}`}
-            title="Ver atividade"
-            aria-label="Ver atividade"
-          >
-            <Icone nome="eye" tamanho={18} />
-          </a>
+        {:else}
+          <span class="dl-main">Sem prazo</span>
+        {/if}
+      {:else if col.key === "estado"}
+        {@const est = resumirEstadoAtribuicaoAluno(row)}
+        <div class="estados-celula">
+          <span class="dl-badge" data-tone={tomEstado(est.classe, row.atrasada)}>
+            {est.rotulo}
+          </span>
+          {#if !row.turma_ativa && !row.entregue}
+            <span class="dl-badge">Turma encerrada</span>
+          {/if}
         </div>
-      </li>
-    {:else}
-      <li class="vazio">
-        Nenhuma atividade disponível. As atribuições aparecem quando o
-        professor anexa uma atividade à sua turma.
-      </li>
-    {/each}
-  </ul>
-
-  {#if paginacao.totalPaginas > 1}
-    <nav class="paginacao" aria-label="Paginação de atividades">
-      <a
-        class="btn-pag"
-        class:desabilitado={paginacao.paginaAtual <= 1}
-        aria-disabled={paginacao.paginaAtual <= 1}
-        href={paginacao.paginaAtual <= 1
-          ? undefined
-          : montarUrl(data.filtroTurma ?? null, paginacao.paginaAtual - 1)}
-      >
-        <Icone nome="chevron-left" tamanho={16} />
-        <span>Anterior</span>
-      </a>
-
-      <span class="pag-info">
-        Página <strong>{paginacao.paginaAtual}</strong> de
-        <strong>{paginacao.totalPaginas}</strong>
-      </span>
-
-      <a
-        class="btn-pag"
-        class:desabilitado={paginacao.paginaAtual >= paginacao.totalPaginas}
-        aria-disabled={paginacao.paginaAtual >= paginacao.totalPaginas}
-        href={paginacao.paginaAtual >= paginacao.totalPaginas
-          ? undefined
-          : montarUrl(data.filtroTurma ?? null, paginacao.paginaAtual + 1)}
-      >
-        <span>Próxima</span>
-        <Icone nome="chevron-right" tamanho={16} />
-      </a>
-    </nav>
-  {/if}
+      {/if}
+    {/snippet}
+  </ListaDados>
 </section>
 
 <style>
@@ -142,111 +179,43 @@
     flex-direction: column;
     gap: 0.9rem;
   }
-  .cabeca {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.75rem;
-  }
-  .cabeca h2 {
-    margin: 0;
-  }
+
   .filtro-turma {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.25rem;
-  }
-  .filtro-turma label {
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--seno-gray-700);
-  }
-  .filtro-turma select {
-    min-width: 12rem;
-    padding: 0.45rem 0.65rem;
-    border: 1px solid var(--seno-gray-300);
-    border-radius: var(--raio-md);
-    background: var(--seno-white);
-    color: var(--seno-text);
-    font-size: 0.88rem;
-  }
-  .lista > li.item-atividade {
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  }
-  .lista > li.item-atividade:hover {
-    border-color: var(--seno-blue-300, #93c5fd);
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
-  }
-  .identidade {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-  }
-  .identidade strong {
-    color: var(--seno-blue-900);
-  }
-  .acao-area {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    flex-wrap: wrap;
   }
-  .btn-icone {
-    width: 2.15rem;
-    height: 2.15rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--raio-md);
-    text-decoration: none;
-    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+  .filtro-turma label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--seno-gray-500);
   }
-  .btn-icone.primario {
-    background: var(--seno-blue-600);
-    color: var(--seno-white);
-    border: 1px solid var(--seno-blue-600);
-  }
-  .btn-icone.primario:hover {
-    background: var(--seno-blue-700);
-    border-color: var(--seno-blue-700);
-  }
-  .estado {
-    background: var(--seno-gray-100);
-    color: var(--seno-gray-700);
-    border: 1px solid var(--seno-gray-300);
-    font-weight: 600;
-  }
-  .paginacao {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.85rem;
-    margin-top: 0.25rem;
-  }
-  .btn-pag {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    padding: 0.4rem 0.8rem;
-    border: 1px solid var(--seno-gray-300);
-    border-radius: var(--raio-md);
+
+  .filtro-turma select {
+    height: 36px;
+    padding: 0 0.65rem;
+    border: 1px solid var(--seno-line);
+    border-radius: var(--raio-sm);
     background: var(--seno-white);
-    color: var(--seno-gray-700);
-    font-size: 0.85rem;
-    font-weight: 600;
-    text-decoration: none;
+    font: inherit;
+    font-size: 0.875rem;
+    color: var(--seno-gray-900);
   }
-  .btn-pag:hover:not(.desabilitado) {
-    background: var(--seno-gray-100);
-    color: var(--seno-blue-900);
+
+  .estados-celula {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
   }
-  .btn-pag.desabilitado {
-    opacity: 0.45;
-    pointer-events: none;
+
+  .prazo-breve {
+    color: var(--seno-amber);
+    font-weight: 500;
   }
-  .pag-info {
-    font-size: 0.85rem;
-    color: var(--seno-gray-600);
+
+  .prazo-vencido {
+    color: var(--seno-red);
+    font-weight: 500;
   }
 </style>
