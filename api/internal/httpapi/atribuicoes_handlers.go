@@ -3,11 +3,14 @@
 package httpapi
 
 import (
+	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/seno-project/seno/api/internal/atribuicoes"
+	"github.com/seno-project/seno/api/internal/monitor"
 	"github.com/seno-project/seno/api/internal/platform"
 )
 
@@ -53,8 +56,27 @@ func (d *Dependencies) CriarAtribuicao(c *gin.Context) {
 		platform.ErrorBody(c, err)
 		return
 	}
-	// Transferência ao Monitor (Fase 9.2): assíncrona, nunca bloqueia.
-	d.Monitor.Enfileirar(c.Request.Context(), atribuicao.ID)
+	if err := d.Monitor.Transferir(c.Request.Context(), atribuicao.ID); err != nil {
+		if delErr := d.AtribuicaoS.Excluir(c.Request.Context(), user, atribuicao.ID); delErr != nil {
+			slog.Error("atribuicao: rollback após falha no Monitor", "atribuicao", atribuicao.ID, "err", delErr)
+		}
+		slog.Error("atribuicao: falha ao disponibilizar no Monitor", "atribuicao", atribuicao.ID, "err", err)
+		switch {
+		case errors.Is(err, monitor.ErrSemAlunos):
+			platform.ErrorBody(c, platform.NewAPIError(
+				http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+				"A turma precisa ter pelo menos um aluno ativo para atribuir a atividade."))
+		case errors.Is(err, monitor.ErrSemTarefas):
+			platform.ErrorBody(c, platform.NewAPIError(
+				http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+				"A atividade precisa ter pelo menos uma tarefa para ser atribuída."))
+		default:
+			platform.ErrorBody(c, platform.NewAPIError(
+				http.StatusServiceUnavailable, platform.CodeServiceUnavailable,
+				"Não foi possível disponibilizar a atividade no Monitor. Tente novamente."))
+		}
+		return
+	}
 	c.JSON(http.StatusCreated, atribuicao)
 }
 

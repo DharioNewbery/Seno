@@ -16,8 +16,9 @@ const (
 	CodeConflict       = "CONFLITO_DE_ESTADO"
 	CodeRateLimited    = "LIMITE_EXCEDIDO"
 	CodeUnprocessable  = "VALIDACAO"
-	CodeInternal       = "ERRO_INTERNO"
-	CodeWrongTimestamp = "ORIGEM_INVALIDA"
+	CodeInternal           = "ERRO_INTERNO"
+	CodeServiceUnavailable = "SERVICO_INDISPONIVEL"
+	CodeWrongTimestamp     = "ORIGEM_INVALIDA"
 )
 
 // APIError é o tipo de erro dominó da camada de aplicação. Handlers

@@ -211,3 +211,26 @@ func TestEntrarEmissor(t *testing.T) {
 		t.Fatalf("claims inesperadas: %+v err=%v", claims, err)
 	}
 }
+
+func TestJanelaSemInicioUsaAgora(t *testing.T) {
+	prazo := time.Now().UTC().Add(72 * time.Hour)
+	antes := time.Now().UTC().Add(-time.Second)
+	j := janela(atribuicaoRow{Prazo: &prazo})
+	depois := time.Now().UTC().Add(time.Second)
+
+	if j.Inicio.Before(antes) || j.Inicio.After(depois) {
+		t.Fatalf("inicio sem data configurada deve usar agora; obtido %v", j.Inicio)
+	}
+	if !j.Prazo.Equal(prazo) {
+		t.Fatalf("prazo esperado %v; obtido %v", prazo, j.Prazo)
+	}
+
+	inicioExplicito := time.Now().UTC().Add(24 * time.Hour)
+	j2 := janela(atribuicaoRow{Inicio: &inicioExplicito, Prazo: &prazo})
+	if !j2.Inicio.Equal(inicioExplicito) {
+		t.Fatalf("inicio explícito esperado %v; obtido %v", inicioExplicito, j2.Inicio)
+	}
+	if !j2.Prazo.Equal(prazo) {
+		t.Fatalf("prazo esperado %v; obtido %v", prazo, j2.Prazo)
+	}
+}

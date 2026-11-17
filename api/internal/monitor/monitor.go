@@ -35,6 +35,11 @@ import (
 // KindTransferir é o kind do job na fila de jobs da API.
 const KindTransferir = "monitor_transferir"
 
+var (
+	ErrSemAlunos  = errors.New("turma sem alunos ativos")
+	ErrSemTarefas = errors.New("atividade sem tarefas ativas")
+)
+
 type Service struct {
 	st        *store.Store
 	audit     *platform.Audit
@@ -83,6 +88,23 @@ func (s *Service) Enfileirar(ctx context.Context, atribuicaoID int64) {
 	}
 }
 
+// Transferir monta, assina, envia a atribuição ao Monitor e grava monitor_id.
+// Quando a integração está desligada (!Ligado), retorna nil.
+func (s *Service) Transferir(ctx context.Context, atribuicaoID int64) error {
+	if !s.Ligado() {
+		return nil
+	}
+	t, err := s.Montar(ctx, atribuicaoID)
+	if err != nil {
+		return err
+	}
+	mid, err := s.Enviar(ctx, t)
+	if err != nil {
+		return err
+	}
+	return s.gravarMonitorID(ctx, atribuicaoID, mid)
+}
+
 // Handler devolve o handler de fila do kind (registrado no main).
 func (s *Service) Handler() fila.Handler {
 	return func(ctx context.Context, payload json.RawMessage) error {
@@ -90,15 +112,7 @@ func (s *Service) Handler() fila.Handler {
 		if err := json.Unmarshal(payload, &p); err != nil {
 			return fmt.Errorf("monitor_transferir: payload: %w", err)
 		}
-		t, err := s.Montar(ctx, p.AtribuicaoID)
-		if err != nil {
-			return err
-		}
-		mid, err := s.Enviar(ctx, t)
-		if err != nil {
-			return err
-		}
-		return s.gravarMonitorID(ctx, p.AtribuicaoID, mid)
+		return s.Transferir(ctx, p.AtribuicaoID)
 	}
 }
 
@@ -172,7 +186,7 @@ func (s *Service) Montar(ctx context.Context, atribuicaoID int64) (*contract.Tra
 	}
 	if len(alunos) == 0 {
 		// Monitor valida 422 alunos vazio: falha definitiva do payload.
-		return nil, fmt.Errorf("monitor_transferir: atribuição %d sem alunos ativos", atribuicaoID)
+		return nil, fmt.Errorf("monitor_transferir: atribuição %d: %w", atribuicaoID, ErrSemAlunos)
 	}
 
 	tarefas, err := s.montarCarga(ctx, a.AtividadeID)
@@ -213,11 +227,8 @@ func (s *Service) Montar(ctx context.Context, atribuicaoID int64) (*contract.Tra
 // transferência); sem prazo = aberta até encerramento — POCO: o Monitor exige
 // prazo: usa encerramento da turma quando existente, senão horizonte largo.
 func janela(a atribuicaoRow) contract.Janela {
-	inicio := a.Inicio
-	if inicio == nil {
-		inicio = a.Prazo
-	}
 	base := time.Now().UTC()
+	inicio := a.Inicio
 	if inicio == nil {
 		inicio = &base
 	}
@@ -315,7 +326,7 @@ func (s *Service) montarCarga(ctx context.Context, atividadeID int64) ([]contrac
 		})
 	}
 	if len(out) == 0 {
-		return nil, fmt.Errorf("monitor_transferir: atividade %d sem tarefas ativas", atividadeID)
+		return nil, fmt.Errorf("monitor_transferir: atividade %d: %w", atividadeID, ErrSemTarefas)
 	}
 	return out, nil
 }
