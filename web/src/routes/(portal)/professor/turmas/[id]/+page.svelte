@@ -371,7 +371,9 @@
                 <div class="identidade">
                   <strong>{a.atividade_nome || `Atividade #${a.atividade_id}`}</strong>
                   <span class="meta">
-                    {a.prazo ? `Prazo ${dataHora(a.prazo)}` : "Sem prazo"} ·
+                    {a.inicio ? `Início ${dataHora(a.inicio)} · ` : ""}{a.prazo
+                      ? `Prazo ${dataHora(a.prazo)}`
+                      : "Sem prazo"} ·
                     {a.duracao_seg
                       ? `${Math.round((a.duracao_seg / 3600) * 10) / 10} h de duração`
                       : "sem duração"} ·
@@ -433,6 +435,10 @@
                 </div>
 
                 <div class="campos-atribuir">
+                  <label class="mini">
+                    <span>Início (vazio = agora)</span>
+                    <input type="datetime-local" name="inicio" />
+                  </label>
                   <label class="mini">
                     <span>Prazo de entrega *</span>
                     <input type="datetime-local" name="prazo" required />

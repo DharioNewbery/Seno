@@ -381,6 +381,18 @@ export const actions: Actions = {
         erro: "Informe a data máxima de entrega.",
       });
     }
+    const inicioBruto = String(form.get("inicio") ?? "").trim();
+    const inicioData = inicioBruto !== "" ? new Date(inicioBruto) : null;
+    if (inicioData && Number.isNaN(inicioData.getTime())) {
+      return fail(422, {
+        erro: "Data de início inválida.",
+      });
+    }
+    if (inicioData && prazoData < inicioData) {
+      return fail(422, {
+        erro: "Prazo de entrega não pode ser anterior ao início.",
+      });
+    }
     const cad: {
       turma_id: number;
       atividade_id: number;
@@ -394,6 +406,7 @@ export const actions: Actions = {
       atividade_id: atividadeID,
       prazo: prazoData.toISOString(),
     };
+    if (inicioData) cad.inicio = inicioData.toISOString();
     const duracaoHoras = Number(form.get("duracao_horas"));
     if (Number.isFinite(duracaoHoras) && duracaoHoras > 0) {
       cad.duracao_seg = Math.floor(duracaoHoras * 3600);
