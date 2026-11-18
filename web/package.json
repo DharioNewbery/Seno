@@ -1,7 +1,7 @@
 {
   "name": "web",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "scripts": {
     "dev": "node --env-file=../deploy/.env ./node_modules/vite/bin/vite.js dev",
