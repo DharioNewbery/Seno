@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -42,6 +43,17 @@ func (s *Service) Receber(ctx context.Context, t *contract.Transferencia) (monit
 	if err := tx.QueryRow(ctx,
 		`SELECT monitor_id FROM atividade WHERE api_id = $1 FOR UPDATE`, t.APIID,
 	).Scan(&existing); err == nil {
+		if _, err := tx.Exec(ctx,
+			`UPDATE atividade SET carga = $2::jsonb WHERE monitor_id = $1`,
+			existing, string(carga)); err != nil {
+			return "", false, fmt.Errorf("atualizando atividade: %w", err)
+		}
+		fimReal := fimRealJanela(t.Janela)
+		if _, err := tx.Exec(ctx,
+			`UPDATE tentativa SET fim_real = $2 WHERE monitor_id = $1`,
+			existing, fimReal); err != nil {
+			return "", false, fmt.Errorf("atualizando fim_real de tentativas: %w", err)
+		}
 		return existing, true, tx.Commit(ctx)
 	}
 
@@ -63,6 +75,17 @@ func (s *Service) Receber(ctx context.Context, t *contract.Transferencia) (monit
 	}
 
 	return id, false, tx.Commit(ctx)
+}
+
+// fimRealJanela calcula fim_real = min(inicio + duração, prazo).
+func fimRealJanela(j contract.Janela) time.Time {
+	fim := j.Prazo
+	if j.DuracaoSeg != nil {
+		if d := j.Inicio.Add(time.Duration(*j.DuracaoSeg) * time.Second); d.Before(fim) {
+			fim = d
+		}
+	}
+	return fim
 }
 
 // gerarMonitorID devolve "atv_" + 12 hex aleatórios (CSPRNG).

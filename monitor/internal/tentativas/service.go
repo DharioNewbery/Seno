@@ -137,7 +137,7 @@ func (s *Service) Abrir(ctx context.Context, mid string, aluno int64, agora time
 	if _, err := s.pool.Exec(ctx, `INSERT INTO tentativa
 	    (monitor_id, aluno_api_id, aberta_em, fim_real, revisao, seq_submissao, dados)
 	    VALUES ($1, $2, $3, $4, 0, $5, $6::jsonb)
-	    ON CONFLICT (monitor_id, aluno_api_id) DO NOTHING`,
+	    ON CONFLICT (monitor_id, aluno_api_id) DO UPDATE SET fim_real = EXCLUDED.fim_real`,
 		mid, aluno, agora, fimReal, seqSub, dadosIniciais); err != nil {
 		return nil, fmt.Errorf("tentativas: abrindo: %w", err)
 	}
