@@ -1,6 +1,7 @@
 import { fail, redirect, type Actions } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 
+import { deCampoDataHora } from "#lib/formato";
 import {
   editarAtribuicao,
   excluirAtribuicao,
@@ -45,13 +46,13 @@ export const actions: Actions = {
     const id = Number(evento.params.id);
     const form = await evento.request.formData();
     const prazoBruto = texto(form, "prazo");
-    const prazoData = prazoBruto ? new Date(prazoBruto) : null;
-    if (!prazoData || Number.isNaN(prazoData.getTime())) {
+    const prazoData = deCampoDataHora(prazoBruto);
+    if (!prazoData) {
       return fail(422, { erro: "Informe a data máxima de entrega." });
     }
     const inicioBruto = texto(form, "inicio");
-    const inicioData = inicioBruto ? new Date(inicioBruto) : null;
-    if (inicioData && Number.isNaN(inicioData.getTime())) {
+    const inicioData = inicioBruto ? deCampoDataHora(inicioBruto) : null;
+    if (inicioBruto && !inicioData) {
       return fail(422, { erro: "Data de início inválida." });
     }
     const auto = String(form.get("autocomplete") ?? "");

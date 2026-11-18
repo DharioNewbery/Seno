@@ -1,5 +1,7 @@
 import { error, fail, redirect, type Actions } from "@sveltejs/kit";
 
+import { deCampoDataHora } from "#lib/formato";
+
 import {
   acaoTurma,
   conferirMatriculas,
@@ -375,15 +377,15 @@ export const actions: Actions = {
       });
     }
     const prazoBruto = String(form.get("prazo") ?? "").trim();
-    const prazoData = prazoBruto !== "" ? new Date(prazoBruto) : null;
-    if (!prazoData || Number.isNaN(prazoData.getTime())) {
+    const prazoData = deCampoDataHora(prazoBruto);
+    if (!prazoData) {
       return fail(422, {
         erro: "Informe a data máxima de entrega.",
       });
     }
     const inicioBruto = String(form.get("inicio") ?? "").trim();
-    const inicioData = inicioBruto !== "" ? new Date(inicioBruto) : null;
-    if (inicioData && Number.isNaN(inicioData.getTime())) {
+    const inicioData = inicioBruto !== "" ? deCampoDataHora(inicioBruto) : null;
+    if (inicioBruto !== "" && !inicioData) {
       return fail(422, {
         erro: "Data de início inválida.",
       });

@@ -41,6 +41,34 @@ export function soData(
   return d ? fmtData.format(d) : "—";
 }
 
+const fmtCampoDataHora = new Intl.DateTimeFormat("sv-SE", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+  timeZone: FUSO,
+});
+
+/** Formata ISO para `<input type="datetime-local">` ("2026-10-22T19:43") no fuso do sistema. */
+export function paraCampoDataHora(
+  valor: string | number | Date | null | undefined,
+): string {
+  const d = valida(valor);
+  if (!d) return "";
+  return fmtCampoDataHora.format(d).replace(" ", "T");
+}
+
+/** Interpreta valor de `<input type="datetime-local">` no fuso do sistema (-03:00). */
+export function deCampoDataHora(bruto: string | null | undefined): Date | null {
+  const texto = (bruto ?? "").trim();
+  if (!texto) return null;
+  const comFuso = /(?:Z|[+-]\d{2}:\d{2})$/.test(texto) ? texto : `${texto}-03:00`;
+  const d = new Date(comFuso);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 export type TomPrazo = "folga" | "breve" | "vencido";
 
 /**

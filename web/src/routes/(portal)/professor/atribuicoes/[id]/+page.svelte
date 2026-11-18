@@ -2,12 +2,11 @@
   // Configuração da atribuição: autocomplete, início, prazo, duração e
   // atraso. Editar depois da 1ª submissão será bloqueado (futuro).
   import type { PageProps } from "./$types";
+  import { paraCampoDataHora } from "#lib/formato";
 
   let { data, form }: PageProps = $props();
 
   const atribuicao = $derived(data.atribuicao);
-  const paraCampo = (v: string | null | undefined): string =>
-    v ? new Date(v).toISOString().slice(0, 16) : "";
   const horasDe = (seg: number | null | undefined): string =>
     seg ? String(Math.round((seg / 3600) * 100) / 100) : "";
 
@@ -21,8 +20,8 @@
   $effect(() => {
     if (carregado || !atribuicao) return;
     auto = atribuicao.autocomplete ? "on" : "off";
-    inicio = paraCampo(atribuicao.inicio);
-    prazo = paraCampo(atribuicao.prazo);
+    inicio = paraCampoDataHora(atribuicao.inicio);
+    prazo = paraCampoDataHora(atribuicao.prazo);
     duracao = horasDe(atribuicao.duracao_seg);
     atraso = atribuicao.pode_atrasado;
     carregado = true;
