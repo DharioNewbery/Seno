@@ -1,6 +1,9 @@
 <script lang="ts">
+  import type { ComponentProps } from "svelte";
+  import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { SvelteURLSearchParams } from "svelte/reactivity";
+  import ListaDados from "#lib/components/ListaDados.svelte";
   import { dataHora, formatarBytes, soData } from "#lib/formato";
   import {
     resumirAtividade,
@@ -11,8 +14,13 @@
   import type {
     AlunoExistenteConferencia,
     AlunoNovoConferencia,
+    Atribuicao,
+    Matricula,
   } from "#lib/server/ensino";
   import type { PageProps } from "./$types";
+
+  type ListaAtribuicoesProps = ComponentProps<typeof ListaDados<Atribuicao>>;
+  type ListaMatriculasProps = ComponentProps<typeof ListaDados<Matricula>>;
 
   let { data, form }: PageProps = $props();
 
@@ -22,9 +30,6 @@
   const atribuicoes = $derived(data.atribuicoes);
   const atividades = $derived(data.atividades);
   const encerrada = $derived(Boolean(turma?.encerrado_em));
-
-  // Navegação entre as seções principais (Alunos / Atividades) + Modal de Configurações
-  let secaoAtiva = $state<"alunos" | "atividades">("alunos");
 
   // Modal de Configurações da Turma
   let modalConfigAberto = $state(false);
@@ -43,7 +48,10 @@
   let novosConferencia = $state<AlunoNovoConferencia[]>([]);
   let emConferencia = $state(false);
 
-  // Atribuição de atividade (grid de opções + modal de preview)
+  // Modal de atribuição de atividade em 2 etapas + preview
+  let modalAtribuirAberto = $state(false);
+  let etapaAtribuir = $state<1 | 2>(1);
+  let buscaAtividade = $state("");
   let atividadeSelecionadaId = $state<number | null>(null);
   let atividadePreview = $state<AtividadeComPreview | null>(null);
 
@@ -54,6 +62,14 @@
   const atividadeSelecionada = $derived(
     atividades.find((a) => a.id === atividadeSelecionadaId) ?? null,
   );
+
+  const atividadesFiltradas = $derived.by(() => {
+    const q = buscaAtividade.trim().toLowerCase();
+    if (!q) return atividades;
+    return atividades.filter(
+      (a) => a.nome.toLowerCase().includes(q) || String(a.id).includes(q),
+    );
+  });
 
   // Reage a retornos das actions (conferência de alunos ou erros nos modais)
   $effect(() => {
@@ -76,6 +92,9 @@
       emConferencia = false;
       modalAlunosAberto = false;
       modalConfigAberto = false;
+      modalAtribuirAberto = false;
+      etapaAtribuir = 1;
+      atividadeSelecionadaId = null;
       confirmouEncerrar = false;
       confirmouExcluir = false;
     }
@@ -155,16 +174,194 @@
     return s ? `?${s}` : page.url.pathname;
   }
 
+  function abrirModalAtribuir() {
+    buscaAtividade = "";
+    atividadeSelecionadaId = null;
+    etapaAtribuir = 1;
+    modalAtribuirAberto = true;
+  }
+
+  function fecharModalAtribuir() {
+    modalAtribuirAberto = false;
+    etapaAtribuir = 1;
+  }
+
   function selecionarParaAtribuir(id: number) {
     atividadeSelecionadaId = id;
     atividadePreview = null;
+    modalAtribuirAberto = true;
+    etapaAtribuir = 2;
   }
+
+  let formEditarConfig = $state<HTMLFormElement | null>(null);
+  let idEditarConfig = $state<number | null>(null);
+  let formDesligar = $state<HTMLFormElement | null>(null);
+  let idDesligar = $state<number | null>(null);
+  let formReenviar = $state<HTMLFormElement | null>(null);
+  let idReenviar = $state<number | null>(null);
+  let formRemoverAluno = $state<HTMLFormElement | null>(null);
+  let idRemoverAluno = $state<number | null>(null);
+
+  function dispararForm(
+    formRef: HTMLFormElement | null,
+    setter: () => void,
+  ) {
+    setter();
+    queueMicrotask(() => formRef?.requestSubmit());
+  }
+
+  const duracaoLabel = (seg: number | null | undefined) =>
+    seg ? `${Math.round((seg / 3600) * 10) / 10} h` : "Sem duração";
+
+  const colunasAtribuicoes: ListaAtribuicoesProps["columns"] = [
+    {
+      key: "atividade_nome",
+      label: "Atividade",
+      primary: true,
+      sortable: true,
+      value: (a) => a.atividade_nome || `Atividade #${a.atividade_id}`,
+    },
+    {
+      key: "inicio",
+      label: "Início",
+      sortable: true,
+      value: (a) => (a.inicio ? dataHora(a.inicio) : "Imediato"),
+    },
+    {
+      key: "prazo",
+      label: "Prazo",
+      sortable: true,
+      value: (a) => (a.prazo ? dataHora(a.prazo) : "Sem prazo"),
+    },
+    {
+      key: "config",
+      label: "Configuração",
+      custom: true,
+      value: (a) =>
+        `${duracaoLabel(a.duracao_seg)} · autocomplete ${a.autocomplete ? "ligado" : "desligado"} · ${a.pode_atrasado ? "atraso permitido" : "sem atraso"}`,
+    },
+  ];
+
+  const acoesAtribuicoes: ListaAtribuicoesProps["actions"] = [
+    {
+      id: "open",
+      label: "Entregas",
+      onselect: (a) => goto(`/professor/atribuicoes/${a.id}/entregas`),
+    },
+    {
+      id: "edit",
+      label: "Configurar",
+      onselect: (a) =>
+        dispararForm(formEditarConfig, () => (idEditarConfig = a.id)),
+    },
+    {
+      id: "delete",
+      label: "Desligar",
+      onselect: (a) =>
+        dispararForm(formDesligar, () => (idDesligar = a.id)),
+    },
+  ];
+
+  function rotuloStatusAluno(m: Matricula): string {
+    if (m.aluno.status === "active") return "Ativo";
+    if (m.aluno.status === "pending" && m.aluno.convite_expirado) {
+      return "Convite vencido";
+    }
+    if (m.aluno.status === "pending") return "Convite pendente";
+    return "Bloqueado";
+  }
+
+  function tomStatusAluno(
+    m: Matricula,
+  ): "success" | "warning" | "danger" | "info" {
+    if (m.aluno.status === "active") return "success";
+    if (m.aluno.status === "pending" && m.aluno.convite_expirado) {
+      return "danger";
+    }
+    if (m.aluno.status === "pending") return "warning";
+    return "danger";
+  }
+
+  const colunasMatriculas = $derived<ListaMatriculasProps["columns"]>([
+    {
+      key: "aluno",
+      label: "Aluno",
+      primary: true,
+      sortable: true,
+      value: (m) => `${m.aluno.first_name} ${m.aluno.last_name}`,
+    },
+    {
+      key: "email",
+      label: "E-mail",
+      sortable: true,
+      value: (m) => m.aluno.email,
+    },
+    {
+      key: "status",
+      label: "Status",
+      sortable: true,
+      custom: true,
+      value: (m) =>
+        m.saida_em
+          ? `${rotuloStatusAluno(m)} · Matrícula encerrada`
+          : rotuloStatusAluno(m),
+    },
+    {
+      key: "entrada_em",
+      label: "Entrada",
+      sortable: true,
+      value: (m) => soData(m.entrada_em),
+    },
+    ...(incluirEncerradas
+      ? [
+          {
+            key: "saida_em",
+            label: "Saída",
+            sortable: true,
+            value: (m: Matricula) => (m.saida_em ? soData(m.saida_em) : "—"),
+          },
+        ]
+      : []),
+  ]);
+
+  const filtrosMatriculas: ListaMatriculasProps["filters"] = [
+    { id: "todos", label: "Todos" },
+    {
+      id: "ativos",
+      label: "Ativos",
+      predicate: (m) => m.aluno.status === "active" && !m.saida_em,
+    },
+    {
+      id: "pendentes",
+      label: "Pendentes",
+      predicate: (m) => m.aluno.status === "pending" && !m.saida_em,
+    },
+  ];
+
+  const acoesMatriculas: ListaMatriculasProps["actions"] = [
+    {
+      id: "open",
+      label: "Reenviar convite",
+      hidden: (m) =>
+        Boolean(m.saida_em) || encerrada || m.aluno.status !== "pending",
+      onselect: (m) =>
+        dispararForm(formReenviar, () => (idReenviar = m.aluno.id)),
+    },
+    {
+      id: "delete",
+      label: "Remover",
+      hidden: (m) => Boolean(m.saida_em) || encerrada,
+      onselect: (m) =>
+        dispararForm(formRemoverAluno, () => (idRemoverAluno = m.id)),
+    },
+  ];
 </script>
 
 <svelte:window
   onkeydown={(e) => {
     if (e.key === "Escape") {
       if (atividadePreview) atividadePreview = null;
+      else if (modalAtribuirAberto) fecharModalAtribuir();
       else if (modalAlunosAberto) fecharModalAlunos();
       else if (modalConfigAberto) fecharModalConfig();
     }
@@ -207,23 +404,7 @@
         </span>
       </div>
 
-      <nav class="abas-turma" aria-label="Seções da turma">
-        <button
-          type="button"
-          class="aba"
-          class:ativa={secaoAtiva === "alunos"}
-          onclick={() => (secaoAtiva = "alunos")}
-        >
-          Alunos <span class="contador">({matriculas.length})</span>
-        </button>
-        <button
-          type="button"
-          class="aba"
-          class:ativa={secaoAtiva === "atividades"}
-          onclick={() => (secaoAtiva = "atividades")}
-        >
-          Atividades <span class="contador">({atribuicoes.length})</span>
-        </button>
+      <div class="acoes-cabeca">
         <button
           type="button"
           class="aba config-btn"
@@ -231,319 +412,316 @@
         >
           Configurações
         </button>
-      </nav>
+      </div>
     </header>
 
-    <!-- ==================== SEÇÃO 1: ALUNOS ==================== -->
-    {#if secaoAtiva === "alunos"}
-      <section class="secao-painel" aria-label="Alunos da turma">
-        <div class="cabeca-secao">
-          <div>
-            <h3>Alunos matriculados <span class="total">({matriculas.length})</span></h3>
-          </div>
-          <div class="acoes-secao">
-            <a
-              class="btn-texto-sutil"
-              href={urlIncluirEncerradas(!incluirEncerradas)}
+    <!-- ==================== SEÇÃO 1: ATIVIDADES ==================== -->
+    <section class="secao-painel" aria-label="Atividades da turma">
+      <ListaDados
+        title="Atividades atribuídas"
+        subtitle={`${atribuicoes.length} ${atribuicoes.length === 1 ? "atividade" : "atividades"}`}
+        columns={colunasAtribuicoes}
+        rows={atribuicoes}
+        rowKey={(a) => a.id}
+        actions={acoesAtribuicoes}
+        searchPlaceholder="Buscar atividade..."
+        onrowclick={(a) => goto(`/professor/atribuicoes/${a.id}/entregas`)}
+        emptyTitle="Nenhuma atividade atribuída"
+        emptyText="Clique em Atribuir atividade + para adicionar atividades a esta turma."
+      >
+        {#snippet header()}
+          {#if !encerrada}
+            <button
+              type="button"
+              class="nova btn-primario"
+              onclick={abrirModalAtribuir}
             >
-              {incluirEncerradas
-                ? "Ocultar matrículas encerradas"
-                : "Mostrar matrículas encerradas"}
-            </a>
-            {#if !encerrada}
-              <button
-                type="button"
-                class="nova btn-primario"
-                onclick={abrirModalAlunos}
-              >
-                Adicionar alunos +
-              </button>
-            {/if}
-          </div>
-        </div>
+              Atribuir atividade +
+            </button>
+          {/if}
+        {/snippet}
 
-        <div class="tabela-wrapper">
-          <table class="tabela">
-            <thead>
-              <tr>
-                <th>Aluno</th>
-                <th>E-mail</th>
-                <th>Status</th>
-                <th>Entrada</th>
-                {#if incluirEncerradas}
-                  <th>Saída</th>
-                {/if}
-                <th class="col-acoes" aria-label="Ações"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each matriculas as m (m.id)}
-                {@const matEncerrada = Boolean(m.saida_em)}
-                {@const conviteVencido =
-                  m.aluno.status === "pending" && Boolean(m.aluno.convite_expirado)}
-                <tr class:linha-encerrada={matEncerrada}>
-                  <td class="nome-aluno">
-                    <strong>{m.aluno.first_name} {m.aluno.last_name}</strong>
-                  </td>
-                  <td class="email">{m.aluno.email}</td>
-                  <td>
-                    <div class="badges-status">
-                      {#if m.aluno.status === "active"}
-                        <span class="estado ativa">Ativo</span>
-                      {:else if conviteVencido}
-                        <span class="estado vencido">Convite vencido</span>
-                      {:else if m.aluno.status === "pending"}
-                        <span class="estado pendente">Convite pendente</span>
-                      {:else}
-                        <span class="estado encerrada">Bloqueado</span>
-                      {/if}
-                      {#if matEncerrada}
-                        <span class="estado encerrada">Matrícula encerrada</span>
-                      {/if}
-                    </div>
-                  </td>
-                  <td>{soData(m.entrada_em)}</td>
-                  {#if incluirEncerradas}
-                    <td>{m.saida_em ? soData(m.saida_em) : "—"}</td>
-                  {/if}
-                  <td class="acao-cell">
-                    {#if !matEncerrada && !encerrada}
-                      <div class="acoes-linha">
-                        {#if m.aluno.status === "pending"}
-                          <form method="POST" action="?/reenviar_convite">
-                            <input
-                              type="hidden"
-                              name="aluno_id"
-                              value={m.aluno.id}
-                            />
-                            <button
-                              type="submit"
-                              class="peq"
-                              class:destaque-convite={conviteVencido}
-                            >
-                              {conviteVencido
-                                ? "Enviar novo convite"
-                                : "Reenviar convite"}
-                            </button>
-                          </form>
-                        {/if}
-                        <form method="POST" action="?/remover_aluno">
-                          <input
-                            type="hidden"
-                            name="matricula_id"
-                            value={m.id}
-                          />
-                          <button type="submit" class="peq vermelho">
-                            Remover
-                          </button>
-                        </form>
-                      </div>
-                    {/if}
-                  </td>
-                </tr>
-              {:else}
-                <tr>
-                  <td colspan={incluirEncerradas ? 6 : 5} class="vazio">
-                    Nenhum aluno matriculado nesta turma.
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    {/if}
+        {#snippet cell(row, col)}
+          {#if col.key === "config"}
+            <span class="dl-main">{duracaoLabel(row.duracao_seg)}</span>
+            <span class="dl-sub">
+              autocomplete {row.autocomplete ? "ligado" : "desligado"} ·
+              {row.pode_atrasado ? "atraso permitido" : "sem atraso"}
+            </span>
+          {/if}
+        {/snippet}
+      </ListaDados>
 
-    <!-- ==================== SEÇÃO 2: ATIVIDADES ==================== -->
-    {#if secaoAtiva === "atividades"}
-      <section class="secao-painel" aria-label="Atividades da turma">
-        <div class="bloco-atribuidas">
-          <div class="cabeca-secao">
-            <h3>
-              Atividades atribuídas
-              <span class="total">({atribuicoes.length})</span>
-            </h3>
-          </div>
+      <form method="POST" action="?/editarConfig" bind:this={formEditarConfig} hidden>
+        <input type="hidden" name="atribuicao_id" value={idEditarConfig ?? ""} />
+      </form>
+      <form method="POST" action="?/desligar" bind:this={formDesligar} hidden>
+        <input type="hidden" name="atribuicao_id" value={idDesligar ?? ""} />
+      </form>
+    </section>
 
-          <ul class="lista-atrib">
-            {#each atribuicoes as a (a.id)}
-              <li>
-                <div class="identidade">
-                  <strong>{a.atividade_nome || `Atividade #${a.atividade_id}`}</strong>
-                  <span class="meta">
-                    {a.inicio ? `Início ${dataHora(a.inicio)} · ` : ""}{a.prazo
-                      ? `Prazo ${dataHora(a.prazo)}`
-                      : "Sem prazo"} ·
-                    {a.duracao_seg
-                      ? `${Math.round((a.duracao_seg / 3600) * 10) / 10} h de duração`
-                      : "sem duração"} ·
-                    autocomplete {a.autocomplete ? "ligado" : "desligado"} ·
-                    {a.pode_atrasado ? "atraso permitido" : "sem atraso"}
-                  </span>
-                </div>
-                <div class="acao-area">
-                  <a class="peq" href={`/professor/atribuicoes/${a.id}/entregas`}>
-                    Entregas
-                  </a>
-                  <form method="POST" action="?/editarConfig">
-                    <input type="hidden" name="atribuicao_id" value={a.id} />
-                    <button class="peq">Configurar</button>
-                  </form>
-                  <form method="POST" action="?/desligar">
-                    <input type="hidden" name="atribuicao_id" value={a.id} />
-                    <button class="peq vermelho">Desligar</button>
-                  </form>
-                </div>
-              </li>
-            {:else}
-              <li class="vazio-card">Nenhuma atividade atribuída a esta turma.</li>
-            {/each}
-          </ul>
-        </div>
+    <!-- ==================== SEÇÃO 2: ALUNOS ==================== -->
+    <section class="secao-painel" aria-label="Alunos da turma">
+      <ListaDados
+        title="Alunos matriculados"
+        subtitle={`${matriculas.length} ${matriculas.length === 1 ? "aluno" : "alunos"}`}
+        columns={colunasMatriculas}
+        rows={matriculas}
+        rowKey={(m) => m.id}
+        filters={filtrosMatriculas}
+        actions={acoesMatriculas}
+        searchPlaceholder="Buscar aluno por nome ou e-mail..."
+        emptyTitle="Nenhum aluno matriculado"
+        emptyText="Adicione alunos individualmente ou em lote (CSV)."
+      >
+        {#snippet header()}
+          <a
+            class="btn-texto-sutil"
+            href={urlIncluirEncerradas(!incluirEncerradas)}
+          >
+            {incluirEncerradas
+              ? "Ocultar matrículas encerradas"
+              : "Mostrar matrículas encerradas"}
+          </a>
+          {#if !encerrada}
+            <button
+              type="button"
+              class="nova btn-primario"
+              onclick={abrirModalAlunos}
+            >
+              Adicionar alunos +
+            </button>
+          {/if}
+        {/snippet}
 
-        {#if !encerrada}
-          <div class="bloco-banco-atividades">
-            <div class="cabeca-secao">
-              <div>
-                <h3>Atribuir atividade à turma</h3>
-                <p class="dica">
-                  Escolha uma atividade no grid abaixo, visualize o preview das
-                  tarefas e configure os parâmetros de entrega.
-                </p>
-              </div>
+        {#snippet cell(row, col)}
+          {#if col.key === "status"}
+            <div class="badges-status">
+              <span class="dl-badge" data-tone={tomStatusAluno(row)}>
+                {rotuloStatusAluno(row)}
+              </span>
+              {#if row.saida_em}
+                <span class="dl-badge" data-tone="danger">
+                  Matrícula encerrada
+                </span>
+              {/if}
             </div>
+          {/if}
+        {/snippet}
+      </ListaDados>
 
-            {#if atividadeSelecionada}
-              <form method="POST" action="?/atribuir" class="form-atribuir">
-                <input
-                  type="hidden"
-                  name="atividade_id"
-                  value={atividadeSelecionada.id}
-                />
-                <div class="selecionada-topo">
-                  <div>
-                    <span class="rotulo-selecionada">Atividade selecionada</span>
-                    <strong>{atividadeSelecionada.nome}</strong>
-                  </div>
-                  <button
-                    type="button"
-                    class="btn-texto-sutil"
-                    onclick={() => (atividadeSelecionadaId = null)}
-                  >
-                    Trocar seleção
-                  </button>
-                </div>
-
-                <div class="campos-atribuir">
-                  <label class="mini">
-                    <span>Início (vazio = agora)</span>
-                    <input type="datetime-local" name="inicio" />
-                  </label>
-                  <label class="mini">
-                    <span>Prazo de entrega *</span>
-                    <input type="datetime-local" name="prazo" required />
-                  </label>
-                  <label class="mini">
-                    <span>Duração (h)</span>
-                    <input
-                      type="number"
-                      name="duracao_horas"
-                      min="0.25"
-                      max="168"
-                      step="0.25"
-                      placeholder="Ex.: 2"
-                    />
-                  </label>
-                  <label class="mini">
-                    <span>Autocomplete</span>
-                    <select name="autocomplete">
-                      <option value="">Padrão do sistema</option>
-                      <option value="on">Ligado</option>
-                      <option value="off">Desligado</option>
-                    </select>
-                  </label>
-                  <label class="mini linha-check">
-                    <input type="checkbox" name="pode_atrasado" />
-                    <span>Permitir entrega com atraso</span>
-                  </label>
-                  <button type="submit" class="nova btn-primario">
-                    Confirmar atribuição
-                  </button>
-                </div>
-              </form>
-            {/if}
-
-            {#if atividades.length === 0}
-              <p class="vazio-card">
-                Nenhuma atividade cadastrada no banco. Crie uma atividade em
-                <a href="/professor/atividades/nova">Banco de atividades</a>.
-              </p>
-            {:else}
-              <div class="grid-atividades">
-                {#each atividades as atv (atv.id)}
-                  {@const resumo = resumirAtividade(atv)}
-                  {@const jaAtribuida = idsAtribuidos.has(atv.id)}
-                  {@const selecionada = atividadeSelecionadaId === atv.id}
-                  <article
-                    class="card-grid-atividade"
-                    class:selecionada
-                    class:ja-atribuida={jaAtribuida}
-                  >
-                    <div class="card-grid-topo">
-                      <div class="card-grid-titulo">
-                        <strong>{atv.nome}</strong>
-                        <span class="card-id">#{atv.id}</span>
-                      </div>
-                      {#if jaAtribuida}
-                        <span class="badge-ja-atribuida">Já atribuída</span>
-                      {/if}
-                    </div>
-
-                    <div class="card-grid-metricas">
-                      <span>
-                        {resumo.totalTarefas}
-                        {resumo.totalTarefas === 1 ? "tarefa" : "tarefas"}
-                      </span>
-                      <span>·</span>
-                      <span>{resumo.totalPontos} pts</span>
-                    </div>
-
-                    {#if resumo.etiquetas.length > 0}
-                      <div class="card-grid-tags">
-                        {#each resumo.etiquetas as tag (tag)}
-                          <span class="tag-item">{tag}</span>
-                        {/each}
-                      </div>
-                    {/if}
-
-                    <div class="card-grid-acoes">
-                      <button
-                        type="button"
-                        class="btn-preview"
-                        onclick={() => (atividadePreview = atv)}
-                      >
-                        Preview
-                      </button>
-                      <button
-                        type="button"
-                        class="btn-selecionar"
-                        class:ativo={selecionada}
-                        onclick={() =>
-                          (atividadeSelecionadaId = selecionada ? null : atv.id)}
-                      >
-                        {selecionada ? "Selecionada ✓" : "Selecionar"}
-                      </button>
-                    </div>
-                  </article>
-                {/each}
-              </div>
-            {/if}
-          </div>
-        {/if}
-      </section>
-    {/if}
+      <form method="POST" action="?/reenviar_convite" bind:this={formReenviar} hidden>
+        <input type="hidden" name="aluno_id" value={idReenviar ?? ""} />
+      </form>
+      <form method="POST" action="?/remover_aluno" bind:this={formRemoverAluno} hidden>
+        <input type="hidden" name="matricula_id" value={idRemoverAluno ?? ""} />
+      </form>
+    </section>
   {/if}
 </section>
+
+<!-- ==================== MODAL: ATRIBUIR ATIVIDADE (2 ETAPAS) ==================== -->
+{#if modalAtribuirAberto && turma}
+  <div
+    class="modal-backdrop"
+    role="presentation"
+    onclick={(e) => {
+      if (e.target === e.currentTarget) fecharModalAtribuir();
+    }}
+  >
+    <div
+      class="modal-janela modal-largo"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-atribuir-titulo"
+    >
+      <div class="modal-cabecalho">
+        <div>
+          <span class="etapa-indicador">Etapa {etapaAtribuir} de 2</span>
+          <h3 id="modal-atribuir-titulo">
+            {etapaAtribuir === 1
+              ? "Selecionar atividade"
+              : "Configurar atribuição"}
+          </h3>
+          <p class="dica">
+            {etapaAtribuir === 1
+              ? "Escolha uma atividade do seu banco para atribuir à turma."
+              : "Defina as datas de início, prazo de entrega e regras de realização."}
+          </p>
+        </div>
+        <button
+          type="button"
+          class="btn-fechar-modal"
+          onclick={fecharModalAtribuir}
+          aria-label="Fechar janela"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div class="modal-corpo">
+        {#if etapaAtribuir === 1}
+          {#if atividades.length === 0}
+            <p class="vazio-card">
+              Nenhuma atividade cadastrada no banco. Crie uma atividade em
+              <a href="/professor/atividades">Banco de atividades</a>.
+            </p>
+          {:else}
+            <div class="busca-atribuir">
+              <input
+                type="search"
+                placeholder="Buscar atividade por nome ou ID..."
+                bind:value={buscaAtividade}
+              />
+            </div>
+
+            <div class="grid-atividades">
+              {#each atividadesFiltradas as atv (atv.id)}
+                {@const resumo = resumirAtividade(atv)}
+                {@const jaAtribuida = idsAtribuidos.has(atv.id)}
+                {@const selecionada = atividadeSelecionadaId === atv.id}
+                <article
+                  class="card-grid-atividade"
+                  class:selecionada
+                  class:ja-atribuida={jaAtribuida}
+                >
+                  <div class="card-grid-topo">
+                    <div class="card-grid-titulo">
+                      <strong>{atv.nome}</strong>
+                      <span class="card-id">#{atv.id}</span>
+                    </div>
+                    {#if jaAtribuida}
+                      <span class="badge-ja-atribuida">Já atribuída</span>
+                    {/if}
+                  </div>
+
+                  <div class="card-grid-metricas">
+                    <span>
+                      {resumo.totalTarefas}
+                      {resumo.totalTarefas === 1 ? "tarefa" : "tarefas"}
+                    </span>
+                    <span>·</span>
+                    <span>{resumo.totalPontos} pts</span>
+                  </div>
+
+                  {#if resumo.etiquetas.length > 0}
+                    <div class="card-grid-tags">
+                      {#each resumo.etiquetas as tag (tag)}
+                        <span class="tag-item">{tag}</span>
+                      {/each}
+                    </div>
+                  {/if}
+
+                  <div class="card-grid-acoes">
+                    <button
+                      type="button"
+                      class="btn-preview"
+                      onclick={() => (atividadePreview = atv)}
+                    >
+                      Preview
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-selecionar"
+                      class:ativo={selecionada}
+                      onclick={() => (atividadeSelecionadaId = atv.id)}
+                    >
+                      {selecionada ? "Selecionada ✓" : "Selecionar"}
+                    </button>
+                  </div>
+                </article>
+              {:else}
+                <p class="vazio-card">Nenhuma atividade encontrada para a busca.</p>
+              {/each}
+            </div>
+          {/if}
+
+          <div class="modal-rodape-acoes">
+            <button type="button" class="peq" onclick={fecharModalAtribuir}>
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="nova btn-primario"
+              disabled={!atividadeSelecionada}
+              onclick={() => (etapaAtribuir = 2)}
+            >
+              Próximo: Configurar →
+            </button>
+          </div>
+        {:else if atividadeSelecionada}
+          <form method="POST" action="?/atribuir" class="form-atribuir">
+            <input
+              type="hidden"
+              name="atividade_id"
+              value={atividadeSelecionada.id}
+            />
+            <div class="selecionada-topo">
+              <div>
+                <span class="rotulo-selecionada">Atividade selecionada</span>
+                <strong>{atividadeSelecionada.nome}</strong>
+              </div>
+              <button
+                type="button"
+                class="btn-texto-sutil"
+                onclick={() => (etapaAtribuir = 1)}
+              >
+                Trocar atividade
+              </button>
+            </div>
+
+            <div class="campos-atribuir-modal">
+              <label class="mini">
+                <span>Início (vazio = agora)</span>
+                <input type="datetime-local" name="inicio" />
+              </label>
+              <label class="mini">
+                <span>Prazo de entrega *</span>
+                <input type="datetime-local" name="prazo" required />
+              </label>
+              <label class="mini">
+                <span>Duração (h)</span>
+                <input
+                  type="number"
+                  name="duracao_horas"
+                  min="0.25"
+                  max="168"
+                  step="0.25"
+                  placeholder="Ex.: 2"
+                />
+              </label>
+              <label class="mini">
+                <span>Autocomplete</span>
+                <select name="autocomplete">
+                  <option value="">Padrão do sistema</option>
+                  <option value="on">Ligado</option>
+                  <option value="off">Desligado</option>
+                </select>
+              </label>
+              <label class="mini linha-check">
+                <input type="checkbox" name="pode_atrasado" />
+                <span>Permitir entrega com atraso</span>
+              </label>
+            </div>
+
+            <div class="modal-rodape-acoes">
+              <button
+                type="button"
+                class="peq"
+                onclick={() => (etapaAtribuir = 1)}
+              >
+                ← Voltar
+              </button>
+              <button type="submit" class="nova btn-primario">
+                Confirmar atribuição
+              </button>
+            </div>
+          </form>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
 
 <!-- ==================== MODAL: ADICIONAR ALUNOS ==================== -->
 {#if modalAlunosAberto && turma}
@@ -1056,13 +1234,6 @@
     font-size: 0.88rem;
   }
 
-  .abas-turma {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    flex-wrap: wrap;
-  }
-
   .aba {
     background: var(--seno-white);
     border: 1px solid var(--seno-gray-300);
@@ -1084,41 +1255,10 @@
     color: var(--seno-blue-900);
   }
 
-  .aba.ativa {
-    background: var(--seno-blue-100);
-    border-color: var(--seno-blue-500);
-    color: var(--seno-blue-900);
-    font-weight: 600;
-  }
-
-  .contador {
-    font-weight: 400;
-    color: var(--seno-gray-500);
-  }
-
   .secao-painel {
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
-  }
-
-  .cabeca-secao {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-  }
-
-  .cabeca-secao h3 {
-    margin: 0;
-  }
-
-  .acoes-secao {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    flex-wrap: wrap;
   }
 
   .btn-texto-sutil {
@@ -1144,49 +1284,6 @@
     font-family: inherit;
   }
 
-  /* Tabela de Alunos */
-  .tabela-wrapper {
-    background: var(--seno-white);
-    border: 1px solid var(--seno-line);
-    border-radius: var(--raio-lg);
-    overflow-x: auto;
-  }
-
-  .tabela {
-    width: 100%;
-    font-size: 0.9rem;
-  }
-
-  .tabela th,
-  .tabela td {
-    text-align: left;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--seno-line);
-  }
-
-  .tabela th {
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--seno-gray-500);
-    background: var(--seno-gray-50);
-  }
-
-  .tabela tbody tr:last-child td {
-    border-bottom: none;
-  }
-
-  .linha-encerrada {
-    background: var(--seno-gray-100);
-    color: var(--seno-gray-500);
-  }
-
-  .email {
-    color: var(--seno-gray-500);
-    font-family: var(--fonte-mono);
-    font-size: 0.83rem;
-  }
-
   .badges-status {
     display: flex;
     align-items: center;
@@ -1202,74 +1299,6 @@
   .estado.vencido {
     background: var(--seno-amber-50);
     color: var(--seno-amber);
-  }
-
-  .acao-cell {
-    text-align: right;
-    white-space: nowrap;
-  }
-
-  .acoes-linha {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-
-  .acoes-linha form {
-    display: contents;
-  }
-
-  .peq.destaque-convite {
-    background: var(--seno-amber-500);
-  }
-
-  .peq.destaque-convite:hover {
-    background: var(--seno-amber);
-  }
-
-  /* Seção Atividades */
-  .bloco-atribuidas,
-  .bloco-banco-atividades {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .lista-atrib {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .lista-atrib li {
-    background: var(--seno-white);
-    border: 1px solid var(--seno-gray-300);
-    border-radius: var(--raio-lg);
-    padding: 0.8rem 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-  }
-
-  .identidade {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-  }
-
-  .acao-area {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-
-  .acao-area form {
-    display: contents;
   }
 
   .vazio-card {
@@ -1308,11 +1337,44 @@
     color: var(--seno-blue-800);
   }
 
-  .campos-atribuir {
+  .campos-atribuir-modal {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 0.85rem;
+    align-items: end;
+  }
+
+  .etapa-indicador {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--seno-blue-700);
+    margin-bottom: 0.2rem;
+  }
+
+  .busca-atribuir {
+    margin-bottom: 0.85rem;
+  }
+
+  .busca-atribuir input {
+    width: 100%;
+  }
+
+  .modal-rodape-acoes {
     display: flex;
-    align-items: flex-end;
-    gap: 0.75rem;
-    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--seno-gray-200);
+  }
+
+  .acoes-cabeca {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   .mini {
