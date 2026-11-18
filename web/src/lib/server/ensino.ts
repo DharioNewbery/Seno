@@ -440,6 +440,7 @@ export interface Atividade {
   nome: string;
   conteudo?: unknown;
   tarefas?: TarefaAtividade[];
+  bloqueada?: boolean;
   created_at?: string;
 }
 
