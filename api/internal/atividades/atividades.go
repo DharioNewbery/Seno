@@ -78,6 +78,7 @@ type Atividade struct {
 	Nome        string          `json:"nome"`
 	Conteudo    json.RawMessage `json:"conteudo"`
 	Tarefas     []DetalheTarefa `json:"tarefas,omitempty"`
+	Bloqueada   bool            `json:"bloqueada"`
 	DeletedAt   *time.Time      `json:"deleted_at,omitempty"`
 	CreatedAt   time.Time       `json:"created_at"`
 }
@@ -125,8 +126,11 @@ func validaConteudo(bruto json.RawMessage) (json.RawMessage, error) {
 	return json.RawMessage(bruto), nil
 }
 
-func validaTarefas(atribuicoes []TarefaAtributo) ([]TarefaAtributo, error) {
+func validaTarefas(atribuicoes []TarefaAtributo, permitirVazia bool) ([]TarefaAtributo, error) {
 	if len(atribuicoes) == 0 {
+		if permitirVazia {
+			return nil, nil
+		}
 		return nil, platform.NewAPIError(
 			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
 			"Atividade sem tarefas.")
@@ -227,7 +231,7 @@ func (s *Service) Criar(ctx context.Context, actor domain.User, cad CadastroAtiv
 	if err != nil {
 		return Atividade{}, err
 	}
-	lista, err := validaTarefas(cad.Tarefas)
+	lista, err := validaTarefas(cad.Tarefas, true)
 	if err != nil {
 		return Atividade{}, err
 	}
@@ -373,9 +377,14 @@ func (s *Service) Ver(ctx context.Context, actor domain.User, id int64) (Ativida
 		}
 		detalhes = append(detalhes, dt)
 	}
+	bloqueada, err := s.bloqueada(ctx, id)
+	if err != nil {
+		return Atividade{}, err
+	}
 	return Atividade{
 		ID: row.ID, ProfessorID: row.ProfessorID, Nome: row.Nome,
 		Conteudo: row.Conteudo, Tarefas: detalhes,
+		Bloqueada: bloqueada,
 		DeletedAt: horaPtr(row.DeletedAt), CreatedAt: horaDe(row.CreatedAt),
 	}, nil
 }
@@ -401,22 +410,35 @@ func (s *Service) Listar(ctx context.Context, actor domain.User, f FiltroAtivida
 		return ListaAtividades{}, err
 	}
 	out := make([]Atividade, 0, len(rows))
+	ids := make([]int64, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, atividadesDeListas(row))
+		ids = append(ids, row.ID)
+	}
+	bloq, err := s.atividadesBloqueadas(ctx, ids)
+	if err != nil {
+		return ListaAtividades{}, err
+	}
+	for i := range out {
+		out[i].Bloqueada = bloq[out[i].ID]
 	}
 	return ListaAtividades{
 		Total: total, Pagina: pagina, Por: por, Atividades: out,
 	}, nil
 }
 
-// Editar muda nome/conteúdo/tarefas; atividade com submissão → 409
-// (futuro: quando Submissões existirem; agora sempre editável se alcançada).
+// Editar muda nome/conteúdo/tarefas; atividade já utilizada e aberta por
+// algum aluno → 409 (duplicar para obter editável).
 func (s *Service) Editar(ctx context.Context, actor domain.User, id int64, cad CadastroAtividade) (Atividade, error) {
 	atual, err := s.Ver(ctx, actor, id)
 	if err != nil {
 		return Atividade{}, err
 	}
-	_ = atual
+	if atual.Bloqueada {
+		return Atividade{}, platform.NewAPIError(
+			http.StatusConflict, platform.CodeConflict,
+			"Esta atividade já foi utilizada e aberta por um aluno. Duplique-a para editar.")
+	}
 	nome, err := namae(cad.Nome)
 	if err != nil {
 		return Atividade{}, err
@@ -425,7 +447,7 @@ func (s *Service) Editar(ctx context.Context, actor domain.User, id int64, cad C
 	if err != nil {
 		return Atividade{}, err
 	}
-	lista, err := validaTarefas(cad.Tarefas)
+	lista, err := validaTarefas(cad.Tarefas, false)
 	if err != nil {
 		return Atividade{}, err
 	}
@@ -501,8 +523,14 @@ func (s *Service) Duplicar(ctx context.Context, actor domain.User, id int64) (At
 // Excluir: apaga definitivamente (sem submissões hoje — hard delete;
 // com submissões, soft delete e visível somente leitura no futuro).
 func (s *Service) Excluir(ctx context.Context, actor domain.User, id int64) error {
-	if _, err := s.Ver(ctx, actor, id); err != nil {
+	atual, err := s.Ver(ctx, actor, id)
+	if err != nil {
 		return err
+	}
+	if atual.Bloqueada {
+		return platform.NewAPIError(
+			http.StatusConflict, platform.CodeConflict,
+			"Esta atividade já foi utilizada e aberta por um aluno e não pode ser excluída.")
 	}
 	rows, err := s.store.Q.DeleteAtividade(ctx, id)
 	if err != nil {
@@ -520,6 +548,49 @@ func (s *Service) Excluir(ctx context.Context, actor domain.User, id int64) erro
 }
 
 // helpers -----------------------------------------------------------
+
+// bloqueada indica se a atividade já foi atribuída e aberta/entregue por algum aluno.
+func (s *Service) bloqueada(ctx context.Context, id int64) (bool, error) {
+	m, err := s.atividadesBloqueadas(ctx, []int64{id})
+	if err != nil {
+		return false, err
+	}
+	return m[id], nil
+}
+
+// atividadesBloqueadas consulta em lote quais atividades já foram atribuídas e
+// abertas ou entregues por algum aluno (tentativas, submissoes ou monitor_estado_aluno).
+func (s *Service) atividadesBloqueadas(ctx context.Context, ids []int64) (map[int64]bool, error) {
+	res := make(map[int64]bool, len(ids))
+	if len(ids) == 0 {
+		return res, nil
+	}
+	rows, err := s.store.Pool.Query(ctx, `
+		SELECT DISTINCT a.atividade_id
+		FROM atribuicoes a
+		WHERE a.atividade_id = ANY($1)
+		  AND (
+		      EXISTS (SELECT 1 FROM tentativas t WHERE t.atribuicao_id = a.id)
+		      OR EXISTS (SELECT 1 FROM submissoes sub WHERE sub.atribuicao_id = a.id)
+		      OR EXISTS (
+		          SELECT 1 FROM monitor_estado_aluno m
+		          WHERE m.atribuicao_id = a.id
+		            AND (m.estado IN ('aberta', 'entregue') OR m.iniciada_em IS NOT NULL OR m.entregue_em IS NOT NULL)
+		      )
+		  )`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		res[id] = true
+	}
+	return res, rows.Err()
+}
 
 func paginaPadrao(pagina, por *int) (int, int) {
 	p, n := 1, 50

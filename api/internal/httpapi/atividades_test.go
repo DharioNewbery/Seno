@@ -65,8 +65,8 @@ func TestAtividades(t *testing.T) {
 	w, _ = chama(t, r, "POST", "/v1/atividades",
 		`{"nome":"vazia","conteudo":{"schema_version":1},"tarefas":[]}`,
 		autenticado(tokCarla))
-	if w.Code != http.StatusUnprocessableEntity {
-		t.Errorf("atividade sem tarefas: %d", w.Code)
+	if w.Code != http.StatusCreated {
+		t.Errorf("atividade vazia criada: %d", w.Code)
 	}
 
 	// Escopo: Hugo não vê a de Carla; lista própria vazia; staff vê tudo.
