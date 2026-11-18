@@ -64,10 +64,6 @@ export const PORTAIS: Record<PortalId, PortalDef> = {
         rotulo: "Banco de atividades",
         href: "/professor/atividades",
         descricao: "Conjuntos de tarefas para atribuir às turmas.",
-        sub: [
-          { rotulo: "Listar atividades", href: "/professor/atividades" },
-          { rotulo: "Criar atividade", href: "/professor/atividades/nova" },
-        ],
       },
     ],
   },

@@ -1,9 +1,11 @@
 ﻿import {
+  criarAtividade,
   duplicarAtividade,
   excluirAtividade,
   listaDeAtividades,
   listarAtividades,
   mensagemDaApi,
+  montarConteudo,
 } from "#lib/server/ensino";
 import { fail, redirect, type Actions } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
@@ -27,6 +29,29 @@ export const load: PageServerLoad = async ({ locals, cookies, request }) => {
 };
 
 export const actions: Actions = {
+  criar: async (evento) => {
+    const token = tokenDaSessao(evento.cookies);
+    if (!token) return fail(401, { erroCriar: "Sessão encerrada." });
+    const form = await evento.request.formData();
+    const nome = String(form.get("nome") ?? "").trim();
+    if (!nome) {
+      return fail(422, { erroCriar: "Informe o nome da atividade.", nomeCriar: "" });
+    }
+    const r = await criarAtividade(evento.request, token, {
+      nome,
+      conteudo: montarConteudo(nome, []),
+      tarefas: [],
+    });
+    if (r.status === 401) redirect(303, "/");
+    if (r.ok) {
+      const novaId = (r.body as { id?: number } | null)?.id;
+      redirect(303, `/professor/atividades/${novaId}`);
+    }
+    return fail(r.status || 500, {
+      erroCriar: mensagemDaApi(r.body, "Não foi possível criar a atividade."),
+      nomeCriar: nome,
+    });
+  },
   excluir: async (evento) => {
     const token = tokenDaSessao(evento.cookies);
     if (!token) return fail(401, { erro: "SessÃ£o encerrada." });
