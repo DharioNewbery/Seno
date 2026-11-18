@@ -61,23 +61,27 @@ func (d *Dependencies) CriarAtribuicao(c *gin.Context) {
 			slog.Error("atribuicao: rollback após falha no Monitor", "atribuicao", atribuicao.ID, "err", delErr)
 		}
 		slog.Error("atribuicao: falha ao disponibilizar no Monitor", "atribuicao", atribuicao.ID, "err", err)
-		switch {
-		case errors.Is(err, monitor.ErrSemAlunos):
-			platform.ErrorBody(c, platform.NewAPIError(
-				http.StatusUnprocessableEntity, platform.CodeUnprocessable,
-				"A turma precisa ter pelo menos um aluno ativo para atribuir a atividade."))
-		case errors.Is(err, monitor.ErrSemTarefas):
-			platform.ErrorBody(c, platform.NewAPIError(
-				http.StatusUnprocessableEntity, platform.CodeUnprocessable,
-				"A atividade precisa ter pelo menos uma tarefa para ser atribuída."))
-		default:
-			platform.ErrorBody(c, platform.NewAPIError(
-				http.StatusServiceUnavailable, platform.CodeServiceUnavailable,
-				"Não foi possível disponibilizar a atividade no Monitor. Tente novamente."))
-		}
+		erroTransferenciaMonitor(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, atribuicao)
+}
+
+func erroTransferenciaMonitor(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, monitor.ErrSemAlunos):
+		platform.ErrorBody(c, platform.NewAPIError(
+			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+			"A turma precisa ter pelo menos um aluno ativo para atribuir a atividade."))
+	case errors.Is(err, monitor.ErrSemTarefas):
+		platform.ErrorBody(c, platform.NewAPIError(
+			http.StatusUnprocessableEntity, platform.CodeUnprocessable,
+			"A atividade precisa ter pelo menos uma tarefa para ser atribuída."))
+	default:
+		platform.ErrorBody(c, platform.NewAPIError(
+			http.StatusServiceUnavailable, platform.CodeServiceUnavailable,
+			"Não foi possível disponibilizar a atividade no Monitor. Tente novamente."))
+	}
 }
 
 // VerAtribuicao: GET /v1/atribuicoes/:id — 404 fora do escopo.
@@ -106,9 +110,26 @@ func (d *Dependencies) EditarAtribuicao(c *gin.Context) {
 	if !bindJSON(c, &cad) {
 		return
 	}
+	antes, errAntes := d.AtribuicaoS.Ver(c.Request.Context(), user, id)
 	atribuicao, err := d.AtribuicaoS.Editar(c.Request.Context(), user, id, cad)
 	if err != nil {
 		platform.ErrorBody(c, err)
+		return
+	}
+	if err := d.Monitor.Transferir(c.Request.Context(), atribuicao.ID); err != nil {
+		if errAntes == nil {
+			if _, revErr := d.AtribuicaoS.Editar(c.Request.Context(), user, id, atribuicoes.CadastroAtribuicao{
+				Autocomplete: &antes.Autocomplete,
+				Inicio:       antes.Inicio,
+				Prazo:        antes.Prazo,
+				DuracaoSeg:   antes.DuracaoSeg,
+				PodeAtrasado: &antes.PodeAtrasado,
+			}); revErr != nil {
+				slog.Error("atribuicao: rollback de edição após falha no Monitor", "atribuicao", id, "err", revErr)
+			}
+		}
+		slog.Error("atribuicao: falha ao atualizar no Monitor", "atribuicao", atribuicao.ID, "err", err)
+		erroTransferenciaMonitor(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, atribuicao)
