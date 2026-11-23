@@ -15,7 +15,7 @@ function para(location: string): Response {
 export const GET: RequestHandler = async (event) => {
   const { params, cookies, request } = event;
   const token = tokenDaSessao(cookies);
-  if (!token) return para("/login");
+  if (!token) return para("/");
 
   const editor = `/aluno/atividade/${params.id}`; // editor atual (fallback)
   try {

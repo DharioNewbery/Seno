@@ -168,6 +168,9 @@ function linkExterno(caminho) {
   if (WEB) {
     return WEB.replace(/\/$/, '') + (s.startsWith('/') ? '' : '/') + s;
   }
+  if (s.startsWith('/')) {
+    return s;
+  }
   return null;
 }
 

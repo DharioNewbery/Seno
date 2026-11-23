@@ -21,7 +21,23 @@ export async function apiFetch(
   init: ApiInit = {},
 ): Promise<Response> {
   const headers = new Headers(init.headers);
-  headers.set("Origin", process.env.SENO_WEB_ORIGIN ?? "http://localhost:5173");
+  const origin =
+    process.env.SENO_WEB_ORIGIN?.trim().replace(/\/+$/, "") ||
+    new URL(request.url).origin;
+  headers.set("Origin", origin);
+
+  for (const h of [
+    "x-forwarded-for",
+    "x-forwarded-proto",
+    "x-forwarded-host",
+    "user-agent",
+  ]) {
+    if (!headers.has(h)) {
+      const val = request.headers.get(h);
+      if (val) headers.set(h, val);
+    }
+  }
+
   const cookie = request.headers.get("cookie");
   if (cookie) headers.set("Cookie", cookie);
 
