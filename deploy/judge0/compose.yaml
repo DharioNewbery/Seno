@@ -21,8 +21,8 @@ services:
     volumes:
       - ./judge0.conf:/judge0.conf:ro
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    ports:
-      - "2358:2358"
+    expose:
+      - "2358"
     privileged: true # isolate precisa (sandbox interno)
     depends_on:
       - db

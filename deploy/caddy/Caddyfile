@@ -1,16 +1,21 @@
 # Caddyfile — proxy reverso e terminação TLS para o Seno (ARQUITETURA §8.4).
-# Certificado real da UFPA montado em /etc/caddy/certs/fullchain.pem e privkey.pem.
+# Suporta acesso dinâmico por qualquer domínio, IP ou porta, além de múltiplas
+# camadas de proxy reverso externas (via trusted_proxies e X-Forwarded-*).
 
 {
-	email seno@ufpa.br
+	auto_https off
+	servers {
+		trusted_proxies static {$SENO_TRUSTED_PROXIES:private_ranges}
+	}
 }
 
-{$SENO_DOMAIN:seno.ufpa.br} {
-	tls /etc/caddy/certs/fullchain.pem /etc/caddy/certs/privkey.pem
+(seno_routes) {
 	encode zstd gzip
 
-	# Realização e prova no Monitor:
+	# Realização e prova no Monitor (bloqueia rotas internas /interna/*):
 	handle_path /monitor* {
+		@interna path /interna/*
+		respond @interna 404
 		reverse_proxy monitor:8081
 	}
 
@@ -25,5 +30,24 @@
 	# Portal e BFF do Seno (SvelteKit):
 	handle {
 		reverse_proxy web:3000
+	}
+}
+
+:443 {
+	tls /etc/caddy/certs/fullchain.pem /etc/caddy/certs/privkey.pem
+	import seno_routes
+}
+
+:80 {
+	# Quando atrás de proxy externo que já terminou TLS (X-Forwarded-Proto: https),
+	# atende diretamente sem causar loop de redirecionamento.
+	@via_https_proxy header_regexp xfp X-Forwarded-Proto ^(?i)https(\s*,|$)
+	handle @via_https_proxy {
+		import seno_routes
+	}
+
+	# Acesso HTTP direto: redireciona para HTTPS na porta pública configurada.
+	handle {
+		redir https://{http.request.host}{$SENO_HTTPS_PORT_SUFFIX}{uri} 308
 	}
 }

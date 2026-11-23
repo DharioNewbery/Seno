@@ -1,0 +1,37 @@
+# Caddyfile.http — proxy reverso HTTP puro para o Seno (uso atrás de proxy
+# reverso externo que já realiza terminação TLS, ou ambiente sem certificado).
+
+{
+	auto_https off
+	servers {
+		trusted_proxies static {$SENO_TRUSTED_PROXIES:private_ranges}
+	}
+}
+
+(seno_routes) {
+	encode zstd gzip
+
+	# Realização e prova no Monitor (bloqueia rotas internas /interna/*):
+	handle_path /monitor* {
+		@interna path /interna/*
+		respond @interna 404
+		reverse_proxy monitor:8081
+	}
+
+	handle /a/* {
+		reverse_proxy monitor:8081
+	}
+
+	handle /entrar* {
+		reverse_proxy monitor:8081
+	}
+
+	# Portal e BFF do Seno (SvelteKit):
+	handle {
+		reverse_proxy web:3000
+	}
+}
+
+:80 {
+	import seno_routes
+}

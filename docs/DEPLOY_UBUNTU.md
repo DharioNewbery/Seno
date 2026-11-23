@@ -1,6 +1,29 @@
-# Manual Completo de Deploy no Ubuntu Linux (Rede Local)
+# Manual Completo de Deploy no Ubuntu Linux (Rede Local e Produção)
 
-Este manual descreve, passo a passo, tudo o que é necessário instalar, configurar e ajustar para colocar o **Seno** em funcionamento em um servidor **Ubuntu Linux** (22.04 LTS ou 24.04 LTS) acessível na **rede local** (LAN / rede acadêmica).
+Este manual descreve como colocar o **Seno** em funcionamento em um servidor **Ubuntu Linux** (22.04 LTS ou 24.04 LTS) usando o script automatizado de produção ou a configuração manual passo a passo.
+
+---
+
+## Deploy Rápido em 1 Comando (Recomendado)
+
+Com o **Docker Engine**, **Docker Compose v2**, **OpenSSL** e **curl** instalados no Linux:
+
+```bash
+git clone https://github.com/DharioNewbery/Seno.git
+cd Seno
+./deploy/deploy.sh
+```
+
+O script [`deploy/deploy.sh`](../deploy/deploy.sh) realiza automaticamente:
+1. Geração das chaves secretas fortes (`POSTGRES_PASSWORD`, `SENO_MONITOR_SECRET`, chaves do Judge0 e `deploy/judge0/judge0.conf`).
+2. Verificação de certificado SSL em `deploy/caddy/certs/` — caso não exista, oferece gerar um certificado autoassinado (com SAN dinâmico para o IP/domínio da máquina) ou copiar seus arquivos `.pem`.
+3. Perguntas simplificadas no terminal apenas para o que ainda não estiver configurado em `deploy/.env` (controlado pela flag `SENO_DEPLOY_CONFIGURED=true`).
+4. Build e subida da stack inteira atrás do Caddy em um único endereço público, com suporte a portas customizadas e múltiplas camadas de proxy reverso.
+
+Opções úteis:
+- `./deploy/deploy.sh --reconfigure`: reexibe o assistente de configuração mantendo as chaves secretas.
+- `./deploy/deploy.sh --ghcr`: puxa as imagens pré-compiladas do GHCR em vez de compilar localmente.
+- `./deploy/deploy.sh --rotate-secrets`: regenera todas as chaves secretas.
 
 ---
 
@@ -222,8 +245,8 @@ docker compose -f deploy/compose.yaml --env-file deploy/.env exec postgres \
 
 ### 7.2 Construir e subir toda a stack
 
-> [!IMPORTANT]
-> O frontend (`web`) grava `SENO_SITE_ORIGIN` no momento do build ([`web/config/vite.config.ts`](../web/config/vite.config.ts#L10)) para validação de CSRF. Sempre que `SENO_WEB_ORIGIN` for diferente de `https://seno.ufpa.br` (como no caso de um IP da rede local), utilize o build local (`--build`):
+> [!NOTE]
+> O frontend (`web`) resolve a origem dinamicamente por requisição em produção (`PROTOCOL_HEADER` / `HOST_HEADER`), funcionando com qualquer domínio, IP, porta ou camada de proxy reverso sem precisar recompilar a imagem.
 
 ```bash
 docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --build
