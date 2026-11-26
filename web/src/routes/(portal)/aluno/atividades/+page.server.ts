@@ -1,9 +1,8 @@
+import { atribuicoesMockAluno } from "#lib/atividades-aluno";
 import {
   listarMinhasAtribuicoes,
-  listarMinhasTurmas,
   mensagemDaApi,
   type AtribuicaoDoAluno,
-  type TurmaDoAluno,
 } from "#lib/server/ensino";
 import { redirect } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
@@ -16,31 +15,28 @@ export const load: PageServerLoad = async ({
   url,
 }) => {
   if (!locals.usuario) redirect(303, "/");
+
+  if (url.searchParams.has("mock")) {
+    return {
+      atribuicoes: atribuicoesMockAluno(),
+      erro: null,
+    };
+  }
+
   const token = tokenDaSessao(cookies);
-  const turmaParam = Number(url.searchParams.get("turma_id")) || undefined;
-  const paginaParam = Math.max(1, Number(url.searchParams.get("pagina")) || 1);
   try {
-    const [ra, rt] = await Promise.all([
-      listarMinhasAtribuicoes(request, token, turmaParam),
-      listarMinhasTurmas(request, token),
-    ]);
-    if (ra.status === 401 || rt.status === 401) redirect(303, "/");
+    const ra = await listarMinhasAtribuicoes(request, token);
+    if (ra.status === 401) redirect(303, "/");
     if (ra.status === 403) redirect(303, "/");
     return {
       atribuicoes:
         (ra.body as { atribuicoes?: AtribuicaoDoAluno[] } | null)
           ?.atribuicoes ?? [],
-      turmas: (rt.body as { turmas?: TurmaDoAluno[] } | null)?.turmas ?? [],
-      filtroTurma: turmaParam,
-      pagina: paginaParam,
       erro: ra.ok ? null : mensagemDaApi(ra.body),
     };
   } catch {
     return {
       atribuicoes: [],
-      turmas: [],
-      filtroTurma: turmaParam,
-      pagina: paginaParam,
       erro: "Sem comunicação com a API.",
     };
   }
