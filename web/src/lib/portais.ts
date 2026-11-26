@@ -31,12 +31,6 @@ export const PORTAIS: Record<PortalId, PortalDef> = {
     titulo: "Portal do Aluno",
     descricao: "Suas turmas, atividades e correções em um só lugar.",
     nav: [
-      { rotulo: "Início", href: "/aluno" },
-      {
-        rotulo: "Minhas turmas",
-        href: "/aluno/turmas",
-        descricao: "Suas turmas, com colegas e atividades de cada uma.",
-      },
       {
         rotulo: "Atividades",
         href: "/aluno/atividades",
