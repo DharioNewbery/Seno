@@ -709,9 +709,11 @@ export interface AtribuicaoDoAluno {
   duracao_seg?: number;
   pode_atrasado: boolean;
   materia_codigo: string;
+  materia_nome?: string;
   turma_titulo?: string;
   turma_ativa: boolean;
   atividade_nome: string;
+  pontuacao_maxima?: number;
   em_andamento: boolean;
   iniciada_em?: string;
   minha_revisao?: number;
