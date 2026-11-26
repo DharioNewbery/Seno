@@ -1,20 +1,15 @@
 <script lang="ts">
-  // Template único dos portais: barra lateral com navegação (grupos com
-  // subopções) e cartão do usuário. Em telas estreitas a barra vira uma
-  // gaveta aberta por um botão no topo.
+  // Template único dos portais: barra superior limpa (sem fundo azul) com logo,
+  // navegação centralizada (incluindo dropdowns de subitens) e perfil à direita
+  // em coluna central única. Em telas estreitas, a navegação abre em gaveta.
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import type { Snippet } from "svelte";
 
   import Logo from "./Logo.svelte";
-  import NavIcon from "./NavIcon.svelte";
-  import { NOME_SISTEMA } from "#lib/config";
-  import { iconeDoItem, type NavItem, type PortalDef } from "#lib/portais";
-  import {
-    portaisDisponiveis,
-    ROTULO_CARGO,
-    type Usuario,
-  } from "#lib/tipos";
+  import { iniciaisUsuario } from "#lib/atividades-aluno";
+  import type { NavItem, PortalDef } from "#lib/portais";
+  import { portaisDisponiveis, type Usuario } from "#lib/tipos";
 
   let {
     portal,
@@ -25,17 +20,19 @@
   const rota = $derived(page.url.pathname);
   const outros = $derived(portaisDisponiveis(usuario.roles));
   const podeTrocar = $derived(outros.length > 1);
-  const raiz = $derived(`/${portal.id}`);
+  const raiz = $derived(portal.nav[0]?.href ?? `/${portal.id}`);
+  const sigla = $derived(iniciaisUsuario(usuario.first_name, usuario.last_name));
 
   /** Itens de navegação visíveis (filtro de super admin aplicado). */
   const nav = $derived(
     portal.nav.filter((item) => !item.soSuper || usuario.roles.includes("super")),
   );
 
-  // Grupos: abertos por padrão quando a rota atual está dentro deles; o clique
-  // do usuário sempre prevalece sobre esse padrão.
-  let abertos = $state<Record<string, boolean>>({});
-  let menuAberto = $state(false);
+  let subAberto = $state<string | null>(null);
+  let perfilAberto = $state(false);
+  let menuMovelAberto = $state(false);
+  let navRef = $state<HTMLElement | null>(null);
+  let perfilRef = $state<HTMLDivElement | null>(null);
 
   function dentro(href: string): boolean {
     return rota === href || rota.startsWith(`${href}/`);
@@ -49,137 +46,218 @@
   }
 
   function ativo(item: NavItem): boolean {
-    if (item.href === raiz) return rota === raiz;
+    if (item.href === `/${portal.id}`) return rota === `/${portal.id}`;
     return dentro(item.href) || subAtivo(item) !== undefined;
   }
 
-  function aberto(item: NavItem): boolean {
-    return abertos[item.rotulo] ?? ativo(item);
-  }
-
-  function alternar(item: NavItem) {
-    abertos = { ...abertos, [item.rotulo]: !aberto(item) };
-  }
-
-  // Ao navegar, a gaveta (mobile) se fecha.
   $effect(() => {
     void rota;
-    menuAberto = false;
+    subAberto = null;
+    perfilAberto = false;
+    menuMovelAberto = false;
   });
 
+  function aoClicarFora(e: Event) {
+    const alvo = e.target as Parameters<HTMLDivElement["contains"]>[0];
+    if (perfilAberto && perfilRef && alvo && !perfilRef.contains(alvo)) {
+      perfilAberto = false;
+    }
+    if (subAberto && navRef && alvo && !navRef.contains(alvo)) {
+      subAberto = null;
+    }
+  }
+
+  function aoTecla(e: { key: string }) {
+    if (e.key === "Escape") {
+      subAberto = null;
+      perfilAberto = false;
+      menuMovelAberto = false;
+    }
+  }
+
   async function sair() {
+    perfilAberto = false;
     await fetch("/api/logout", { method: "POST" });
     await goto("/");
   }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === "Escape" && (menuAberto = false)} />
+<svelte:window onclick={aoClicarFora} onkeydown={aoTecla} />
 
 <a class="pular" href="#conteudo">Ir para o conteúdo</a>
 
-<div class="portal" class:menu-aberto={menuAberto}>
-  <header class="topo-movel">
-    <button
-      class="hamburguer"
-      onclick={() => (menuAberto = !menuAberto)}
-      aria-label={menuAberto ? "Fechar menu" : "Abrir menu"}
-      aria-expanded={menuAberto}
-      aria-controls="menu-lateral"
-    >
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-      </svg>
-    </button>
-    <a class="marca-movel" href={raiz}>
-      <Logo tamanho={26} />
-      <span>{NOME_SISTEMA}</span>
-    </a>
-    <span class="portal-movel">{portal.titulo}</span>
-  </header>
+<div class="portal-shell">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-esq">
+        <button
+          type="button"
+          class="hamburguer"
+          onclick={() => (menuMovelAberto = !menuMovelAberto)}
+          aria-label={menuMovelAberto ? "Fechar menu" : "Abrir menu"}
+          aria-expanded={menuMovelAberto}
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M4 7h16M4 12h16M4 17h16"
+              stroke="currentColor"
+              stroke-width="1.9"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
 
-  <button
-    class="veu"
-    tabindex="-1"
-    aria-label="Fechar menu"
-    onclick={() => (menuAberto = false)}
-  ></button>
+        <a class="marca" href={raiz} aria-label={portal.titulo}>
+          <Logo tamanho={32} />
+        </a>
+      </div>
 
-  <aside class="barra" id="menu-lateral">
-    <a class="marca" href={raiz} title={`Início de ${portal.titulo}`}>
-      <Logo tamanho={32} />
-      <span class="textos">
-        <span class="nome">{NOME_SISTEMA}</span>
-        <span class="portal-nome">{portal.titulo}</span>
-      </span>
-    </a>
-
-    <nav aria-label={`Navegação do ${portal.titulo}`}>
-      <ul>
+      <nav
+        class="topbar-nav"
+        bind:this={navRef}
+        aria-label={`Navegação do ${portal.titulo}`}
+      >
         {#each nav as item (item.rotulo)}
-          {@const icone = iconeDoItem(portal.id, item.href)}
           {@const atual = ativo(item)}
-          <li>
-            {#if item.sub}
+          {#if item.sub}
+            {@const aberto = subAberto === item.rotulo}
+            {@const subAtual = subAtivo(item)}
+            <div class="nav-grupo">
               <button
+                type="button"
+                class="nav-btn"
                 class:ativo={atual}
-                class:aberto={aberto(item)}
-                onclick={() => alternar(item)}
-                aria-expanded={aberto(item)}
-                aria-controls={`sub-${icone}`}
+                aria-expanded={aberto}
+                onclick={() => (subAberto = aberto ? null : item.rotulo)}
               >
-                <NavIcon nome={icone} />
-                <span class="rotulo">{item.rotulo}</span>
-                <svg class="seta" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-                  <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" />
+                <span>{item.rotulo}</span>
+                <svg
+                  class="seta"
+                  class:girada={aberto}
+                  width="12"
+                  height="12"
+                  viewBox="0 0 12 12"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.5 4.5l3.5 3.5 3.5-3.5"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    fill="none"
+                    stroke-linecap="round"
+                  />
                 </svg>
               </button>
-              {#if aberto(item)}
-                {@const subAtual = subAtivo(item)}
-                <ul class="sub" id={`sub-${icone}`}>
+
+              {#if aberto}
+                <div class="balao nav-dropdown" role="menu">
                   {#each item.sub as subitem (subitem.href)}
-                    <li>
-                      <a
-                        href={subitem.href}
-                        class:ativo={subitem.href === subAtual}
-                        aria-current={subitem.href === subAtual ? "page" : undefined}
-                      >
-                        {subitem.rotulo}
-                      </a>
-                    </li>
+                    <a
+                      href={subitem.href}
+                      class="balao-item"
+                      class:ativo-sub={subitem.href === subAtual}
+                      role="menuitem"
+                      aria-current={subitem.href === subAtual ? "page" : undefined}
+                    >
+                      {subitem.rotulo}
+                    </a>
                   {/each}
-                </ul>
+                </div>
               {/if}
+            </div>
+          {:else}
+            <a
+              href={item.href}
+              class="nav-btn"
+              class:ativo={atual}
+              aria-current={atual ? "page" : undefined}
+            >
+              {item.rotulo}
+            </a>
+          {/if}
+        {/each}
+      </nav>
+
+      <div class="topbar-dir" bind:this={perfilRef}>
+        <button
+          type="button"
+          class="perfil-btn"
+          aria-expanded={perfilAberto}
+          aria-haspopup="menu"
+          onclick={() => (perfilAberto = !perfilAberto)}
+        >
+          <span class="avatar" aria-hidden="true">{sigla}</span>
+          <span class="primeiro-nome">{usuario.first_name}</span>
+        </button>
+
+        {#if perfilAberto}
+          <div class="balao balao-perfil" role="menu">
+            {#if podeTrocar}
+              <a class="balao-item" role="menuitem" href="/portais">
+                Trocar portal
+              </a>
+            {/if}
+            <button
+              type="button"
+              class="balao-item sair"
+              role="menuitem"
+              onclick={sair}
+            >
+              Sair
+            </button>
+          </div>
+        {/if}
+      </div>
+    </div>
+
+    {#if menuMovelAberto}
+      <nav
+        class="menu-movel"
+        aria-label={`Navegação móvel do ${portal.titulo}`}
+      >
+        <div class="menu-movel-inner">
+          {#each nav as item (item.rotulo)}
+            {@const atual = ativo(item)}
+            {#if item.sub}
+              {@const subAtual = subAtivo(item)}
+              <div class="movel-grupo">
+                <span class="movel-titulo" class:ativo={atual}>
+                  {item.rotulo}
+                </span>
+                <div class="movel-sub">
+                  {#each item.sub as subitem (subitem.href)}
+                    <a
+                      href={subitem.href}
+                      class="movel-link"
+                      class:ativo={subitem.href === subAtual}
+                      aria-current={subitem.href === subAtual ? "page" : undefined}
+                    >
+                      {subitem.rotulo}
+                    </a>
+                  {/each}
+                </div>
+              </div>
             {:else}
               <a
                 href={item.href}
+                class="movel-link"
                 class:ativo={atual}
                 aria-current={atual ? "page" : undefined}
               >
-                <NavIcon nome={icone} />
-                <span class="rotulo">{item.rotulo}</span>
+                {item.rotulo}
               </a>
             {/if}
-          </li>
-        {/each}
-      </ul>
-    </nav>
-
-    <div class="rodape-barra">
-      <div class="usuario" title={usuario.email}>
-        <span class="avatar" aria-hidden="true">{usuario.first_name.charAt(0).toUpperCase()}</span>
-        <span class="quem">
-          <strong>{usuario.first_name} {usuario.last_name}</strong>
-          <small>{usuario.roles.map((c) => ROTULO_CARGO[c]).join(", ")}</small>
-        </span>
-      </div>
-      <div class="acoes">
-        {#if podeTrocar}
-          <a class="acao" href="/portais" title="Voltar ao seletor de portal">Trocar portal</a>
-        {/if}
-        <button class="acao" onclick={sair} title="Encerrar sessão">Sair</button>
-      </div>
-    </div>
-  </aside>
+          {/each}
+        </div>
+      </nav>
+    {/if}
+  </header>
 
   <main class="corpo" id="conteudo" tabindex="-1">
     <div class="pagina">
@@ -196,7 +274,7 @@
     z-index: 100;
     padding: 0.5rem 0.9rem;
     background: var(--seno-white);
-    color: var(--seno-blue-900);
+    color: var(--seno-gray-900);
     border-radius: var(--raio-md);
     box-shadow: var(--sombra-flutuante);
     transform: translateY(-200%);
@@ -206,227 +284,302 @@
     transform: none;
   }
 
-  .portal {
-    display: grid;
-    grid-template-columns: 16.5rem minmax(0, 1fr);
-    height: 100vh;
-    height: 100dvh;
-    background: var(--seno-bg);
-  }
-
-  /* ---- Barra lateral ---- */
-  .barra {
+  .portal-shell {
+    min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
-    min-height: 0;
-    background: var(--seno-blue-950);
-    color: var(--seno-blue-200);
+    background: var(--seno-bg);
+    overflow-x: clip;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--seno-white);
+    border-bottom: 1px solid var(--seno-line);
+  }
+
+  .topbar-inner {
+    width: 100%;
+    max-width: var(--seno-largura-conteudo);
+    margin: 0 auto;
+    padding: 0.75rem 2rem;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .topbar-esq {
+    justify-self: start;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .hamburguer {
+    display: none;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    background: transparent;
+    border: none;
+    border-radius: var(--raio-md);
+    color: var(--seno-gray-700);
+    cursor: pointer;
+  }
+
+  .hamburguer:hover {
+    background: var(--seno-gray-100);
+    color: var(--seno-gray-900);
   }
 
   .marca {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 0.7rem;
-    padding: 1.15rem 1.1rem 1rem;
+    border-radius: var(--raio-md);
     text-decoration: none;
   }
 
-  .textos {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.2;
-  }
-
-  .nome {
-    color: var(--seno-white);
-    font-weight: 600;
-    font-size: 1.15rem;
-    letter-spacing: -0.01em;
-  }
-
-  .portal-nome {
-    color: var(--seno-blue-300);
-    font-size: 0.78rem;
-  }
-
-  nav {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 0.35rem 0.75rem 1rem;
-  }
-
-  nav ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-  }
-
-  nav a,
-  nav button {
-    position: relative;
-    width: 100%;
+  /* ---- Navegação centralizada ---- */
+  .topbar-nav {
+    justify-self: center;
     display: flex;
     align-items: center;
-    gap: 0.7rem;
-    background: none;
+    gap: 0.35rem;
+  }
+
+  .nav-grupo {
+    position: relative;
+  }
+
+  .nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.9rem;
     border: none;
-    color: var(--seno-blue-200);
-    text-align: left;
+    border-radius: var(--raio-pill);
+    background: transparent;
     text-decoration: none;
     font: inherit;
-    font-size: 0.93rem;
+    font-size: 0.95rem;
     font-weight: 500;
-    padding: 0.55rem 0.7rem;
-    border-radius: var(--raio-md);
+    color: var(--seno-gray-700);
+    white-space: nowrap;
     cursor: pointer;
-    transition:
-      background-color 0.12s,
-      color 0.12s;
+    transition: color 0.14s ease;
   }
 
-  nav a:hover,
-  nav button:hover {
-    background: rgb(255 255 255 / 0.07);
-    color: var(--seno-white);
+  .nav-btn:hover {
+    background: transparent;
+    color: var(--seno-blue-800);
   }
 
-  nav a.ativo,
-  nav button.ativo {
-    background: rgb(255 255 255 / 0.12);
-    color: var(--seno-white);
-  }
-
-  nav :global(svg:first-child) {
-    flex: none;
-    opacity: 0.85;
-  }
-
-  .rotulo {
-    flex: 1;
-    min-width: 0;
+  .nav-btn.ativo {
+    background: transparent;
+    color: var(--seno-primary);
+    font-weight: 600;
   }
 
   .seta {
-    flex: none;
-    transition: transform 0.15s;
+    transition: transform 0.16s ease;
   }
 
-  button.aberto .seta {
+  .seta.girada {
     transform: rotate(180deg);
   }
 
-  /* Subitens: uma linha-guia à esquerda; o item atual a sobrepõe. */
-  nav .sub {
-    margin: 0.15rem 0 0.35rem 1.4rem;
-    padding-left: 0.7rem;
-    gap: 0;
-    border-left: 1px solid rgb(255 255 255 / 0.16);
+  /* ---- Perfil à direita ---- */
+  .topbar-dir {
+    justify-self: end;
+    position: relative;
   }
 
-  .sub a {
-    padding: 0.4rem 0.65rem;
-    font-size: 0.88rem;
-    font-weight: 400;
-  }
-
-  .sub a.ativo {
-    background: none;
-    font-weight: 600;
-  }
-
-  .sub a.ativo::before {
-    content: "";
-    position: absolute;
-    left: calc(-0.7rem - 1px);
-    top: 0.3rem;
-    bottom: 0.3rem;
-    width: 2px;
-    border-radius: 2px;
-    background: var(--seno-blue-300);
-  }
-
-  /* ---- Rodapé da barra: usuário, ações, versão ---- */
-  .rodape-barra {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding: 0.9rem 1rem 1rem;
-    border-top: 1px solid rgb(255 255 255 / 0.1);
-  }
-
-  .usuario {
-    display: flex;
+  .perfil-btn {
+    display: inline-flex;
     align-items: center;
-    gap: 0.65rem;
-    min-width: 0;
+    gap: 0.55rem;
+    padding: 0.3rem 0.65rem 0.3rem 0.35rem;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--raio-pill);
+    color: var(--seno-gray-900);
+    font: inherit;
+    font-size: 0.92rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      background-color 0.14s ease,
+      border-color 0.14s ease;
+  }
+
+  .perfil-btn:hover,
+  .perfil-btn[aria-expanded="true"] {
+    background: var(--seno-gray-100);
+    border-color: var(--seno-line);
   }
 
   .avatar {
-    flex: none;
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 2rem;
+    height: 2rem;
     display: grid;
     place-items: center;
     border-radius: 50%;
-    background: var(--seno-blue-600);
-    color: var(--seno-white);
+    background: var(--seno-blue-100);
+    color: var(--seno-blue-700);
+    font-size: 0.78rem;
     font-weight: 600;
+    letter-spacing: 0.02em;
+    flex: none;
   }
 
-  .quem {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    line-height: 1.25;
-  }
-
-  .quem strong {
-    color: var(--seno-white);
-    font-size: 0.9rem;
-    font-weight: 600;
+  .primeiro-nome {
+    max-width: 10rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .quem small {
-    color: var(--seno-blue-300);
-    font-size: 0.78rem;
-  }
-
-  .acoes {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .acao {
-    flex: 1;
-    padding: 0.42rem 0.5rem;
-    background: none;
-    border: 1px solid rgb(255 255 255 / 0.2);
+  /* ---- Balões (dropdowns de subitens e perfil) ---- */
+  .balao {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    min-width: 11rem;
+    padding: 0.35rem;
+    background: var(--seno-white);
+    border: 1px solid var(--seno-line);
     border-radius: var(--raio-md);
-    color: var(--seno-blue-100);
+    box-shadow: var(--sombra-flutuante);
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    z-index: 30;
+  }
+
+  .nav-dropdown {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .balao-perfil {
+    right: 0;
+  }
+
+  .balao-perfil::before {
+    content: "";
+    position: absolute;
+    top: -5px;
+    right: 1rem;
+    width: 9px;
+    height: 9px;
+    background: var(--seno-white);
+    border-left: 1px solid var(--seno-line);
+    border-top: 1px solid var(--seno-line);
+    transform: rotate(45deg);
+  }
+
+  .balao-item {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background: none;
+    border: none;
+    border-radius: var(--raio-sm);
+    color: var(--seno-gray-900);
     font: inherit;
-    font-size: 0.84rem;
-    text-align: center;
+    font-size: 0.88rem;
+    font-weight: 500;
+    text-align: left;
     text-decoration: none;
     cursor: pointer;
-    transition: background-color 0.12s;
+    transition: background-color 0.12s ease;
   }
 
-  .acao:hover {
-    background: rgb(255 255 255 / 0.1);
-    color: var(--seno-white);
+  .balao-item:hover {
+    background: var(--seno-gray-100);
   }
 
-  /* ---- Conteúdo ---- */
+  .balao-item.ativo-sub {
+    color: var(--seno-primary);
+    font-weight: 600;
+  }
+
+  .balao-item.sair {
+    color: var(--seno-red-700);
+  }
+
+  .balao-item.sair:hover {
+    background: var(--seno-red-50);
+  }
+
+  /* ---- Menu móvel ---- */
+  .menu-movel {
+    display: none;
+    border-top: 1px solid var(--seno-line);
+    background: var(--seno-white);
+  }
+
+  .menu-movel-inner {
+    max-width: var(--seno-largura-conteudo);
+    margin: 0 auto;
+    padding: 0.75rem 1.25rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .movel-grupo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding-top: 0.25rem;
+  }
+
+  .movel-titulo {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--seno-gray-500);
+  }
+
+  .movel-titulo.ativo {
+    color: var(--seno-primary);
+  }
+
+  .movel-sub {
+    padding-left: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    border-left: 2px solid var(--seno-line);
+  }
+
+  .movel-link {
+    padding: 0.45rem 0.65rem;
+    border-radius: var(--raio-sm);
+    text-decoration: none;
+    font-size: 0.92rem;
+    font-weight: 500;
+    color: var(--seno-gray-700);
+  }
+
+  .movel-link:hover {
+    background: var(--seno-gray-100);
+    color: var(--seno-gray-900);
+  }
+
+  .movel-link.ativo {
+    color: var(--seno-primary);
+    font-weight: 600;
+  }
+
+  /* ---- Conteúdo em coluna central ---- */
   .corpo {
+    flex: 1;
     min-width: 0;
-    overflow-y: auto;
   }
 
   .corpo:focus {
@@ -437,87 +590,25 @@
     width: 100%;
     max-width: var(--seno-largura-conteudo);
     margin: 0 auto;
-    padding: 2rem 2rem 3rem;
-  }
-
-  /* ---- Barra superior e gaveta (telas estreitas) ---- */
-  .topo-movel,
-  .veu {
-    display: none;
+    padding: 2rem 2rem 3.5rem;
   }
 
   @media (max-width: 900px) {
-    .portal {
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: auto minmax(0, 1fr);
-    }
-
-    .topo-movel {
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-      padding: 0.5rem 0.75rem;
-      background: var(--seno-blue-950);
-      color: var(--seno-white);
+    .topbar-inner {
+      grid-template-columns: 1fr auto;
+      padding: 0.65rem 1rem;
     }
 
     .hamburguer {
       display: grid;
-      place-items: center;
-      width: 2.5rem;
-      height: 2.5rem;
-      background: none;
-      border: none;
-      border-radius: var(--raio-md);
-      color: inherit;
-      cursor: pointer;
     }
 
-    .hamburguer:hover {
-      background: rgb(255 255 255 / 0.1);
+    .topbar-nav {
+      display: none;
     }
 
-    .marca-movel {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      color: var(--seno-white);
-      font-weight: 600;
-      text-decoration: none;
-    }
-
-    .portal-movel {
-      margin-left: auto;
-      color: var(--seno-blue-200);
-      font-size: 0.82rem;
-    }
-
-    .barra {
-      position: fixed;
-      inset: 0 auto 0 0;
-      z-index: 30;
-      width: min(18rem, 86vw);
-      visibility: hidden;
-      transform: translateX(-100%);
-      transition:
-        transform 0.2s ease,
-        visibility 0s linear 0.2s;
-    }
-
-    .menu-aberto .barra {
-      visibility: visible;
-      transform: none;
-      box-shadow: var(--sombra-flutuante);
-      transition-delay: 0s;
-    }
-
-    .menu-aberto .veu {
+    .menu-movel {
       display: block;
-      position: fixed;
-      inset: 0;
-      z-index: 20;
-      border: none;
-      background: rgb(8 42 90 / 0.5);
     }
 
     .pagina {
