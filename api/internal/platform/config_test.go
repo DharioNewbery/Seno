@@ -83,3 +83,28 @@ func TestLoadConfigRetencaoDados(t *testing.T) {
 		t.Errorf("esperava 365 dias, obteve %v", cfg.DadosRetencao)
 	}
 }
+
+func TestLoadConfigNormalizacaoWebOriginEMonitorRelativo(t *testing.T) {
+	t.Setenv("SENO_DATABASE_URL", "postgres://x")
+	t.Setenv("SENO_SUPER_EMAIL", "super@seno.dev")
+	t.Setenv("SENO_SUPER_PASSWORD", "x")
+	t.Setenv("SENO_WEB_ORIGIN", "  https://192.168.100.161:8443/  ")
+	t.Setenv("SENO_MONITOR_URL", "http://monitor:8081/")
+	t.Setenv("SENO_MONITOR_PUBLIC_URL", " /monitor/ ")
+	t.Setenv("SENO_MONITOR_SECRET", "12345678901234567890123456789012")
+	t.Setenv("SENO_JUDGE0_URL", "")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig falhou: %v", err)
+	}
+	if cfg.WebOrigin != "https://192.168.100.161:8443" {
+		t.Errorf("WebOrigin esperado sem barra/espaços, obteve %q", cfg.WebOrigin)
+	}
+	if cfg.MonitorURL != "http://monitor:8081" {
+		t.Errorf("MonitorURL inesperado: %q", cfg.MonitorURL)
+	}
+	if cfg.MonitorPublicURL != "/monitor" {
+		t.Errorf("MonitorPublicURL relativo inesperado: %q", cfg.MonitorPublicURL)
+	}
+}

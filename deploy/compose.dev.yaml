@@ -16,6 +16,10 @@ include:
   - ./judge0/compose.yaml # Judge0 (server, workers, db, redis) no mesmo projeto
 
 services:
+  server:
+    ports:
+      - "127.0.0.1:2358:2358"
+
   postgres:
     image: postgres:17-alpine
     environment:
@@ -75,6 +79,7 @@ services:
       SENO_MONITOR_CALLBACK_URL: http://monitor:8081
       # Base do web vista pelo navegador (link "ver entregas" no bloqueio final).
       SENO_WEB_URL: http://localhost:3000
+      SENO_API_URL: http://api:8080
     depends_on:
       postgres:
         condition: service_healthy

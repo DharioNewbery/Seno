@@ -12,11 +12,19 @@ export const COOKIE_SESSAO = "seno_session";
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
 
 export function opcoesCookie() {
+  const envSecure = process.env.SENO_COOKIE_SECURE?.trim().toLowerCase();
+  const secure =
+    envSecure === "false" || envSecure === "0"
+      ? false
+      : envSecure === "true" || envSecure === "1"
+        ? true
+        : !dev;
+
   return {
     path: "/",
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: !dev,
+    secure,
     maxAge: COOKIE_MAX_AGE,
   };
 }

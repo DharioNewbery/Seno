@@ -84,8 +84,6 @@ jobs:
           context: web
           file: web/Dockerfile
           push: true
-          build-args: |
-            SENO_SITE_ORIGIN=${{ vars.SENO_SITE_ORIGIN || 'https://seno.ufpa.br' }}
           tags: ${{ steps.meta_web.outputs.tags }}
           labels: ${{ steps.meta_web.outputs.labels }}
 

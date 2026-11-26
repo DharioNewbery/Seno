@@ -63,7 +63,7 @@ func LoadConfig() (*Config, error) {
 		SMTPUser:          os.Getenv("SENO_SMTP_USER"),
 		SMTPPassword:      os.Getenv("SENO_SMTP_PASSWORD"),
 		SMTPFrom:          env("SENO_SMTP_FROM", "seno@ufpa.br"),
-		WebOrigin:         os.Getenv("SENO_WEB_ORIGIN"),
+		WebOrigin:         strings.TrimSuffix(strings.TrimSpace(os.Getenv("SENO_WEB_ORIGIN")), "/"),
 		ShutdownDeadline:  envDuration("SENO_SHUTDOWN_DEADLINE", 10*time.Second),
 		Judge0URL:         os.Getenv("SENO_JUDGE0_URL"),
 		Judge0Token:       os.Getenv("SENO_JUDGE0_TOKEN"),

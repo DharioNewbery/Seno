@@ -3,8 +3,8 @@ export const NOME_SISTEMA = "Seno";
 export const DESCRICAO_SISTEMA =
   "Envio e correção automática de provas de programação — UFPA.";
 
-export const APP_VERSION = "0.2.2";
-export const API_VERSION = "0.2.2";
+export const APP_VERSION = "0.2.3";
+export const API_VERSION = "0.2.3";
 
 import { dev } from "$app/env";
 

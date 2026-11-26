@@ -1,13 +1,9 @@
 # compose.yaml — produção do Seno (ARQUITETURA §8.3).
-# Cobre toda a stack de produção: Caddy (TLS da UFPA) + Web (BFF SvelteKit) +
+# Cobre toda a stack de produção: Caddy (único ponto de entrada) + Web (BFF SvelteKit) +
 # API (Go) + Monitor (realização da prova) + Judge0 + PostgreSQL + sidecar de backup diário.
 #
-# Antes: cp .env.example .env (e troque TODOS os segredos).
-# Subir: docker compose -f deploy/compose.yaml --env-file deploy/.env up -d
-#
-# Imagem: em produção prefira GHCR (release.yml) em vez de build no host —
-# o build local com contexto na raiz do monorepo (contract/ compartilhado) é o caminho
-# quando compilando a partir do repositório.
+# Deploy rápido em Linux:
+#   ./deploy/deploy.sh
 
 name: seno
 
@@ -19,13 +15,13 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: seno # banco principal da API; o Monitor usa seno_monitor
+      POSTGRES_DB: ${POSTGRES_DB:-seno} # banco principal da API; o Monitor usa seno_monitor
       POSTGRES_USER: ${POSTGRES_USER:-seno}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-seno}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-seno}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-seno} -d ${POSTGRES_DB:-seno}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -37,12 +33,12 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      SENO_DATABASE_URL: postgres://${POSTGRES_USER:-seno}:${POSTGRES_PASSWORD:-seno}@postgres:5432/seno?sslmode=disable
-      SENO_WEB_ORIGIN: ${SENO_WEB_ORIGIN:-https://seno.ufpa.br}
+      SENO_DATABASE_URL: postgres://${POSTGRES_USER:-seno}:${POSTGRES_PASSWORD:-seno}@postgres:5432/${POSTGRES_DB:-seno}?sslmode=disable
+      SENO_WEB_ORIGIN: ${SENO_WEB_ORIGIN}
       SENO_JUDGE0_URL: http://server:2358
       SENO_JUDGE0_CALLBACK_URL: http://api:8080
       SENO_MONITOR_URL: http://monitor:8081
-      SENO_MONITOR_PUBLIC_URL: ${SENO_MONITOR_PUBLIC_URL:-https://seno.ufpa.br/monitor}
+      SENO_MONITOR_PUBLIC_URL: ${SENO_MONITOR_PUBLIC_URL:-/monitor}
     depends_on:
       postgres:
         condition: service_healthy
@@ -56,10 +52,11 @@ services:
     environment:
       # Overrides de rede interna:
       SENO_MONITOR_DSN: postgres://${POSTGRES_USER:-seno}:${POSTGRES_PASSWORD:-seno}@postgres:5432/seno_monitor?sslmode=disable
+      SENO_API_URL: http://api:8080
       SENO_JUDGE0_URL: http://server:2358
       SENO_MONITOR_CALLBACK_URL: http://monitor:8081
-      SENO_COOKIE_SECURE: "true" # HTTPS do Caddy (§8.4)
-      SENO_WEB_URL: ${SENO_WEB_ORIGIN:-https://seno.ufpa.br}
+      SENO_COOKIE_SECURE: ${SENO_COOKIE_SECURE:-true}
+      SENO_WEB_URL: ${SENO_WEB_URL:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -74,14 +71,22 @@ services:
     build:
       context: ../web
       dockerfile: Dockerfile
-      args:
-        SENO_SITE_ORIGIN: ${SENO_WEB_ORIGIN:-https://seno.ufpa.br}
     restart: unless-stopped
     env_file: .env
     environment:
       SENO_API_URL: http://api:8080
-      SENO_WEB_ORIGIN: ${SENO_WEB_ORIGIN:-https://seno.ufpa.br}
+      SENO_WEB_ORIGIN: ${SENO_WEB_ORIGIN}
+      SENO_COOKIE_SECURE: ${SENO_COOKIE_SECURE:-true}
+      PROTOCOL_HEADER: x-forwarded-proto
+      HOST_HEADER: x-forwarded-host
+      BODY_SIZE_LIMIT: ${SENO_WEB_BODY_LIMIT:-16M}
       PORT: "3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     depends_on:
       - api
 
@@ -89,12 +94,13 @@ services:
     image: caddy:2.9-alpine
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "${SENO_HTTP_PORT:-80}:80"
+      - "${SENO_HTTPS_PORT:-443}:443"
     environment:
-      SENO_DOMAIN: ${SENO_DOMAIN:-seno.ufpa.br}
+      SENO_HTTPS_PORT_SUFFIX: ${SENO_HTTPS_PORT_SUFFIX:-}
+      SENO_TRUSTED_PROXIES: ${SENO_TRUSTED_PROXIES:-private_ranges}
     volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${SENO_CADDYFILE:-./caddy/Caddyfile}:/etc/caddy/Caddyfile:ro
       - ./caddy/certs:/etc/caddy/certs:ro
       - caddy_data:/data
       - caddy_config:/config
@@ -113,7 +119,7 @@ services:
       sh -c 'while :; do
         ts=$$(date +%Y%m%d);
         pg_dump "-hpostgres" "-U$${POSTGRES_USER:-seno}" -d seno_monitor -Fc -f /backups/seno_monitor-$${ts}.dump;
-        pg_dump "-hpostgres" "-U$${POSTGRES_USER:-seno}" -d seno -Fc -f /backups/seno-$${ts}.dump;
+        pg_dump "-hpostgres" "-U$${POSTGRES_USER:-seno}" -d "$${POSTGRES_DB:-seno}" -Fc -f /backups/seno-$${ts}.dump;
         find /backups -name "seno_monitor-*.dump" -mtime +120 -delete;
         find /backups -name "seno-*.dump" -mtime +120 -delete;
         sleep 86400;
@@ -122,6 +128,8 @@ services:
       - backups:/backups
     depends_on:
       postgres:
+        condition: service_healthy
+      monitor:
         condition: service_healthy
 
 volumes:
