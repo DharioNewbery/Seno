@@ -30,10 +30,12 @@ type AtribuicaoDoAluno struct {
 	Prazo         *time.Time `json:"prazo,omitempty"`
 	DuracaoSeg    *int32     `json:"duracao_seg,omitempty"`
 	PodeAtrasado  bool       `json:"pode_atrasado"`
-	MateriaCodigo string     `json:"materia_codigo"`
-	TurmaTitulo   string     `json:"turma_titulo,omitempty"`
-	TurmaAtiva    bool       `json:"turma_ativa"`
-	AtividadeNome string     `json:"atividade_nome"`
+	MateriaCodigo   string     `json:"materia_codigo"`
+	MateriaNome     string     `json:"materia_nome"`
+	TurmaTitulo     string     `json:"turma_titulo,omitempty"`
+	TurmaAtiva      bool       `json:"turma_ativa"`
+	AtividadeNome   string     `json:"atividade_nome"`
+	PontuacaoMaxima int32      `json:"pontuacao_maxima"`
 	EmAndamento   bool       `json:"em_andamento"`
 	IniciadaEm    *time.Time `json:"iniciada_em,omitempty"`
 	MinhaRevisao  int32      `json:"minha_revisao,omitempty"`
@@ -250,10 +252,12 @@ func (s *Service) MinhasAtribuicoes(
 			Prazo:         horaPtr(row.Prazo),
 			DuracaoSeg:    intSegPtr(row.DuracaoSeg),
 			PodeAtrasado:  row.PodeAtrasado,
-			MateriaCodigo: row.MateriaCodigo,
-			TurmaTitulo:   tituloDe(row.TurmaTitulo),
-			TurmaAtiva:    !row.TurmaEncerradoEm.Valid,
-			AtividadeNome: row.AtividadeNome,
+			MateriaCodigo:   row.MateriaCodigo,
+			MateriaNome:     row.MateriaNome,
+			TurmaTitulo:     tituloDe(row.TurmaTitulo),
+			TurmaAtiva:      !row.TurmaEncerradoEm.Valid,
+			AtividadeNome:   row.AtividadeNome,
+			PontuacaoMaxima: row.PontuacaoMaxima,
 			EmAndamento:   row.MinhaRevisao.Valid,
 			MinhaRevisao:  row.MinhaRevisao.Int32,
 			GravadoEm:     horaPtr(row.MeuGravadoEm),

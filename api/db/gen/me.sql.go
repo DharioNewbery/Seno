@@ -81,10 +81,12 @@ SELECT a.id,
        a.duracao_seg,
        a.pode_atrasado,
        m.codigo        AS materia_codigo,
+       m.nome          AS materia_nome,
        t.titulo        AS turma_titulo,
        t.encerrado_em  AS turma_encerrado_em,
        atv.id          AS atividade_id,
        atv.nome        AS atividade_nome,
+       (SELECT COALESCE(SUM(at.valor_pts), 0)::int FROM atividade_tarefas at WHERE at.atividade_id = atv.id) AS pontuacao_maxima,
        tt.revisao      AS minha_revisao,
        tt.gravado_em   AS meu_gravado_em,
        ss.id AS minha_submissao_id,
@@ -131,10 +133,12 @@ type ListAtribuicoesAlunoRow struct {
 	DuracaoSeg       pgtype.Int4        `json:"duracao_seg"`
 	PodeAtrasado     bool               `json:"pode_atrasado"`
 	MateriaCodigo    string             `json:"materia_codigo"`
+	MateriaNome      string             `json:"materia_nome"`
 	TurmaTitulo      *string            `json:"turma_titulo"`
 	TurmaEncerradoEm pgtype.Timestamptz `json:"turma_encerrado_em"`
 	AtividadeID      int64              `json:"atividade_id"`
 	AtividadeNome    string             `json:"atividade_nome"`
+	PontuacaoMaxima  int32              `json:"pontuacao_maxima"`
 	MinhaRevisao     pgtype.Int4        `json:"minha_revisao"`
 	MeuGravadoEm     pgtype.Timestamptz `json:"meu_gravado_em"`
 	MinhaSubmissaoID pgtype.Int8        `json:"minha_submissao_id"`
@@ -166,10 +170,12 @@ func (q *Queries) ListAtribuicoesAluno(ctx context.Context, arg ListAtribuicoesA
 			&i.DuracaoSeg,
 			&i.PodeAtrasado,
 			&i.MateriaCodigo,
+			&i.MateriaNome,
 			&i.TurmaTitulo,
 			&i.TurmaEncerradoEm,
 			&i.AtividadeID,
 			&i.AtividadeNome,
+			&i.PontuacaoMaxima,
 			&i.MinhaRevisao,
 			&i.MeuGravadoEm,
 			&i.MinhaSubmissaoID,
