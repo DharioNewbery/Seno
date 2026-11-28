@@ -48,7 +48,7 @@ jobs:
       - name: git diff após sqlc generate
         run: git diff --exit-code
       - name: go test
-        run: go test ./... -race
+        run: go test ./... -race -p 1
 
   monitor:
     name: "Monitor (Go)"
@@ -84,7 +84,7 @@ jobs:
       - name: go vet
         run: go vet ./...
       - name: go test
-        run: go test ./... -race
+        run: go test ./... -race -p 1
 
   web:
     name: "Web (SvelteKit)"

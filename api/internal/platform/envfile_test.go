@@ -8,6 +8,14 @@ import (
 )
 
 func TestAplicaDotEnv(t *testing.T) {
+	for _, k := range []string{"SENO_SUPER_PASSWORD", "MAIL_DEV", "POSTGRES_PASSWORD"} {
+		if v, ok := os.LookupEnv(k); ok {
+			t.Setenv(k, v)
+		} else {
+			t.Setenv(k, "")
+		}
+		_ = os.Unsetenv(k)
+	}
 	conteudo := "# comentário\r\n" +
 		"SENO_SUPER_PASSWORD=senha-do-teste\r\n" +
 		"\r\n" +
@@ -15,9 +23,6 @@ func TestAplicaDotEnv(t *testing.T) {
 		"POSTGRES_PASSWORD=ignorada\r\n" +
 		"MAIL_DEV=true\r\n"
 	aplicaDotEnv([]byte(conteudo))
-	defer os.Unsetenv("SENO_SUPER_PASSWORD")
-	defer os.Unsetenv("MAIL_DEV")
-	defer os.Unsetenv("POSTGRES_PASSWORD")
 
 	if os.Getenv("SENO_SUPER_PASSWORD") != "senha-do-teste" {
 		t.Errorf("valor aplicado: %q", os.Getenv("SENO_SUPER_PASSWORD"))
@@ -32,7 +37,6 @@ func TestAplicaDotEnv(t *testing.T) {
 	// já existente no ambiente: vence o arquivo (compose/CI sobrepõem).
 	t.Setenv("SENO_SUPER_PASSWORD", "do-ambiente")
 	aplicaDotEnv([]byte("SENO_SUPER_PASSWORD=do-arquivo\n"))
-	defer os.Unsetenv("SENO_SUPER_PASSWORD")
 	if os.Getenv("SENO_SUPER_PASSWORD") != "do-ambiente" {
 		t.Errorf("ambiente deveria vencer: %q", os.Getenv("SENO_SUPER_PASSWORD"))
 	}
