@@ -19,11 +19,19 @@ export const load: PageServerLoad = async ({
   cookies,
   request,
   params,
+  url,
 }) => {
   if (!locals.usuario) redirect(303, "/");
   const token = tokenDaSessao(cookies);
   const id = Number(params.id);
   if (!Number.isInteger(id) || id < 1) redirect(303, "/aluno/atividades");
+  const erroParam = url.searchParams.get("erro");
+  const avisoMonitor =
+    erroParam === "monitor_indisponivel"
+      ? "O ambiente de realização da atividade (Monitor) está temporariamente indisponível. Seus dados estão seguros — tente abrir novamente em instantes."
+      : erroParam === "api_indisponivel"
+        ? "Não foi possível comunicar com o servidor no momento. Tente novamente em instantes."
+        : null;
   let r: Resultado;
   try {
     r = await listarMinhasAtribuicoes(request, token);
@@ -32,6 +40,7 @@ export const load: PageServerLoad = async ({
       a: null as AtribuicaoDoAluno | null,
       visao: null as VisaoCorrecaoAluno | null,
       entrega: null as SubmissaoAluno | null,
+      aviso: avisoMonitor,
       erro: "Sem comunicação com a API.",
     };
   }
@@ -60,6 +69,7 @@ export const load: PageServerLoad = async ({
     a,
     visao,
     entrega,
+    aviso: avisoMonitor,
     erro: r.ok ? null : mensagemDaApi(r.body),
   };
 };

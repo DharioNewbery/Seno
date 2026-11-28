@@ -48,6 +48,26 @@ func (s *Service) Receber(ctx context.Context, t *contract.Transferencia) (monit
 			existing, string(carga)); err != nil {
 			return "", false, fmt.Errorf("atualizando atividade: %w", err)
 		}
+		// Sincroniza matrículas: insere novos alunos ativos e remove alunos
+		// desmatriculados que ainda não possuam submissão registrada.
+		idsAtivos := make([]int64, 0, len(t.Alunos))
+		for _, a := range t.Alunos {
+			idsAtivos = append(idsAtivos, a.APIID)
+			if _, err := tx.Exec(ctx, `INSERT INTO atividade_aluno
+			    (monitor_id, aluno_api_id) VALUES ($1, $2)
+			    ON CONFLICT (monitor_id, aluno_api_id) DO NOTHING`, existing, a.APIID); err != nil {
+				return "", false, fmt.Errorf("sincronizando aluno %d: %w", a.APIID, err)
+			}
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM atividade_aluno
+		    WHERE monitor_id = $1
+		      AND NOT (aluno_api_id = ANY($2::bigint[]))
+		      AND NOT EXISTS (
+		          SELECT 1 FROM submissao s
+		          WHERE s.monitor_id = $1 AND s.aluno_api_id = atividade_aluno.aluno_api_id
+		      )`, existing, idsAtivos); err != nil {
+			return "", false, fmt.Errorf("removendo alunos inativos: %w", err)
+		}
 		fimReal := fimRealJanela(t.Janela)
 		if _, err := tx.Exec(ctx,
 			`UPDATE tentativa SET fim_real = $2 WHERE monitor_id = $1`,

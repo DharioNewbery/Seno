@@ -13,10 +13,21 @@ import (
 )
 
 // fakeJudge0 simula o Judge0 com wait=true: devolve um resultado
-// aceito por item do lote.
+// aceito por item (individual em /submissions ou lote em /submissions/batch).
 func fakeJudge0(t *testing.T) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path == "/submissions" && req.URL.Query().Get("wait") == "true" {
+			var item judge0.SubmissaoJudge0
+			_ = json.NewDecoder(req.Body).Decode(&item)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"status": map[string]any{"id": 3, "description": "Accepted"},
+				"stdout": "3\n", "stderr": "",
+				"time": "0.001", "memory": 3240, "cpu_time": "0.001",
+			})
+			return
+		}
 		if req.URL.Path == "/submissions/batch" && req.URL.Query().Get("wait") == "true" {
 			var itens []judge0.SubmissaoJudge0
 			_ = json.NewDecoder(req.Body).Decode(&itens)
@@ -24,7 +35,7 @@ func fakeJudge0(t *testing.T) *httptest.Server {
 			for range itens {
 				out = append(out, map[string]any{
 					"status": 3, "stdout": "3\n", "stderr": "",
-					"time": "0.001", "memory": "1", "cpu_time": "0.001",
+					"time": "0.001", "memory": 3240, "cpu_time": "0.001",
 				})
 			}
 			w.Header().Set("Content-Type", "application/json")

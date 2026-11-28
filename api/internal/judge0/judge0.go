@@ -1,18 +1,21 @@
 // Package judge0 — cliente da integração com o Judge0 self-hosted
 // (PROJETO §Execução do código): API fala apenas com o Judge0; envio em
-// lote com callback por submissão (sem polling). Sem SENO_JUDGE0_URL a
-// integração fica desligada e as correções seguem pendentes (correção
-// manual pelo professor).
+// lote com callback por submissão (PUT/POST) e envio individual síncrono
+// para testes interativos. Sem SENO_JUDGE0_URL a integração fica desligada
+// e as correções seguem pendentes (correção manual pelo professor).
 package judge0
 
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // IDs de linguagem do Judge0 CE (padrões; ajustáveis por env).
@@ -22,8 +25,16 @@ const (
 	CppID    = 54 // C++ (GCC)
 )
 
-// Veredito aceito pelo Judge0.
-const StatusAcceptedID = 3
+// Limite máximo por chamada /submissions/batch no Judge0 1.13 (PROBES.md).
+const MaxBatchSize = 20
+
+// Vereditos do Judge0.
+const (
+	StatusInQueueID     = 1
+	StatusProcessingID  = 2
+	StatusAcceptedID    = 3
+	StatusWrongAnswerID = 4
+)
 
 // RawStatus absorve `status` do Judge0 nos dois formatos (objeto ou id).
 type RawStatus int
@@ -44,6 +55,30 @@ func (r *RawStatus) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// NumStr absorve número, string ou null do Judge0 no mesmo campo — o Judge0
+// envia `memory` como número JSON e `time` como string (PROBES.md).
+type NumStr string
+
+func (n *NumStr) UnmarshalJSON(b []byte) error {
+	s := strings.TrimSpace(string(b))
+	if s == "" || s == "null" {
+		*n = ""
+		return nil
+	}
+	if s[0] == '"' {
+		var str string
+		if err := json.Unmarshal(b, &str); err != nil {
+			return err
+		}
+		*n = NumStr(str)
+		return nil
+	}
+	*n = NumStr(s)
+	return nil
+}
+
+func (n NumStr) String() string { return string(n) }
+
 // Config da integração.
 type Config struct {
 	URL      string // ex.: http://judge0:2358 (vazio = desligado)
@@ -55,8 +90,8 @@ type Config struct {
 	CppID    int
 }
 
-// ligada deriva da existência do URL.
-func (c *Config) Ligada() bool { return c.URL != "" }
+// Ligada deriva da existência do URL.
+func (c *Config) Ligada() bool { return strings.TrimSpace(c.URL) != "" }
 
 // LinguagemDo seno → id Judge0.
 func (c *Config) LinguagemDo(linguagem string) (int, bool) {
@@ -92,36 +127,74 @@ func (c *Config) cppID() int {
 	return CppID
 }
 
-// CarregarConfigDasEnv lê SENO_JUDGE0_URL/TOKEN/SECRET/ORIGEM.
+// CarregarConfigDasEnvLigada lê SENO_JUDGE0_URL/TOKEN/SECRET/ORIGEM.
 func CarregarConfigDasEnvLigada(url, token, secret, origem string) Config {
-	return Config{URL: url, Token: token, Secret: secret, Origem: origem}
+	return Config{
+		URL:    strings.TrimSuffix(strings.TrimSpace(url), "/"),
+		Token:  token,
+		Secret: secret,
+		Origem: strings.TrimSuffix(strings.TrimSpace(origem), "/"),
+	}
 }
 
-// SubmissaoJudge0 é um item do batch (PROJETO: lote).
+// SubmissaoJudge0 é um item de execução no Judge0.
 type SubmissaoJudge0 struct {
-	LanguageID     int    `json:"language_id"`
-	SourceCode     string `json:"source_code"`
-	Stdin          string `json:"stdin,omitempty"`
-	ExpectedOutput string `json:"expected_output,omitempty"`
-	CallbackURL    string `json:"callback_url,omitempty"`
+	LanguageID     int     `json:"language_id"`
+	SourceCode     string  `json:"source_code"`
+	Stdin          string  `json:"stdin,omitempty"`
+	ExpectedOutput string  `json:"expected_output,omitempty"`
+	CallbackURL    string  `json:"callback_url,omitempty"`
+	CPUTimeSec     float64 `json:"cpu_time_limit,omitempty"`
+	WallTimeSec    float64 `json:"wall_time_limit,omitempty"`
+	MemoriaKB      int     `json:"memory_limit,omitempty"`
 }
 
-// RespostaJudge0 é o corpo do callback (objeto do Judge0; status vem
-// como objeto {id} no corpo completo, id direto quando pedido por fields).
+// RespostaJudge0 é o corpo do callback ou retorno síncrono do Judge0.
 type RespostaJudge0 struct {
 	Token         string    `json:"token"`
 	Status        RawStatus `json:"status"`
 	Stdout        string    `json:"stdout"`
 	Stderr        string    `json:"stderr"`
 	CompileOutput string    `json:"compile_output"`
-	Time          string    `json:"time"`
-	Memory        string    `json:"memory"`
-	CPUTime       string    `json:"cpu_time"`
+	Time          NumStr    `json:"time"`
+	Memory        NumStr    `json:"memory"`
+	CPUTime       NumStr    `json:"cpu_time"`
 }
 
 func (r RespostaJudge0) StatusID() int { return int(r.Status) }
 
-// StatusVeredito descreve o status id ps do Judge0.
+// EmFila informa se o status do Judge0 ainda é transitório (In Queue / Processing).
+func (r RespostaJudge0) EmFila() bool {
+	id := r.StatusID()
+	return id == StatusInQueueID || id == StatusProcessingID
+}
+
+// DecodificarBase64 converte os campos stdout/stderr/compile_output entregues em base64
+// nos callbacks PUT do Judge0 (PROBES.md) para UTF-8 legível.
+func (r *RespostaJudge0) DecodificarBase64() {
+	r.Stdout = decodificaB64(r.Stdout)
+	r.Stderr = decodificaB64(r.Stderr)
+	r.CompileOutput = decodificaB64(r.CompileOutput)
+	if r.CompileOutput != "" {
+		r.Stdout = ""
+	}
+}
+
+func decodificaB64(s string) string {
+	if s == "" {
+		return ""
+	}
+	limpo := strings.ReplaceAll(strings.ReplaceAll(s, "\n", ""), "\r", "")
+	if limpo == "" {
+		return s
+	}
+	if b, err := base64.StdEncoding.DecodeString(limpo); err == nil && utf8.Valid(b) {
+		return string(b)
+	}
+	return s
+}
+
+// StatusVeredito descreve o status id do Judge0.
 func StatusVeredito(statusID int) string {
 	if statusID == StatusAcceptedID {
 		return "accepted"
@@ -138,56 +211,84 @@ type Client struct {
 
 func NewClient(cfg Config) *Client {
 	return &Client{
-		base:   cfg.URL,
+		base:   strings.TrimSuffix(strings.TrimSpace(cfg.URL), "/"),
 		token:  cfg.Token,
-		httpDo: &http.Client{Timeout: 30 * time.Second},
+		httpDo: &http.Client{Timeout: 20 * time.Second},
 	}
 }
 
-// EnviarBatch cria submissões em lote (PROJETO §Backend: sem polling —
-// resultados chegam via callback_url de cada item).
+// EnviarBatch cria submissões em lote (PROJETO §Backend: resultados chegam via
+// callback_url de cada item). Respeita o envelope {"submissions": [...]} e o
+// limite de 20 itens por lote do Judge0 1.13 (PROBES.md).
 func (cli *Client) EnviarBatch(ctx context.Context, itens []SubmissaoJudge0) error {
-	body, err := json.Marshal(itens)
-	if err != nil {
-		return err
+	if len(itens) == 0 {
+		return nil
 	}
-	req, err := http.NewRequestWithContext(
-		ctx, http.MethodPost, cli.base+"/submissions/batch", bytes.NewReader(body),
-	)
-	if err != nil {
-		return err
+	if cli.base == "" {
+		return fmt.Errorf("judge0 desligado: URL vazia")
 	}
-	req.Header.Set("Content-Type", "application/json")
-	if cli.token != "" {
-		req.Header.Set("X-Auth-Token", cli.token)
-	}
-	resp, err := cli.httpDo.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode/100 != 2 {
-		dados, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("judge0 batch: status %d: %s", resp.StatusCode, dados)
+	for inicio := 0; inicio < len(itens); inicio += MaxBatchSize {
+		fim := inicio + MaxBatchSize
+		if fim > len(itens) {
+			fim = len(itens)
+		}
+		fatia := itens[inicio:fim]
+		envelope := struct {
+			Submissions []SubmissaoJudge0 `json:"submissions"`
+		}{Submissions: fatia}
+		body, err := json.Marshal(envelope)
+		if err != nil {
+			return err
+		}
+		callCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		req, err := http.NewRequestWithContext(
+			callCtx, http.MethodPost, cli.base+"/submissions/batch?base64_encoded=false", bytes.NewReader(body),
+		)
+		if err != nil {
+			cancel()
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if cli.token != "" {
+			req.Header.Set("X-Auth-Token", cli.token)
+		}
+		resp, err := cli.httpDo.Do(req)
+		if err != nil {
+			cancel()
+			return err
+		}
+		dados, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		resp.Body.Close()
+		cancel()
+		if resp.StatusCode/100 != 2 {
+			return fmt.Errorf("judge0 batch: status %d: %s", resp.StatusCode, dados)
+		}
 	}
 	return nil
 }
 
-// EnviarBatchSincrono executa o lote com wait=true: o Judge0 responde
-// com os resultados inline (sem callbacks) — usado no "testar" imediato.
-func (cli *Client) EnviarBatchSincrono(
-	ctx context.Context, itens []SubmissaoJudge0,
-) ([]RespostaJudge0, error) {
-	body, err := json.Marshal(itens)
-	if err != nil {
-		return nil, err
+// EnviarSync cria uma submissão individual e aguarda o resultado inline
+// (POST /submissions?wait=true&base64_encoded=false, conforme PROBES.md).
+func (cli *Client) EnviarSync(ctx context.Context, item SubmissaoJudge0) (RespostaJudge0, error) {
+	if strings.TrimSpace(item.SourceCode) == "" {
+		return RespostaJudge0{Status: RawStatus(StatusWrongAnswerID)}, nil
 	}
+	if cli.base == "" {
+		return RespostaJudge0{}, fmt.Errorf("judge0 desligado: URL vazia")
+	}
+	body, err := json.Marshal(item)
+	if err != nil {
+		return RespostaJudge0{}, err
+	}
+	callCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
 	req, err := http.NewRequestWithContext(
-		ctx, http.MethodPost,
-		cli.base+"/submissions/batch?wait=true", bytes.NewReader(body),
+		callCtx, http.MethodPost,
+		cli.base+"/submissions?wait=true&base64_encoded=false", bytes.NewReader(body),
 	)
 	if err != nil {
-		return nil, err
+		return RespostaJudge0{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if cli.token != "" {
@@ -195,27 +296,59 @@ func (cli *Client) EnviarBatchSincrono(
 	}
 	resp, err := cli.httpDo.Do(req)
 	if err != nil {
-		return nil, err
+		return RespostaJudge0{}, err
 	}
 	defer resp.Body.Close()
 	dados, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return nil, err
+		return RespostaJudge0{}, err
 	}
 	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("judge0 wait: status %d: %s", resp.StatusCode, dados)
+		return RespostaJudge0{}, fmt.Errorf("judge0 sync: status %d: %s", resp.StatusCode, dados)
 	}
-	var out []RespostaJudge0
+	var out RespostaJudge0
 	if err := json.Unmarshal(dados, &out); err != nil {
-		return nil, err
+		return RespostaJudge0{}, err
 	}
 	return out, nil
 }
 
-// Saude ping simples (não usado no fluxo; diagnóstico).
+// EnviarBatchSincrono executa cada item sincronamente via /submissions?wait=true
+// (no Judge0 1.13 o endpoint /submissions/batch?wait=true devolve apenas tokens,
+// não resultados inline — ver PROBES.md). Aplica orçamento total de tempo para
+// impedir travamento da API quando há vários casos de teste.
+func (cli *Client) EnviarBatchSincrono(
+	ctx context.Context, itens []SubmissaoJudge0,
+) ([]RespostaJudge0, error) {
+	if len(itens) == 0 {
+		return nil, nil
+	}
+	if cli.base == "" {
+		return nil, fmt.Errorf("judge0 desligado: URL vazia")
+	}
+	totalCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	out := make([]RespostaJudge0, 0, len(itens))
+	for _, it := range itens {
+		r, err := cli.EnviarSync(totalCtx, it)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+// Saude ping simples com timeout curto para diagnóstico / verificação prévia.
 func (cli *Client) Saude(ctx context.Context) error {
+	if cli == nil || cli.base == "" {
+		return fmt.Errorf("judge0 desligado")
+	}
+	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
 	req, err := http.NewRequestWithContext(
-		ctx, http.MethodGet, cli.base+"/system_info", nil,
+		pingCtx, http.MethodGet, cli.base+"/system_info", nil,
 	)
 	if err != nil {
 		return err

@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -90,10 +91,41 @@ func main() {
 	// Retenção LGPD (§9.2): submissão e log por 2 anos (default); ciclo diário.
 	platform.LacaRetensao(ctx, pool, cfg.DadosRetencao, 24*time.Hour)
 
-	fila.Start(ctx, pool, map[string]fila.Handler{
-		ensaios.KindEnsaio:      ensaiosS.Handler(),
-		submissoes.KindCorrecao: submissaoS.Handler(),
-	}, 8)
+	fila.StartWithHooks(ctx, pool, map[string]fila.Handler{
+		ensaios.KindEnsaio:          ensaiosS.Handler(),
+		submissoes.KindCorrecao:     submissaoS.Handler(),
+		submissoes.KindNotificarAPI: submissaoS.NotificarAPIHandler(),
+	}, 8, func(fCtx context.Context, kind string, payload json.RawMessage, err error) {
+		switch kind {
+		case ensaios.KindEnsaio:
+			ensaiosS.MarcarFalhaJob(fCtx, payload)
+		case submissoes.KindCorrecao:
+			submissaoS.MarcarFalhaJob(fCtx, payload)
+		}
+	})
+
+	// Ciclos de reconciliação (recupera callbacks perdidos quando o Monitor estava
+	// fora do ar e destrava correções/notificações após quedas do Judge0 ou da API).
+	go func() {
+		tEnsaio := time.NewTicker(15 * time.Second)
+		tSub := time.NewTicker(60 * time.Second)
+		defer tEnsaio.Stop()
+		defer tSub.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tEnsaio.C:
+				c, cancel := context.WithTimeout(ctx, 12*time.Second)
+				ensaiosS.ReconciliarPendentes(c)
+				cancel()
+			case <-tSub.C:
+				c, cancel := context.WithTimeout(ctx, 30*time.Second)
+				submissaoS.ReconciliarPendentes(c)
+				cancel()
+			}
+		}
+	}()
 
 	r := gin.New()
 	httpapi.RegisterRoutes(r, &httpapi.Dependencies{

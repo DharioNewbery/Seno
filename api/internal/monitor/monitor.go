@@ -49,20 +49,95 @@ type Service struct {
 	http      *http.Client
 }
 
+// ErrMonitorIndisponivel sinaliza falha de comunicação com o serviço Monitor.
+var ErrMonitorIndisponivel = errors.New("monitor: serviço indisponível")
+
 // New cria o serviço; url vazio = integração desligada (Enfileirar no-op).
 func New(st *store.Store, audit *platform.Audit, url, publicURL, secret string) *Service {
 	if url == "" {
 		return &Service{st: st, audit: audit, secret: []byte(secret)}
 	}
 	return &Service{
-		st: st, audit: audit, url: url, publicURL: publicURL,
-		secret: []byte(secret),
-		http:   &http.Client{Timeout: 30 * time.Second},
+		st: st, audit: audit, url: strings.TrimSuffix(strings.TrimSpace(url), "/"),
+		publicURL: publicURL,
+		secret:    []byte(secret),
+		http:      &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
 // Ligado informa se a integração está configurada (nil-safe p/ testes).
 func (s *Service) Ligado() bool { return s != nil && s.url != "" }
+
+// Saude verifica rapidamente se o serviço Monitor está acessível (/healthz).
+func (s *Service) Saude(ctx context.Context) error {
+	if !s.Ligado() {
+		return ErrMonitorIndisponivel
+	}
+	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(pingCtx, http.MethodGet, s.url+"/healthz", nil)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrMonitorIndisponivel, err)
+	}
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrMonitorIndisponivel, err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("%w: status %d", ErrMonitorIndisponivel, resp.StatusCode)
+	}
+	return nil
+}
+
+// mapearErroHTTPMonitor converte erros de rede e respostas de erro do Monitor em *platform.APIError
+// claros para o usuário, evitando retornar 500 genérico quando o Monitor está fora do ar.
+func mapearErroHTTPMonitor(acao string, errRede error, status int, corpo []byte) error {
+	if errRede != nil {
+		return platform.NewAPIError(
+			http.StatusServiceUnavailable, platform.CodeServiceUnavailable,
+			"O serviço Monitor está temporariamente indisponível ("+acao+"). Tente novamente em instantes.")
+	}
+	msg := extrairMensagemMonitor(corpo)
+	switch {
+	case status >= 500:
+		if msg == "" {
+			msg = "O serviço Monitor retornou falha temporária (" + acao + "). Tente novamente em instantes."
+		}
+		return platform.NewAPIError(http.StatusServiceUnavailable, platform.CodeServiceUnavailable, msg)
+	case status == http.StatusNotFound:
+		if msg == "" {
+			msg = "Registro não encontrado no Monitor."
+		}
+		return platform.NewAPIError(http.StatusNotFound, platform.CodeNotFound, msg)
+	case status == http.StatusConflict:
+		if msg == "" {
+			msg = "Conflito de estado no Monitor."
+		}
+		return platform.NewAPIError(http.StatusConflict, platform.CodeConflict, msg)
+	case status == http.StatusUnprocessableEntity || status == http.StatusBadRequest:
+		if msg == "" {
+			msg = "Operação recusada pelo Monitor."
+		}
+		return platform.NewAPIError(http.StatusUnprocessableEntity, platform.CodeUnprocessable, msg)
+	default:
+		if msg == "" {
+			msg = fmt.Sprintf("Falha ao comunicar com o Monitor (%s: HTTP %d).", acao, status)
+		}
+		return platform.NewAPIError(http.StatusServiceUnavailable, platform.CodeServiceUnavailable, msg)
+	}
+}
+
+func extrairMensagemMonitor(corpo []byte) string {
+	if len(corpo) == 0 {
+		return ""
+	}
+	var env contract.ErroEnvelope
+	if json.Unmarshal(corpo, &env) == nil && strings.TrimSpace(env.Erro.Mensagem) != "" {
+		return strings.TrimSpace(env.Erro.Mensagem)
+	}
+	return ""
+}
 
 // VerificarMAC valida a assinatura HMAC de uma chamada interna vinda do Monitor.
 func (s *Service) VerificarMAC(corpo []byte, mac, tempo string) error {
@@ -79,13 +154,107 @@ type payloadTransferencia struct {
 // Enfileirar agenda o envio da atribuição ao Monitor (não bloqueia a
 // publicação; falha da fila nunca derruba o request — fica no slog).
 func (s *Service) Enfileirar(ctx context.Context, atribuicaoID int64) {
-	if !s.Ligado() {
+	if !s.Ligado() || atribuicaoID <= 0 {
+		return
+	}
+	// Evita empilhar jobs duplicados para a mesma atribuição já agendada.
+	var jaAgendado bool
+	_ = s.st.Pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM jobs
+			WHERE kind = $1 AND status IN ('scheduled', 'running')
+			  AND (payload->>'atribuicao_id')::bigint = $2
+		)`, KindTransferir, atribuicaoID).Scan(&jaAgendado)
+	if jaAgendado {
 		return
 	}
 	if _, err := fila.Agenda(ctx, s.st, KindTransferir,
 		payloadTransferencia{AtribuicaoID: atribuicaoID}, 5); err != nil {
 		slog.Error("monitor_transferir: agendando", "atribuicao", atribuicaoID, "err", err)
 	}
+}
+
+// EnfileirarPorTurma agenda a ressincronização das atribuições de uma turma no Monitor
+// (ex.: após nova matrícula ativa ou encerramento de matrícula).
+func (s *Service) EnfileirarPorTurma(ctx context.Context, turmaID int64) {
+	if !s.Ligado() || turmaID <= 0 {
+		return
+	}
+	rows, err := s.st.Pool.Query(ctx, `SELECT id FROM atribuicoes WHERE turma_id = $1`, turmaID)
+	if err != nil {
+		return
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+	for _, id := range ids {
+		s.Enfileirar(ctx, id)
+	}
+}
+
+// EnfileirarPorUsuario agenda a ressincronização de todas as turmas onde o aluno possui matrícula ativa
+// (ex.: quando um aluno pendente aceita o convite e passa a 'active').
+func (s *Service) EnfileirarPorUsuario(ctx context.Context, userID int64) {
+	if !s.Ligado() || userID <= 0 {
+		return
+	}
+	rows, err := s.st.Pool.Query(ctx, `
+		SELECT DISTINCT a.id
+		FROM atribuicoes a
+		JOIN matriculas m ON m.turma_id = a.turma_id
+		WHERE m.aluno_id = $1 AND m.saida_em IS NULL`, userID)
+	if err != nil {
+		return
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+	for _, id := range ids {
+		s.Enfileirar(ctx, id)
+	}
+}
+
+// TransferirOuEnfileirar valida a atividade imediatamente (rejeitando atividade sem tarefas
+// com ErrSemTarefas) e tenta enviar ao Monitor com timeout curto. Se a turma ainda não tiver
+// alunos ativos (ex.: convites pendentes) ou se o Monitor estiver fora do ar, mantém a
+// atribuição salva e agenda o job persistente para sincronização assim que possível.
+func (s *Service) TransferirOuEnfileirar(ctx context.Context, atribuicaoID int64) (enfileirado bool, err error) {
+	if !s.Ligado() {
+		return false, nil
+	}
+	t, err := s.Montar(ctx, atribuicaoID)
+	if err != nil {
+		if errors.Is(err, ErrSemAlunos) {
+			// Turma ainda sem alunos ativos (ex.: serão matriculados/ativados em seguida):
+			// preserva a atribuição; MatricularTurma / AcceptInvite / PollEstado fará o envio.
+			slog.Info("monitor: atribuição salva aguardando alunos ativos na turma", "atribuicao", atribuicaoID)
+			return true, nil
+		}
+		return false, err
+	}
+	sendCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	mid, errEnvio := s.Enviar(sendCtx, t)
+	cancel()
+	if errEnvio != nil {
+		slog.Warn("monitor: indisponível na publicação; enfileirando transferência",
+			"atribuicao", atribuicaoID, "err", errEnvio)
+		s.Enfileirar(ctx, atribuicaoID)
+		return true, nil
+	}
+	if err := s.gravarMonitorID(ctx, atribuicaoID, mid); err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
 // Transferir monta, assina, envia a atribuição ao Monitor e grava monitor_id.
@@ -112,7 +281,12 @@ func (s *Service) Handler() fila.Handler {
 		if err := json.Unmarshal(payload, &p); err != nil {
 			return fmt.Errorf("monitor_transferir: payload: %w", err)
 		}
-		return s.Transferir(ctx, p.AtribuicaoID)
+		err := s.Transferir(ctx, p.AtribuicaoID)
+		if errors.Is(err, ErrSemAlunos) {
+			// Sem alunos ativos no momento: conclui sem gastar retentativas; novo aluno re-enfileira.
+			return nil
+		}
+		return err
 	}
 }
 
@@ -426,11 +600,41 @@ func (s *Service) Ciclo(ctx context.Context, intervalo time.Duration) {
 
 // PollEstado consome GET /interna/v1/atividades/:monitor_id/estado de cada
 // atribuição transferida, grava o snapshot em monitor_estado_aluno e ingere
-// definitivamente na API qualquer submissão entregue no Monitor.
+// definitivamente na API submissões novas ou atualizadas do Monitor.
+// Também recupera atribuições pendentes de transferência inicial após retorno do Monitor.
 func (s *Service) PollEstado(ctx context.Context) error {
 	if !s.Ligado() {
 		return nil
 	}
+	// Recupera atribuições criadas enquanto o Monitor estava fora do ar (ou cuja turma ganhou alunos ativos).
+	pRows, errP := s.st.Pool.Query(ctx, `
+		SELECT a.id FROM atribuicoes a
+		WHERE a.monitor_id IS NULL
+		  AND NOT EXISTS (
+		      SELECT 1 FROM jobs j
+		      WHERE j.kind = $1 AND j.status IN ('scheduled', 'running')
+		        AND (j.payload->>'atribuicao_id')::bigint = a.id
+		  )
+		LIMIT 20`, KindTransferir)
+	if errP == nil {
+		var pendentes []int64
+		for pRows.Next() {
+			var id int64
+			if pRows.Scan(&id) == nil {
+				pendentes = append(pendentes, id)
+			}
+		}
+		pRows.Close()
+		for _, id := range pendentes {
+			tCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			errT := s.Transferir(tCtx, id)
+			cancel()
+			if errT != nil && !errors.Is(errT, ErrSemAlunos) && !errors.Is(errT, ErrSemTarefas) {
+				slog.Debug("monitor: transferência pendente aguardando Monitor", "atribuicao", id, "err", errT)
+			}
+		}
+	}
+
 	rows, err := s.st.Pool.Query(ctx,
 		`SELECT id, monitor_id FROM atribuicoes WHERE monitor_id IS NOT NULL`)
 	if err != nil {
@@ -454,20 +658,79 @@ func (s *Service) PollEstado(ctx context.Context) error {
 		slog.Debug("monitor: poll de estado", "alvos", len(alvos))
 	}
 	for _, a := range alvos {
-		est, err := s.pegaEstado(ctx, a.Mid)
-		if err != nil {
-			// 404 = atividade ainda não no Monitor (transferência em
-			// andamento): pula; resto é retry no ciclo seguinte.
-			slog.Warn("monitor: estado inacessível", "monitor_id", a.Mid, "err", err)
-			continue
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
-		for _, al := range est.Alunos {
-			if err := s.gravaEstado(ctx, a.ID, &al); err != nil {
+		if err := s.PollEstadoAtribuicao(ctx, a.ID, a.Mid); err != nil {
+			slog.Warn("monitor: falha ao atualizar atribuição no poll", "atribuicao", a.ID, "monitor_id", a.Mid, "err", err)
+		}
+	}
+	return nil
+}
+
+// PollEstadoAtribuicao sincroniza o estado e eventuais submissões pendentes de UMA atribuição específica.
+func (s *Service) PollEstadoAtribuicao(ctx context.Context, atribuicaoID int64, mid string) error {
+	if !s.Ligado() || mid == "" {
+		return nil
+	}
+	estCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	est, err := s.pegaEstado(estCtx, mid)
+	cancel()
+	if err != nil {
+		if errors.Is(err, errEstadoIndisponivel) {
+			return nil
+		}
+		slog.Warn("monitor: estado inacessível", "monitor_id", mid, "err", err)
+		return nil
+	}
+
+	// Carrega o mapa local atual para evitar baixar pacotes/arquivos repetidos a cada ciclo.
+	type subLocal struct {
+		existe    bool
+		nt        int
+		corStatus string
+		congelada bool // confirmada ou publicada pelo professor na API
+	}
+	locais := map[int64]subLocal{}
+	lRows, errL := s.st.Pool.Query(ctx, `
+		SELECT s.aluno_id,
+		       COALESCE(m.n_t, 1),
+		       COALESCE(c.status, ''),
+		       (c.confirmada_em IS NOT NULL OR c.publicada_em IS NOT NULL)
+		FROM submissoes s
+		LEFT JOIN correcoes c ON c.submissao_id = s.id
+		LEFT JOIN monitor_estado_aluno m ON m.atribuicao_id = s.atribuicao_id AND m.aluno_id = s.aluno_id
+		WHERE s.atribuicao_id = $1`, atribuicaoID)
+	if errL == nil {
+		for lRows.Next() {
+			var alunoID int64
+			var sl subLocal
+			sl.existe = true
+			if lRows.Scan(&alunoID, &sl.nt, &sl.corStatus, &sl.congelada) == nil {
+				locais[alunoID] = sl
+			}
+		}
+		lRows.Close()
+	}
+
+	for _, al := range est.Alunos {
+		loc := locais[al.AlunoAPIID]
+		if !loc.congelada {
+			if err := s.gravaEstado(ctx, atribuicaoID, &al); err != nil {
 				return err
 			}
-			if al.Estado == "entregue" {
-				if _, errSync := s.SincronizarSubmissaoAluno(ctx, a.Mid, a.ID, al.AlunoAPIID); errSync != nil {
-					slog.Debug("monitor: sincronização de submissão pendente", "monitor_id", a.Mid, "aluno", al.AlunoAPIID, "err", errSync)
+		}
+		if al.Estado == "entregue" {
+			precisaSync := !loc.existe ||
+				al.NT > loc.nt ||
+				(!loc.congelada && al.CorrecaoStatus != "" && al.CorrecaoStatus != loc.corStatus)
+			if precisaSync {
+				syncCtx, syncCancel := context.WithTimeout(ctx, 15*time.Second)
+				_, errSync := s.SincronizarSubmissaoAluno(syncCtx, mid, atribuicaoID, al.AlunoAPIID)
+				syncCancel()
+				if errSync != nil {
+					slog.Debug("monitor: sincronização de submissão pendente",
+						"monitor_id", mid, "aluno", al.AlunoAPIID, "err", errSync)
 				}
 			}
 		}
@@ -625,14 +888,74 @@ func (s *Service) Entrar(ctx context.Context, aluno domain.User, atribuicaoID in
 	return strings.TrimSuffix(s.publicURL, "/") + "/entrar?st=" + st, nil
 }
 
+// EntrarVerificado valida a disponibilidade do Monitor (e conclui eventual transferência
+// pendente se o Monitor tiver acabado de voltar ao ar) ANTES de emitir o token SSO ou
+// marcar a atividade como 'aberta', retornando 503 claro ao aluno se o Monitor estiver fora do ar.
+func (s *Service) EntrarVerificado(ctx context.Context, aluno domain.User, atribuicaoID int64) (string, error) {
+	if !s.Ligado() {
+		return "", platform.NewAPIError(
+			http.StatusServiceUnavailable, platform.CodeConflict,
+			"Realização pelo Monitor desligada nesta instalação.")
+	}
+	if !domain.HasAnyRole(aluno.Roles, domain.RoleStudent) {
+		return "", platform.NewAPIError(
+			http.StatusForbidden, platform.CodeForbidden,
+			"Operação exclusiva de alunos.")
+	}
+	var turmaID int64
+	var mid *string
+	if err := s.st.Pool.QueryRow(ctx,
+		`SELECT turma_id, monitor_id FROM atribuicoes WHERE id = $1`, atribuicaoID,
+	).Scan(&turmaID, &mid); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", platform.NewAPIError(
+				http.StatusNotFound, platform.CodeNotFound, "Atribuição não encontrada.")
+		}
+		return "", err
+	}
+	mat, err := s.st.Q.MatriculaAtiva(ctx, gen.MatriculaAtivaParams{
+		TurmaID: turmaID, AlunoID: aluno.ID,
+	})
+	if err != nil {
+		return "", err
+	}
+	if !mat {
+		return "", platform.NewAPIError(
+			http.StatusNotFound, platform.CodeNotFound, "Atribuição não encontrada.")
+	}
+	// Se a atribuição ainda não tinha monitor_id (ex.: criada com Monitor offline), tenta transferir agora.
+	if mid == nil || *mid == "" {
+		tCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		errT := s.Transferir(tCtx, atribuicaoID)
+		cancel()
+		if errT != nil {
+			s.Enfileirar(ctx, atribuicaoID)
+			return "", platform.NewAPIError(
+				http.StatusServiceUnavailable, platform.CodeServiceUnavailable,
+				"O ambiente de realização da atividade (Monitor) está temporariamente indisponível. Tente novamente em instantes.")
+		}
+	} else {
+		if err := s.Saude(ctx); err != nil {
+			return "", platform.NewAPIError(
+				http.StatusServiceUnavailable, platform.CodeServiceUnavailable,
+				"O ambiente de realização da atividade (Monitor) está temporariamente indisponível. Tente novamente em instantes.")
+		}
+	}
+	return s.Entrar(ctx, aluno, atribuicaoID)
+}
+
 // Reexecutar aciona a reexecução de correção de um aluno no Monitor via rota interna HMAC.
 func (s *Service) Reexecutar(ctx context.Context, mid string, alunoID int64) error {
 	if !s.Ligado() {
-		return errors.New("integração com Monitor desligada")
+		return platform.NewAPIError(
+			http.StatusServiceUnavailable, platform.CodeServiceUnavailable,
+			"Integração com o Monitor está desligada.")
 	}
 	mac, tempo := contract.AssinarMAC(s.secret, time.Now(), nil)
 	url := fmt.Sprintf("%s/interna/v1/atividades/%s/alunos/%d/reexecutar", s.url, mid, alunoID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(callCtx, http.MethodPost, url, nil)
 	if err != nil {
 		return err
 	}
@@ -640,12 +963,12 @@ func (s *Service) Reexecutar(ctx context.Context, mid string, alunoID int64) err
 	req.Header.Set(contract.HeaderTime, tempo)
 	resp, err := s.http.Do(req)
 	if err != nil {
-		return err
+		return mapearErroHTTPMonitor("reexecutar correção", err, 0, nil)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		corpo, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("monitor reexecutar %s/%d: %d (%s)", mid, alunoID, resp.StatusCode, string(corpo))
+		return mapearErroHTTPMonitor("reexecutar correção", nil, resp.StatusCode, corpo)
 	}
 	return nil
 }
@@ -653,11 +976,15 @@ func (s *Service) Reexecutar(ctx context.Context, mid string, alunoID int64) err
 // ExcluirSubmissao aciona a exclusão de submissão no Monitor via rota interna HMAC.
 func (s *Service) ExcluirSubmissao(ctx context.Context, mid string, alunoID int64) error {
 	if !s.Ligado() {
-		return errors.New("integração com Monitor desligada")
+		return platform.NewAPIError(
+			http.StatusServiceUnavailable, platform.CodeServiceUnavailable,
+			"Integração com o Monitor está desligada.")
 	}
 	mac, tempo := contract.AssinarMAC(s.secret, time.Now(), nil)
 	url := fmt.Sprintf("%s/interna/v1/atividades/%s/alunos/%d/submissao", s.url, mid, alunoID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(callCtx, http.MethodDelete, url, nil)
 	if err != nil {
 		return err
 	}
@@ -665,12 +992,12 @@ func (s *Service) ExcluirSubmissao(ctx context.Context, mid string, alunoID int6
 	req.Header.Set(contract.HeaderTime, tempo)
 	resp, err := s.http.Do(req)
 	if err != nil {
-		return err
+		return mapearErroHTTPMonitor("excluir submissão", err, 0, nil)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		corpo, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("monitor excluir %s/%d: %d (%s)", mid, alunoID, resp.StatusCode, string(corpo))
+		return mapearErroHTTPMonitor("excluir submissão", nil, resp.StatusCode, corpo)
 	}
 	return nil
 }
@@ -679,11 +1006,15 @@ func (s *Service) ExcluirSubmissao(ctx context.Context, mid string, alunoID int6
 // e sincroniza a submissão gerada para as tabelas definitivas da API.
 func (s *Service) ColetarTentativa(ctx context.Context, mid string, alunoID int64) error {
 	if !s.Ligado() {
-		return errors.New("integração com Monitor desligada")
+		return platform.NewAPIError(
+			http.StatusServiceUnavailable, platform.CodeServiceUnavailable,
+			"Integração com o Monitor está desligada.")
 	}
 	mac, tempo := contract.AssinarMAC(s.secret, time.Now(), nil)
 	url := fmt.Sprintf("%s/interna/v1/atividades/%s/alunos/%d/coletar", s.url, mid, alunoID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(callCtx, http.MethodPost, url, nil)
 	if err != nil {
 		return err
 	}
@@ -691,14 +1022,20 @@ func (s *Service) ColetarTentativa(ctx context.Context, mid string, alunoID int6
 	req.Header.Set(contract.HeaderTime, tempo)
 	resp, err := s.http.Do(req)
 	if err != nil {
-		return err
+		return mapearErroHTTPMonitor("coletar tentativa", err, 0, nil)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		corpo, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("monitor coletar %s/%d: %d (%s)", mid, alunoID, resp.StatusCode, string(corpo))
+		return mapearErroHTTPMonitor("coletar tentativa", nil, resp.StatusCode, corpo)
 	}
-	_, _ = s.SincronizarSubmissaoAluno(ctx, mid, 0, alunoID)
+	syncCtx, syncCancel := context.WithTimeout(ctx, 10*time.Second)
+	_, errSync := s.SincronizarSubmissaoAluno(syncCtx, mid, 0, alunoID)
+	syncCancel()
+	if errSync != nil {
+		slog.Warn("monitor: falha ao sincronizar coleta imediatamente (será recuperada no poll/push)",
+			"monitor_id", mid, "aluno", alunoID, "err", errSync)
+	}
 	return nil
 }
 
@@ -745,11 +1082,15 @@ type TarefaDetalhe struct {
 // ObterSubmissao busca os detalhes da submissão no Monitor via rota interna HMAC.
 func (s *Service) ObterSubmissao(ctx context.Context, mid string, alunoID int64) (*DetalhesSubmissao, error) {
 	if !s.Ligado() {
-		return nil, errors.New("integração com Monitor desligada")
+		return nil, platform.NewAPIError(
+			http.StatusServiceUnavailable, platform.CodeServiceUnavailable,
+			"Integração com o Monitor está desligada.")
 	}
 	mac, tempo := contract.AssinarMAC(s.secret, time.Now(), nil)
 	url := fmt.Sprintf("%s/interna/v1/atividades/%s/alunos/%d/submissao", s.url, mid, alunoID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(callCtx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -757,12 +1098,12 @@ func (s *Service) ObterSubmissao(ctx context.Context, mid string, alunoID int64)
 	req.Header.Set(contract.HeaderTime, tempo)
 	resp, err := s.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, mapearErroHTTPMonitor("obter submissão", err, 0, nil)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		corpo, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("monitor obter submissao %s/%d: %d (%s)", mid, alunoID, resp.StatusCode, string(corpo))
+		return nil, mapearErroHTTPMonitor("obter submissão", nil, resp.StatusCode, corpo)
 	}
 	var det DetalhesSubmissao
 	if err := json.NewDecoder(resp.Body).Decode(&det); err != nil {
@@ -774,11 +1115,15 @@ func (s *Service) ObterSubmissao(ctx context.Context, mid string, alunoID int64)
 // ObterPacoteSubmissao busca o pacote completo de submissão e correção no Monitor via HMAC.
 func (s *Service) ObterPacoteSubmissao(ctx context.Context, mid string, alunoID int64) (*contract.PacoteSubmissaoMonitor, error) {
 	if !s.Ligado() {
-		return nil, errors.New("integração com Monitor desligada")
+		return nil, platform.NewAPIError(
+			http.StatusServiceUnavailable, platform.CodeServiceUnavailable,
+			"Integração com o Monitor está desligada.")
 	}
 	mac, tempo := contract.AssinarMAC(s.secret, time.Now(), nil)
 	url := fmt.Sprintf("%s/interna/v1/atividades/%s/alunos/%d/submissao", s.url, mid, alunoID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	callCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(callCtx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -786,12 +1131,12 @@ func (s *Service) ObterPacoteSubmissao(ctx context.Context, mid string, alunoID 
 	req.Header.Set(contract.HeaderTime, tempo)
 	resp, err := s.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, mapearErroHTTPMonitor("obter pacote de submissão", err, 0, nil)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		corpo, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("monitor obter pacote submissao %s/%d: %d (%s)", mid, alunoID, resp.StatusCode, string(corpo))
+		return nil, mapearErroHTTPMonitor("obter pacote de submissão", nil, resp.StatusCode, corpo)
 	}
 	var pac contract.PacoteSubmissaoMonitor
 	if err := json.NewDecoder(resp.Body).Decode(&pac); err != nil {

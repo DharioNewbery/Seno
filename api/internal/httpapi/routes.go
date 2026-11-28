@@ -3,14 +3,23 @@
 package httpapi
 
 import (
+	"log/slog"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/seno-project/seno/api/internal/domain"
+	"github.com/seno-project/seno/api/internal/platform"
 )
 
 // RegisterRoutes monta o roteador da API com o envelope de erros, as rotas
 // da fundação e as rotas de autenticação (ARQUITETURA §5).
 func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
+	r.Use(gin.CustomRecovery(func(c *gin.Context, recovered any) {
+		slog.Error("api: panic recuperado em handler HTTP", "panic", recovered, "path", c.Request.URL.Path)
+		platform.ErrorBody(c, platform.NewAPIError(
+			http.StatusInternalServerError, platform.CodeInternal, "Erro interno do servidor."))
+	}))
 	r.Use(RequestLog())
 
 	// Rota interna Monitor -> API (autenticada por HMAC, bypassa OriginGuard do frontend)
@@ -181,7 +190,9 @@ func RegisterRoutes(r *gin.Engine, deps *Dependencies) {
 	submissoesCorrecao.GET("/tarefas/:tarefa_id/arquivo", deps.baixarArquivoSubmissao)
 
 	// Callback do Judge0 (rede interna; chave compartilhada validada no
-	// handler — config em SENO_JUDGE0_CALLBACK_KEY).
+	// handler — config em SENO_JUDGE0_CALLBACK_KEY). Judge0 1.13 envia PUT;
+	// mantemos POST também por compatibilidade.
+	r.PUT("/v1/judge0/callback", deps.callbackJudge0)
 	r.POST("/v1/judge0/callback", deps.callbackJudge0)
 
 	// Execução de teste (PROJETO §Execução de teste): aluno "testar"

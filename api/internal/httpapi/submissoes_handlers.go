@@ -3,6 +3,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -87,28 +88,45 @@ func (d *Dependencies) ListarSubmissoes(c *gin.Context) {
 }
 
 // ExcluirSubmissao: DELETE /v1/submissoes/:id — professor dono ou staff exclui entrega
-// do aluno. A tentativa do aluno é restaurada para nova entrega com o comecou_em original.
+// do aluno. Quando a atribuição pertence ao Monitor, exclui primeiro no Monitor para
+// impedir estado divergente ou reimportação indevida no próximo poll; se o Monitor
+// estiver fora do ar, devolve 503 claro ao professor.
 func (d *Dependencies) ExcluirSubmissao(c *gin.Context) {
 	user, _ := currentUser(c)
 	id, ok := idDaRota(c)
 	if !ok {
 		return
 	}
-	var atID, alID int64
+	var atID, alID, profID int64
 	var mid *string
-	_ = d.Store.Pool.QueryRow(c.Request.Context(), `
-		SELECT s.atribuicao_id, s.aluno_id, a.monitor_id
+	errQ := d.Store.Pool.QueryRow(c.Request.Context(), `
+		SELECT s.atribuicao_id, s.aluno_id, a.monitor_id, t.professor_id
 		FROM submissoes s
 		JOIN atribuicoes a ON a.id = s.atribuicao_id
-		WHERE s.id = $1`, id).Scan(&atID, &alID, &mid)
+		JOIN turmas t ON t.id = a.turma_id
+		WHERE s.id = $1`, id).Scan(&atID, &alID, &mid, &profID)
+	if errQ != nil || (!user.IsStaff() && user.ID != profID) {
+		platform.ErrorBody(c, platform.NewAPIError(http.StatusNotFound, platform.CodeNotFound, "Submissão não encontrada."))
+		return
+	}
+
+	if mid != nil && *mid != "" && d.Monitor != nil && d.Monitor.Ligado() {
+		if errMon := d.Monitor.ExcluirSubmissao(c.Request.Context(), *mid, alID); errMon != nil {
+			var apiErr *platform.APIError
+			// Ignora apenas ausência no Monitor (ex.: submissão só local); se o Monitor estiver fora do ar (503), aborta sem excluir parcialmente.
+			if !errors.As(errMon, &apiErr) || (apiErr.Status != http.StatusNotFound && apiErr.Status != http.StatusUnprocessableEntity) {
+				platform.ErrorBody(c, errMon)
+				return
+			}
+		}
+	}
 
 	if err := d.SubmissaoS.Excluir(c.Request.Context(), user, id); err != nil {
 		platform.ErrorBody(c, err)
 		return
 	}
 
-	if mid != nil && *mid != "" && d.Monitor != nil && d.Monitor.Ligado() {
-		_ = d.Monitor.ExcluirSubmissao(c.Request.Context(), *mid, alID)
+	if mid != nil && *mid != "" {
 		_, _ = d.Store.Pool.Exec(c.Request.Context(), `
 			DELETE FROM monitor_estado_aluno WHERE atribuicao_id = $1 AND aluno_id = $2
 		`, atID, alID)
@@ -132,18 +150,32 @@ func (d *Dependencies) ColetarRascunho(c *gin.Context) {
 		})
 		return
 	}
-	sub, err := d.SubmissaoS.Coletar(c.Request.Context(), user, atribuicaoID, alunoID)
-	if err != nil {
-		// Se for atribuição do Monitor, tenta coletar lá:
-		var mid *string
-		if errQ := d.Store.Pool.QueryRow(c.Request.Context(),
-			`SELECT monitor_id FROM atribuicoes WHERE id = $1`, atribuicaoID).Scan(&mid); errQ == nil && mid != nil && *mid != "" {
-			if errMon := d.Monitor.ColetarTentativa(c.Request.Context(), *mid, alunoID); errMon == nil {
-				_ = d.Monitor.PollEstado(c.Request.Context())
-				c.JSON(http.StatusOK, gin.H{"ok": true, "status": "coletada_monitor"})
+
+	// Se a atribuição está no Monitor e não possui rascunho local na API, opera diretamente no Monitor
+	// (garantindo que indisponibilidade do Monitor gere 503 claro em vez de falso 422 local).
+	var mid *string
+	var profID int64
+	var podeAtrasado bool
+	var temTentativaLocal bool
+	if errQ := d.Store.Pool.QueryRow(c.Request.Context(), `
+		SELECT a.monitor_id, t.professor_id, a.pode_atrasado,
+		       EXISTS(SELECT 1 FROM tentativas te WHERE te.atribuicao_id = a.id AND te.aluno_id = $2)
+		FROM atribuicoes a
+		JOIN turmas t ON t.id = a.turma_id
+		WHERE a.id = $1`, atribuicaoID, alunoID).Scan(&mid, &profID, &podeAtrasado, &temTentativaLocal); errQ == nil {
+		if (user.IsStaff() || user.ID == profID) && !podeAtrasado && !temTentativaLocal && mid != nil && *mid != "" && d.Monitor != nil && d.Monitor.Ligado() {
+			if errMon := d.Monitor.ColetarTentativa(c.Request.Context(), *mid, alunoID); errMon != nil {
+				platform.ErrorBody(c, errMon)
 				return
 			}
+			_ = d.Monitor.PollEstadoAtribuicao(c.Request.Context(), atribuicaoID, *mid)
+			c.JSON(http.StatusOK, gin.H{"ok": true, "status": "coletada_monitor"})
+			return
 		}
+	}
+
+	sub, err := d.SubmissaoS.Coletar(c.Request.Context(), user, atribuicaoID, alunoID)
+	if err != nil {
 		platform.ErrorBody(c, err)
 		return
 	}
@@ -200,12 +232,13 @@ func (d *Dependencies) MonitorReexecutar(c *gin.Context) {
 		platform.ErrorBody(c, err)
 		return
 	}
-	_ = d.Monitor.PollEstado(c.Request.Context())
+	_ = d.Monitor.PollEstadoAtribuicao(c.Request.Context(), atribuicaoID, mid)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 // MonitorExcluir: DELETE /v1/atribuicoes/:id/monitor/alunos/:aluno_id/submissao
 func (d *Dependencies) MonitorExcluir(c *gin.Context) {
+	user, _ := currentUser(c)
 	atribuicaoID, ok := idDaRota(c)
 	if !ok {
 		return
@@ -223,7 +256,17 @@ func (d *Dependencies) MonitorExcluir(c *gin.Context) {
 		platform.ErrorBody(c, err)
 		return
 	}
-	_ = d.Monitor.PollEstado(c.Request.Context())
+	// Remove também eventual espelho/submissão já sincronizada na API para manter os 2 bancos consistentes.
+	var subLocalID int64
+	if errS := d.Store.Pool.QueryRow(c.Request.Context(),
+		`SELECT id FROM submissoes WHERE atribuicao_id = $1 AND aluno_id = $2`,
+		atribuicaoID, alunoID).Scan(&subLocalID); errS == nil && subLocalID > 0 {
+		_ = d.SubmissaoS.Excluir(c.Request.Context(), user, subLocalID)
+	}
+	_, _ = d.Store.Pool.Exec(c.Request.Context(),
+		`DELETE FROM monitor_estado_aluno WHERE atribuicao_id = $1 AND aluno_id = $2`,
+		atribuicaoID, alunoID)
+	_ = d.Monitor.PollEstadoAtribuicao(c.Request.Context(), atribuicaoID, mid)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 

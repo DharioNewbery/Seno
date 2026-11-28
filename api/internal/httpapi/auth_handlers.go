@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/seno-project/seno/api/internal/auth"
 	"github.com/seno-project/seno/api/internal/domain"
 	"github.com/seno-project/seno/api/internal/platform"
 )
@@ -132,9 +133,18 @@ func (d *Dependencies) AcceptInvite(c *gin.Context) {
 			"Informe a senha."))
 		return
 	}
+	var userID int64
+	if d.Monitor != nil && d.Monitor.Ligado() {
+		_ = d.Store.Pool.QueryRow(c.Request.Context(),
+			`SELECT user_id FROM one_time_tokens WHERE token_hash = $1 AND kind = 'invite'`,
+			auth.TokenHash(req.Token)).Scan(&userID)
+	}
 	if err := d.Cargo.AcceptInvite(c.Request.Context(), req.Token, req.Senha); err != nil {
 		platform.ErrorBody(c, err)
 		return
+	}
+	if d.Monitor != nil && userID > 0 {
+		d.Monitor.EnfileirarPorUsuario(c.Request.Context(), userID)
 	}
 	c.JSON(http.StatusOK, gin.H{"mensagem": "Senha definida. Você já pode entrar no sistema."})
 }

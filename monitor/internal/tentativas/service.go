@@ -232,6 +232,8 @@ func (s *Service) Salvar(ctx context.Context, mid string, aluno int64,
 
 // precisaSnapshot decide pela regra do spec §5.2: agora - ultimo_ponto >=
 // intervalo (0 = snapshota sempre). Sem ponto anterior, a referência é aberta_em.
+// Importante: usa `tx` (e NUNCA `s.pool`) para evitar deadlock de exaustão do
+// pgxpool quando 20+ alunos salvam rascunho concorrentemente.
 func (s *Service) precisaSnapshot(ctx context.Context, tx pgx.Tx, mid string, aluno int64, agora time.Time) bool {
 	if s.intervalo <= 0 {
 		return true
@@ -241,7 +243,7 @@ func (s *Service) precisaSnapshot(ctx context.Context, tx pgx.Tx, mid string, al
 	    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno).Scan(&ultimo)
 	if ultimo == nil {
 		var abertaEm time.Time
-		if err := s.pool.QueryRow(ctx, `SELECT aberta_em FROM tentativa
+		if err := tx.QueryRow(ctx, `SELECT aberta_em FROM tentativa
 		    WHERE monitor_id = $1 AND aluno_api_id = $2`, mid, aluno).Scan(&abertaEm); err != nil {
 			return false // sem tentativa: UPDATE seguinte devolve ErrSemTentativa
 		}

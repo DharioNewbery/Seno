@@ -1,14 +1,13 @@
 // Package judge0 — cliente da integração com o Judge0 self-hosted do Monitor.
-// Portado de api/internal/judge0 (godé linter médio: os mesmos tipos de
-// resposta/com Armageddon), mas com as verificações da extração à RODAR na
-// instância real (deploy/judge0/reference/PROBES.md):
+// Portado de api/internal/judge0, com as verificações feitas na instância real
+// (deploy/judge0/reference/PROBES.md):
 //   - POST /submissions?wait=true  → resultado inline (envio único);
 //   - POST /submissions/batch      → resultados SÓ por callback/polling
 //     (o `wait=true` do batch devolve apenas tokens nesta versão);
-//   - callback = PUT callback_url, corpo base64, sem header de auth o
+//   - callback = PUT callback_url, corpo base64, sem header de auth — o
 //     segredo vai na própria callback_url (?key=...).
 //
-// Envio em item único com callback (ensaios) e single sync (pré-avaliação).
+// Envio em item único com callback (ensaios) e single sync (pré-avaliação e correção).
 // Também mapeia linguagens do Seno → language_id (python/c/cpp).
 package judge0
 
@@ -16,9 +15,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -30,7 +31,13 @@ const (
 )
 
 // StatusAcceptedID: veredito "accepted" do Judge0 (exibição: spec §5.4).
-const StatusAcceptedID = 3
+const (
+	StatusAcceptedID    = 3
+	StatusWrongAnswerID = 4
+)
+
+// ErrDesligado sinaliza que SENO_JUDGE0_URL não foi configurado.
+var ErrDesligado = errors.New("judge0: integração desligada (URL vazia)")
 
 // RawStatus absorve `status` nos dois formatos (id direto ou objeto).
 type RawStatus int
@@ -51,7 +58,7 @@ func (r *RawStatus) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// StatusID devolve o id, já legacy UnmarshalJSON.
+// StatusID devolve o id numérico do status.
 func (r Resposta) StatusID() int { return int(r.Status) }
 
 // Config do cliente.
@@ -61,7 +68,7 @@ type Config struct {
 }
 
 // Ligada deriva da existência do URL.
-func (c *Config) Ligada() bool { return c.URL != "" }
+func (c *Config) Ligada() bool { return strings.TrimSpace(c.URL) != "" }
 
 // LinguagemDo mapeia o identificador próprio do Seno.
 func LinguagemDo(linguagem string) (int, bool) {
@@ -78,7 +85,7 @@ func LinguagemDo(linguagem string) (int, bool) {
 
 // CarregarConfig das variáveis já lidas (platform.Config).
 func CarregarConfig(url, token string) Config {
-	return Config{URL: url, Token: token}
+	return Config{URL: strings.TrimSuffix(strings.TrimSpace(url), "/"), Token: token}
 }
 
 // Submissao item do lote / envio único (campos conforme PROBES.md).
@@ -96,24 +103,25 @@ type Submissao struct {
 }
 
 // NumStr absorve número ou string do Judge0 no mesmo campo — o GET devolve
-// memory como número, o callback como string (verido ao vivo em PROBES.md;
+// memory como número, o callback como string (verificado ao vivo em PROBES.md;
 // sem isto o polling do fallback engole json error e o run nunca fecha).
 type NumStr string
 
 func (n *NumStr) UnmarshalJSON(b []byte) error {
-	if string(b) == "null" {
+	s := strings.TrimSpace(string(b))
+	if s == "" || s == "null" {
 		*n = ""
 		return nil
 	}
-	if len(b) > 0 && b[0] == '"' {
-		var s string
-		if err := json.Unmarshal(b, &s); err != nil {
+	if len(s) > 0 && s[0] == '"' {
+		var str string
+		if err := json.Unmarshal(b, &str); err != nil {
 			return err
 		}
-		*n = NumStr(s)
+		*n = NumStr(str)
 		return nil
 	}
-	*n = NumStr(b)
+	*n = NumStr(s)
 	return nil
 }
 
@@ -138,14 +146,39 @@ type Client struct {
 }
 
 func NewClient(cfg Config) *Client {
-	return &Client{base: cfg.URL, token: cfg.Token,
-		httpDo: &http.Client{Timeout: 30 * time.Second}}
+	return &Client{
+		base:   strings.TrimSuffix(strings.TrimSpace(cfg.URL), "/"),
+		token:  cfg.Token,
+		httpDo: &http.Client{Timeout: 20 * time.Second},
+	}
+}
+
+// Ligada informa se o cliente possui URL configurada.
+func (c *Client) Ligada() bool {
+	return c != nil && c.base != ""
+}
+
+// Saude verifica rapidamente se o Judge0 responde (timeout curto de 3s).
+func (c *Client) Saude(ctx context.Context) error {
+	if !c.Ligada() {
+		return ErrDesligado
+	}
+	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	var info map[string]any
+	return c.call(pingCtx, "/system_info", nil, &info)
 }
 
 // EnviarSync cria submissão individual e espera o resultado (inline garantido
-// pela instância — PROBES.md). Usado na pré-avaliação (§5.4).
+// pela instância — PROBES.md). Usado na pré-avaliação (§5.4) e correção.
 func (c *Client) EnviarSync(ctx context.Context, s Submissao) (Resposta, error) {
 	var r Resposta
+	if !c.Ligada() {
+		return r, ErrDesligado
+	}
+	if strings.TrimSpace(s.SourceCode) == "" {
+		return Resposta{Status: RawStatus(StatusWrongAnswerID)}, nil
+	}
 	if err := c.call(ctx, `/submissions?wait=true&base64_encoded=false`, s, &r); err != nil {
 		return r, err
 	}
@@ -154,6 +187,9 @@ func (c *Client) EnviarSync(ctx context.Context, s Submissao) (Resposta, error) 
 
 // EnviarAsync cria submissão individual para callback (ensaio, §5.3).
 func (c *Client) EnviarAsync(ctx context.Context, s Submissao) (string, error) {
+	if !c.Ligada() {
+		return "", ErrDesligado
+	}
 	var r struct {
 		Token string `json:"token"`
 	}
@@ -163,13 +199,23 @@ func (c *Client) EnviarAsync(ctx context.Context, s Submissao) (string, error) {
 	return r.Token, nil
 }
 
-// Obter puxa o resultado direto (fallback de polling). O GET com wait=true
-// desta build devolve "In Queue" instantâneo (não bloqueia — verificado em
-// PROBES.md), então re-polling local curto até um estado final.
+// ObterUmaVez consulta o estado atual do token sem loop de espera, evitando
+// travar requisições HTTP de polling quando há vários testes pendentes.
+func (c *Client) ObterUmaVez(ctx context.Context, token string) (Resposta, error) {
+	if !c.Ligada() {
+		return Resposta{}, ErrDesligado
+	}
+	return c.umaVez(ctx, token)
+}
+
+// Obter puxa o resultado direto (fallback de polling curto).
 func (c *Client) Obter(ctx context.Context, token string) (Resposta, error) {
+	if !c.Ligada() {
+		return Resposta{}, ErrDesligado
+	}
 	var r Resposta
 	var err error
-	for i := 0; i < 20; i++ { // teto ~4 s local (não repercute no GET do run)
+	for i := 0; i < 10; i++ { // teto ~2 s local
 		if r, err = c.umaVez(ctx, token); err != nil {
 			return r, err
 		}
@@ -194,6 +240,9 @@ func (c *Client) umaVez(ctx context.Context, token string) (Resposta, error) {
 }
 
 func (c *Client) call(ctx context.Context, path string, corpo any, saida any) error {
+	if !c.Ligada() {
+		return ErrDesligado
+	}
 	metodo := http.MethodGet
 	var rd io.Reader
 	if corpo != nil {

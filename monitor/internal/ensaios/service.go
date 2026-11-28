@@ -18,7 +18,9 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -56,10 +58,12 @@ func New(pool *pgxpool.Pool, j0 *judge0.Client, janela *tentativas.Service,
 
 // Erros que o handler mapeia.
 var (
-	ErrLimite           = errors.New("limite de execuções por minuto")
-	ErrSemTarefa        = errors.New("tarefa não encontrada")
-	ErrSemPublico       = errors.New("tarefa sem testes públicos")
-	ErrTipoNaoSuportado = errors.New("execução de teste disponível apenas para tarefas de programação")
+	ErrLimite                = errors.New("limite de execuções por minuto")
+	ErrSemTarefa             = errors.New("tarefa não encontrada")
+	ErrSemPublico            = errors.New("tarefa sem testes públicos")
+	ErrTipoNaoSuportado      = errors.New("execução de teste disponível apenas para tarefas de programação")
+	ErrAvaliadorIndisponivel = errors.New("avaliador de código temporariamente indisponível")
+	ErrRunInexistente        = errors.New("run inexistente")
 )
 
 type payloadEnsaio struct {
@@ -196,10 +200,41 @@ func (s *Service) Handler() fila.Handler {
 			lim.MemoriaMB = 128
 		}
 
+		if strings.TrimSpace(p.Codigo) == "" {
+			// Judge0 rejeita código vazio com 422: registra reprovação imediata sem chamar a rede.
+			for _, te := range p.Testes {
+				_ = s.registra(ctx, p.Run, te.Ordem, judge0.Resposta{
+					Status: judge0.RawStatus(judge0.StatusWrongAnswerID),
+				})
+			}
+			return nil
+		}
+		if s.j0 == nil || !s.j0.Ligada() {
+			return judge0.ErrDesligado
+		}
+
+		// Idempotência em retentativas: não reenvia testes que já obtiveram token ou veredito.
+		jaEnviados := map[int]bool{}
+		rowsEnv, errQ := s.pool.Query(ctx, `SELECT teste_ordem FROM execucao
+		    WHERE run = $1 AND (veredito IS NOT NULL OR (token IS NOT NULL AND token <> ''))`, p.Run)
+		if errQ == nil {
+			for rowsEnv.Next() {
+				var ord int
+				if rowsEnv.Scan(&ord) == nil {
+					jaEnviados[ord] = true
+				}
+			}
+			rowsEnv.Close()
+		}
+
 		for _, te := range p.Testes {
+			if jaEnviados[te.Ordem] {
+				continue
+			}
 			cb := fmt.Sprintf("%s/interna/callbacks/judge0?key=%s&run=%s&t=%d",
 				s.callbackBase, s.callbackKey, p.Run, te.Ordem)
-			token, err := s.j0.EnviarAsync(ctx, judge0.Submissao{
+			sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			token, err := s.j0.EnviarAsync(sendCtx, judge0.Submissao{
 				LanguageID:     idLinguagem,
 				SourceCode:     p.Codigo,
 				Stdin:          te.Stdin,
@@ -209,16 +244,79 @@ func (s *Service) Handler() fila.Handler {
 				WallTimeSec:    float64(lim.TempoTotalMs) / 1000,
 				MemoriaKB:      lim.MemoriaMB * 1024,
 			})
+			cancel()
 			if err != nil {
 				return fmt.Errorf("ensaio: judge0 (teste %d): %w", te.Ordem, err)
 			}
-			// Fallback: o Judge0 entrega callback silenciosamente descartável
-			// (Windows internet firewall em dev; rede em prod). Com o token, o
-			// GET do run pode buscar o resultado direto do Judge0 (Consultar).
-			_, _ = s.pool.Exec(ctx, `UPDATE execucao SET token = $3
-			    WHERE run = $1 AND teste_ordem = $2`, p.Run, te.Ordem, token)
+			// Fallback: caso o callback do Judge0 se perca (Monitor reiniciando / rede),
+			// o token permite recuperar o resultado diretamente via polling/reconciliação.
+			if _, errUpd := s.pool.Exec(ctx, `UPDATE execucao SET token = $3
+			    WHERE run = $1 AND teste_ordem = $2`, p.Run, te.Ordem, token); errUpd != nil {
+				return fmt.Errorf("ensaio: gravando token (teste %d): %w", te.Ordem, errUpd)
+			}
 		}
 		return nil
+	}
+}
+
+// MarcarFalhaJob registra veredito de falha de infraestrutura quando o job esgota retentativas.
+func (s *Service) MarcarFalhaJob(ctx context.Context, payload json.RawMessage) {
+	var p payloadEnsaio
+	if err := json.Unmarshal(payload, &p); err != nil || p.Run == "" {
+		return
+	}
+	msg := "Avaliador de código indisponível após múltiplas tentativas."
+	_, _ = s.pool.Exec(ctx, `UPDATE execucao
+	    SET veredito = 'erro_avaliador', stderr = $2
+	    WHERE run = $1 AND veredito IS NULL`, p.Run, msg)
+}
+
+// ReconciliarPendentes recupera resultados de ensaios cujos callbacks do Judge0
+// foram perdidos (ex.: Monitor fora do ar quando o Judge0 terminou) e encerra
+// execuções órfãs antigas para que nenhum ensaio fique eternamente pendente.
+func (s *Service) ReconciliarPendentes(ctx context.Context) {
+	// Encerra órfãos sem veredito há mais de 20 minutos.
+	_, _ = s.pool.Exec(ctx, `UPDATE execucao
+	    SET veredito = 'erro_avaliador',
+	        stderr = COALESCE(stderr, 'Tempo limite de espera pelo avaliador esgotado.')
+	    WHERE veredito IS NULL AND criada_em < now() - interval '20 minutes'`)
+
+	if s.j0 == nil || !s.j0.Ligada() {
+		return
+	}
+	rows, err := s.pool.Query(ctx, `SELECT run, teste_ordem, token
+	    FROM execucao
+	    WHERE veredito IS NULL AND token IS NOT NULL AND token <> ''
+	      AND criada_em > now() - interval '20 minutes'
+	    ORDER BY criada_em ASC LIMIT 25`)
+	if err != nil {
+		return
+	}
+	type itemPendente struct {
+		run   string
+		ordem int
+		token string
+	}
+	var pendentes []itemPendente
+	for rows.Next() {
+		var it itemPendente
+		if rows.Scan(&it.run, &it.ordem, &it.token) == nil {
+			pendentes = append(pendentes, it)
+		}
+	}
+	rows.Close()
+
+	for _, it := range pendentes {
+		if ctx.Err() != nil {
+			return
+		}
+		obterCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		r, err := s.j0.ObterUmaVez(obterCtx, it.token)
+		cancel()
+		if err != nil {
+			continue
+		}
+		_ = s.registra(ctx, it.run, it.ordem, r)
 	}
 }
 
@@ -384,24 +482,49 @@ func (s *Service) Consultar(ctx context.Context, mid string, aluno int64, run st
 		e.Resultados = append(e.Resultados, r)
 	}
 	if err := rows.Err(); err != nil {
+		rows.Close()
 		return nil, fmt.Errorf("ensaios: consultar: %w", err)
 	}
+	rows.Close()
+
 	if len(e.Resultados) == 0 && e.Pendentes == 0 && len(pendentes) == 0 {
-		return nil, errors.New("run inexistente") // handler: 404
+		return nil, ErrRunInexistente // handler: 404
 	}
-	// Fallback ativo: pedido direto ao Judge0 pelo token (callback perdido).
-	if len(pendentes) > 0 {
+	// Fallback ativo não-bloqueante: consulta direta ao Judge0 pelo token com orçamento curto.
+	if len(pendentes) > 0 && s.j0 != nil && s.j0.Ligada() {
+		pollBudgetCtx, cancelBudget := context.WithTimeout(ctx, 4*time.Second)
 		for _, p := range pendentes {
-			obterCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-			r, err := s.j0.Obter(obterCtx, p.token)
+			if pollBudgetCtx.Err() != nil {
+				break
+			}
+			obterCtx, cancel := context.WithTimeout(pollBudgetCtx, 1500*time.Millisecond)
+			r, err := s.j0.ObterUmaVez(obterCtx, p.token)
 			cancel()
 			if err != nil {
 				continue // ainda na fila ou indisponível: segue pendente
 			}
 			_ = s.registra(ctx, run, p.ordem, r)
 		}
-		// re-estado após o fallback (passam a pronto nesta mesma resposta).
-		return s.lerEstado(ctx, mid, aluno, run)
+		cancelBudget()
+		estAtual, err := s.lerEstado(ctx, mid, aluno, run)
+		if err != nil {
+			return nil, err
+		}
+		if estAtual.Pronto {
+			return estAtual, nil
+		}
+		e = *estAtual
+	}
+	// Se ainda há testes sem token e o worker já falhou ao contatar o Judge0,
+	// informa imediatamente a indisponibilidade ao aluno em vez de deixá-lo esperando.
+	if e.Pendentes > 0 && s.j0 != nil && s.j0.Ligada() {
+		var falhas int
+		_ = s.pool.QueryRow(ctx, `SELECT COALESCE(max(attempts), 0)
+		    FROM jobs WHERE kind = $1 AND payload->>'run' = $2 AND last_error IS NOT NULL`,
+			KindEnsaio, run).Scan(&falhas)
+		if falhas > 0 {
+			return nil, ErrAvaliadorIndisponivel
+		}
 	}
 	e.Pronto = e.Pendentes == 0
 	return &e, nil
@@ -489,8 +612,11 @@ func decodificaB64(s string) string {
 	if s == "" {
 		return ""
 	}
-	if b, err := base64.StdEncoding.DecodeString(s); err == nil {
-		return string(b)
+	limpo := strings.ReplaceAll(strings.ReplaceAll(s, "\n", ""), "\r", "")
+	if limpo != "" {
+		if b, err := base64.StdEncoding.DecodeString(limpo); err == nil && utf8.Valid(b) {
+			return string(b)
+		}
 	}
 	return s // já cru
 }

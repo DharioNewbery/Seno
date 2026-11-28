@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -45,6 +46,11 @@ type Dependencies struct {
 // Ligo o redirect do /entrar p/ a tela da prova (§AppServir) e as rotas
 // estáticas da realização; middleware da rota de aluno valida sessão.
 func RegisterRoutes(r *gin.Engine, d *Dependencies) {
+	r.Use(gin.CustomRecovery(func(c *gin.Context, recovered any) {
+		slog.Error("monitor: panic recuperado em handler HTTP", "panic", recovered, "path", c.Request.URL.Path)
+		respondErro(c, http.StatusInternalServerError, contract.CodeInternal,
+			"Erro interno do servidor.", nil)
+	}))
 	r.Use(d.limiteCorpo)
 	r.GET("/healthz", d.Healthz)
 	r.POST("/interna/v1/atividades", d.ReceberAtividade)

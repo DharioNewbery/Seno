@@ -10,12 +10,12 @@ import (
 
 // Códigos de erro do envelope único da API (ARQUITETURA §4.2).
 const (
-	CodeUnauthorized   = "SESSAO_INVALIDA"
-	CodeForbidden      = "SEM_PERMISSAO"
-	CodeNotFound       = "NAO_ENCONTRADO"
-	CodeConflict       = "CONFLITO_DE_ESTADO"
-	CodeRateLimited    = "LIMITE_EXCEDIDO"
-	CodeUnprocessable  = "VALIDACAO"
+	CodeUnauthorized       = "SESSAO_INVALIDA"
+	CodeForbidden          = "SEM_PERMISSAO"
+	CodeNotFound           = "NAO_ENCONTRADO"
+	CodeConflict           = "CONFLITO_DE_ESTADO"
+	CodeRateLimited        = "LIMITE_EXCEDIDO"
+	CodeUnprocessable      = "VALIDACAO"
 	CodeInternal           = "ERRO_INTERNO"
 	CodeServiceUnavailable = "SERVICO_INDISPONIVEL"
 	CodeWrongTimestamp     = "ORIGEM_INVALIDA"

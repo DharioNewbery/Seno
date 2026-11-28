@@ -25,8 +25,11 @@ import (
 	"github.com/seno-project/seno/monitor/internal/tentativas"
 )
 
-// KindCorrecao é o kind do job de correção na fila.
-const KindCorrecao = "correcao"
+// KindCorrecao e KindNotificarAPI são os kinds dos jobs persistentes na fila do Monitor.
+const (
+	KindCorrecao     = "correcao"
+	KindNotificarAPI = "notificar_api"
+)
 
 type Service struct {
 	pool   *pgxpool.Pool
@@ -197,19 +200,20 @@ func (s *Service) Confirmar(ctx context.Context, mid string, aluno int64, preID 
 		subID, mid, aluno); err != nil {
 		return nil, fmt.Errorf("submissoes: correcao: %w", err)
 	}
+	// Transactional Outbox: agenda a correção na mesma transação da entrega,
+	// garantindo zero perda caso o processo reinicie logo após o commit.
+	if _, err := fila.AgendaTx(ctx, tx, KindCorrecao, payloadCorrecao{
+		SubmissaoID: subID,
+	}, 5); err != nil {
+		return nil, fmt.Errorf("submissoes: agendando correcao: %w", err)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("submissoes: commit: %w", err)
 	}
 
-	// Envia imediatamente a submissão para a API (fonte única da verdade).
-	s.notificarAPI(ctx, mid, aluno)
-
-	if _, err := fila.Agenda(ctx, s.pool, KindCorrecao, map[string]any{
-		"submissao_id": subID,
-	}, 5); err != nil {
-		// entrega já registrada: a correção pode ser reexecutada (§5 Fase 8)
-		slog.Error("submissoes: enfileirando correção", "err", err)
-	}
+	// Envia imediatamente para a API com timeout curto (2s) e, caso a API esteja
+	// fora do ar, grava job persistente `notificar_api` na fila para retentativa automática.
+	s.notificarImediatoOuEnfileirar(mid, aluno)
 	return &Entrega{Status: "entregue", NT: nT, Atrasada: est.Atrasada, SegundosAtraso: segundosAtraso}, nil
 }
 
@@ -246,6 +250,15 @@ func (s *Service) Finalizado(ctx context.Context, mid string, aluno int64) (bool
 
 type payloadCorrecao struct {
 	SubmissaoID int64 `json:"submissao_id"`
+}
+
+type payloadNotificarAPI struct {
+	MonitorID  string `json:"monitor_id"`
+	AlunoAPIID int64  `json:"aluno_api_id"`
+}
+
+func (s *Service) apiPushLigado() bool {
+	return s.apiURL != "" && len(s.secret) > 0
 }
 
 // --- estrutura da correção --------------------------------------------------
@@ -301,10 +314,30 @@ func (s *Service) Handler() fila.Handler {
 		respostas := map[string]any{}
 		_ = json.Unmarshal(dados, &respostas)
 
+		precisaJudge0 := false
+		for _, tarefa := range t.Carga.Tarefas {
+			if contract.NormalizarTipoTarefa(tarefa.Tipo) != contract.TipoTarefaArquivo && len(tarefa.Testes) > 0 {
+				precisaJudge0 = true
+				break
+			}
+		}
+		if precisaJudge0 && (s.j0 == nil || !s.j0.Ligada()) {
+			// Sem Judge0 configurado: mantém correção 'pendente' (avaliação manual na API)
+			// e garante que o pacote da submissão seja sincronizado com a API.
+			s.enfileirarOuNotificarAPI(ctx, mid, aluno)
+			return nil
+		}
+
 		_, err := s.pool.Exec(ctx, `UPDATE correcao SET status = 'executando', concluida_em = NULL
 		    WHERE submissao_id = $1`, p.SubmissaoID)
 		if err != nil {
 			return fmt.Errorf("correcao: status: %w", err)
+		}
+		reverterPendente := func() {
+			revCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_, _ = s.pool.Exec(revCtx, `UPDATE correcao SET status = 'pendente'
+			    WHERE submissao_id = $1 AND status = 'executando'`, p.SubmissaoID)
 		}
 
 		tarefas := make([]resultadoCOR, 0, len(t.Carga.Tarefas))
@@ -326,6 +359,15 @@ func (s *Service) Handler() fila.Handler {
 				})
 				continue
 			}
+			if len(tarefa.Testes) == 0 {
+				// Tarefa aberta (sem casos de teste): nota manual pelo professor.
+				tarefas = append(tarefas, resultadoCOR{
+					Ordem:       tarefa.Ordem,
+					TarefaAPIID: tarefa.TarefaAPIID,
+					Veredito:    "manual",
+				})
+				continue
+			}
 			codigo := ""
 			if v, ok := respostas[fmt.Sprint(tarefa.Ordem)]; ok {
 				if s, ok := v.(string); ok {
@@ -334,6 +376,7 @@ func (s *Service) Handler() fila.Handler {
 			}
 			idLinguagem, ok := judge0.LinguagemDo(tarefa.Linguagem)
 			if !ok {
+				reverterPendente()
 				return fmt.Errorf("correcao: linguagem %s", tarefa.Linguagem)
 			}
 			lim := tarefa.Limites
@@ -348,7 +391,8 @@ func (s *Service) Handler() fila.Handler {
 			acertos, total := 0, 0
 			for i, te := range tarefa.Testes {
 				total++
-				resp, err := s.j0.EnviarSync(ctx, judge0.Submissao{
+				callCtx, cancelCall := context.WithTimeout(ctx, 15*time.Second)
+				resp, err := s.j0.EnviarSync(callCtx, judge0.Submissao{
 					LanguageID:     idLinguagem,
 					SourceCode:     codigo,
 					Stdin:          te.Stdin,
@@ -357,7 +401,9 @@ func (s *Service) Handler() fila.Handler {
 					WallTimeSec:    float64(lim.TempoTotalMs) / 1000,
 					MemoriaKB:      lim.MemoriaMB * 1024,
 				})
+				cancelCall()
 				if err != nil {
+					reverterPendente()
 					return fmt.Errorf("correcao: judge0 (tarefa %d, teste %d): %w", tarefa.Ordem, i+1, err)
 				}
 				st := "judge0:" + strconv.Itoa(resp.StatusID())
@@ -365,7 +411,7 @@ func (s *Service) Handler() fila.Handler {
 					st = "accepted"
 					acertos++
 				} else if resp.StatusID() == 1 || resp.StatusID() == 2 {
-					// fila do judge0 estagnada: retente (o handler re-executa)
+					reverterPendente()
 					return fmt.Errorf("correcao: judge0 em fila (tarefa %d)", tarefa.Ordem)
 				}
 				cpuVal := tempo(resp.CPUTime)
@@ -400,6 +446,7 @@ func (s *Service) Handler() fila.Handler {
 			"tarefas": tarefas, "nota_auto": notaTotal,
 		})
 		if err != nil {
+			reverterPendente()
 			return fmt.Errorf("correcao: relatório: %w", err)
 		}
 		if _, err := s.pool.Exec(ctx, `UPDATE correcao
@@ -410,8 +457,9 @@ func (s *Service) Handler() fila.Handler {
 		}
 		slog.Info("correção concluída", "submissao_id", p.SubmissaoID, "nota", notaTotal)
 
-		// Envia o resultado completo da correção automática para a API principal.
-		s.notificarAPI(ctx, mid, aluno)
+		// Tenta envio imediato para a API; se a API estiver fora do ar, agenda job
+		// persistente para retentativa sem precisar reexecutar os testes no Judge0.
+		s.enfileirarOuNotificarAPI(ctx, mid, aluno)
 		return nil
 	}
 }
@@ -628,17 +676,16 @@ func (s *Service) Coletar(ctx context.Context, mid string, aluno int64, agora ti
 		subID, mid, aluno); err != nil {
 		return nil, fmt.Errorf("submissoes: correcao: %w", err)
 	}
+	if _, err := fila.AgendaTx(ctx, tx, KindCorrecao, payloadCorrecao{
+		SubmissaoID: subID,
+	}, 5); err != nil {
+		return nil, fmt.Errorf("submissoes: agendando correcao na coleta: %w", err)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("submissoes: commit: %w", err)
 	}
 
-	s.notificarAPI(ctx, mid, aluno)
-
-	if _, err := fila.Agenda(ctx, s.pool, KindCorrecao, map[string]any{
-		"submissao_id": subID,
-	}, 5); err != nil {
-		slog.Error("submissoes: enfileirando correção", "err", err)
-	}
+	s.notificarImediatoOuEnfileirar(mid, aluno)
 	return &Entrega{Status: "entregue", NT: nT, Atrasada: true, SegundosAtraso: 0}, nil
 }
 
@@ -847,19 +894,159 @@ func (s *Service) carregarArquivosTentativa(ctx context.Context, mid string, alu
 	return out
 }
 
-// notificarAPI envia o pacote da submissão e correção para a API principal via HMAC
-// sempre que uma submissão é confirmada/coletada ou quando a correção automática termina.
-func (s *Service) notificarAPI(ctx context.Context, mid string, aluno int64) {
-	if s.apiURL == "" || len(s.secret) == 0 {
+// NotificarAPIHandler devolve o worker da fila para sincronizar pacotes pendentes
+// de submissão/correção com a API principal (com retentativa automática se a API estiver fora do ar).
+func (s *Service) NotificarAPIHandler() fila.Handler {
+	return func(ctx context.Context, payload json.RawMessage) error {
+		var p payloadNotificarAPI
+		if err := json.Unmarshal(payload, &p); err != nil {
+			return fmt.Errorf("notificar_api: payload: %w", err)
+		}
+		if !s.apiPushLigado() || p.MonitorID == "" || p.AlunoAPIID == 0 {
+			return nil
+		}
+		return s.enviarPacoteAPI(ctx, p.MonitorID, p.AlunoAPIID)
+	}
+}
+
+// MarcarFalhaJob garante que uma correção cujas retentativas da fila esgotaram
+// transicione para 'falhou' (nunca ficando presa em 'pendente'/'executando') e notifique a API.
+func (s *Service) MarcarFalhaJob(ctx context.Context, payload json.RawMessage) {
+	var p payloadCorrecao
+	if err := json.Unmarshal(payload, &p); err != nil || p.SubmissaoID == 0 {
 		return
 	}
-	pacote, err := s.ObterDetalhes(ctx, mid, aluno)
-	if err != nil || pacote == nil || pacote.Submissao == nil || pacote.Submissao.ID == 0 {
+	var mid string
+	var aluno int64
+	err := s.pool.QueryRow(ctx, `UPDATE correcao
+	    SET status = 'falhou'
+	    WHERE submissao_id = $1 AND status <> 'concluida'
+	    RETURNING monitor_id, aluno_api_id`, p.SubmissaoID).Scan(&mid, &aluno)
+	if err == nil && s.apiPushLigado() {
+		_, _ = fila.Agenda(ctx, s.pool, KindNotificarAPI, payloadNotificarAPI{
+			MonitorID:  mid,
+			AlunoAPIID: aluno,
+		}, 6)
+	}
+}
+
+// ReconciliarPendentes garante auto-recuperação após quedas prolongadas do Judge0 ou da API:
+//  1. Destrava correções 'executando' há mais de 12 min sem job ativo;
+//  2. Reenfileira correções 'pendente' órfãs ou 'falhou' quando o Judge0 volta a responder;
+//  3. Reenfileira jobs 'notificar_api' que esgotaram tentativas quando a API volta ao ar.
+func (s *Service) ReconciliarPendentes(ctx context.Context) {
+	// 1. Correções 'executando' órfãs (> 12 min sem job executando).
+	_, _ = s.pool.Exec(ctx, `UPDATE correcao c
+	    SET status = 'pendente'
+	    WHERE c.status = 'executando'
+	      AND c.criada_em < now() - interval '12 minutes'
+	      AND NOT EXISTS (
+	          SELECT 1 FROM jobs j
+	          WHERE j.kind = $1 AND j.status IN ('agendado', 'executando')
+	            AND (j.payload->>'submissao_id')::bigint = c.submissao_id
+	      )`, KindCorrecao)
+
+	// 2. Se Judge0 estiver saudável, reenfileira correções pendentes sem job ou que falharam por queda do Judge0.
+	if s.j0 != nil && s.j0.Ligada() && s.j0.Saude(ctx) == nil {
+		rows, err := s.pool.Query(ctx, `SELECT c.submissao_id
+		    FROM correcao c
+		    WHERE c.status IN ('pendente', 'falhou')
+		      AND NOT EXISTS (
+		          SELECT 1 FROM jobs j
+		          WHERE j.kind = $1 AND j.status IN ('agendado', 'executando')
+		            AND (j.payload->>'submissao_id')::bigint = c.submissao_id
+		      )
+		    ORDER BY c.criada_em ASC LIMIT 10`, KindCorrecao)
+		if err == nil {
+			var ids []int64
+			for rows.Next() {
+				var id int64
+				if rows.Scan(&id) == nil {
+					ids = append(ids, id)
+				}
+			}
+			rows.Close()
+			for _, id := range ids {
+				_, _ = s.pool.Exec(ctx, `UPDATE correcao SET status = 'pendente' WHERE submissao_id = $1 AND status = 'falhou'`, id)
+				_, _ = fila.Agenda(ctx, s.pool, KindCorrecao, payloadCorrecao{SubmissaoID: id}, 4)
+			}
+		}
+	}
+
+	// 3. Se API estiver saudável, reativa jobs de sincronização que esgotaram tentativas durante queda longa da API.
+	if s.apiPushLigado() && s.apiSaudavel(ctx) {
+		_, _ = s.pool.Exec(ctx, `UPDATE jobs
+		    SET status = 'agendado', attempts = 0, run_after = now(), updated_at = now()
+		    WHERE kind = $1 AND status = 'falhou'`, KindNotificarAPI)
+	}
+}
+
+func (s *Service) apiSaudavel(ctx context.Context) bool {
+	if !s.apiPushLigado() {
+		return false
+	}
+	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(pingCtx, http.MethodGet, s.apiURL+"/healthz", nil)
+	if err != nil {
+		return false
+	}
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
+}
+
+func (s *Service) notificarImediatoOuEnfileirar(mid string, aluno int64) {
+	if !s.apiPushLigado() {
 		return
+	}
+	pushCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := s.enviarPacoteAPI(pushCtx, mid, aluno); err != nil {
+		slog.Warn("monitor: API indisponível na entrega; agendando sincronização persistente",
+			"monitor_id", mid, "aluno", aluno, "err", err)
+		qCtx, qCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer qCancel()
+		_, _ = fila.Agenda(qCtx, s.pool, KindNotificarAPI, payloadNotificarAPI{
+			MonitorID:  mid,
+			AlunoAPIID: aluno,
+		}, 6)
+	}
+}
+
+func (s *Service) enfileirarOuNotificarAPI(ctx context.Context, mid string, aluno int64) {
+	if !s.apiPushLigado() {
+		return
+	}
+	if err := s.enviarPacoteAPI(ctx, mid, aluno); err != nil {
+		slog.Warn("monitor: API indisponível no push imediato; agendando retentativa persistente",
+			"monitor_id", mid, "aluno", aluno, "err", err)
+		_, _ = fila.Agenda(ctx, s.pool, KindNotificarAPI, payloadNotificarAPI{
+			MonitorID:  mid,
+			AlunoAPIID: aluno,
+		}, 6)
+	}
+}
+
+// enviarPacoteAPI envia o pacote da submissão e correção para a API principal via HMAC.
+// Devolve erro quando a API está inacessível ou responde erro transitório, permitindo retentativa na fila.
+func (s *Service) enviarPacoteAPI(ctx context.Context, mid string, aluno int64) error {
+	if !s.apiPushLigado() {
+		return nil
+	}
+	pacote, err := s.ObterDetalhes(ctx, mid, aluno)
+	if err != nil {
+		return err
+	}
+	if pacote == nil || pacote.Submissao == nil || pacote.Submissao.ID == 0 {
+		return nil
 	}
 	corpo, err := json.Marshal(pacote)
 	if err != nil {
-		return
+		return err
 	}
 	mac, ts := contract.AssinarMAC(s.secret, time.Now(), corpo)
 	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -867,18 +1054,18 @@ func (s *Service) notificarAPI(ctx context.Context, mid string, aluno int64) {
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost,
 		s.apiURL+"/v1/interna/monitor/submissoes", bytes.NewReader(corpo))
 	if err != nil {
-		return
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(contract.HeaderMAC, mac)
 	req.Header.Set(contract.HeaderTime, ts)
 	resp, err := s.http.Do(req)
 	if err != nil {
-		slog.Warn("monitor: falha ao enviar submissão para a API (será sincronizada no polling)", "err", err)
-		return
+		return fmt.Errorf("monitor push api: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
-		slog.Warn("monitor: API rejeitou envio de submissão", "status", resp.StatusCode)
+		return fmt.Errorf("monitor push api: status %d", resp.StatusCode)
 	}
+	return nil
 }

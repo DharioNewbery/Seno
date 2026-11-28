@@ -25,8 +25,16 @@ services:
       - "2358"
     privileged: true # isolate precisa (sandbox interno)
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:2358/system_info >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     <<: *default-logging
     restart: always
 
@@ -38,8 +46,10 @@ services:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     privileged: true
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     <<: *default-logging
     restart: always
 
@@ -48,6 +58,11 @@ services:
     env_file: judge0.conf
     volumes:
       - postgres-data:/var/lib/postgresql/data/
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-judge0} -d $${POSTGRES_DB:-judge0}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     <<: *default-logging
     restart: always
 
@@ -60,6 +75,11 @@ services:
     env_file: judge0.conf
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     <<: *default-logging
     restart: always
 

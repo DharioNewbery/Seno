@@ -22,11 +22,16 @@ import (
 
 	"github.com/seno-project/seno/api/db/gen"
 	"github.com/seno-project/seno/api/internal/domain"
+	"github.com/seno-project/seno/api/internal/fila"
 	"github.com/seno-project/seno/api/internal/judge0"
 	"github.com/seno-project/seno/api/internal/platform"
 	"github.com/seno-project/seno/api/internal/store"
 	"github.com/seno-project/seno/contract"
 )
+
+// KindCorrecaoExecutar é o kind do job na fila PostgreSQL quando o Judge0
+// estava indisponível no momento da submissão/reexecução.
+const KindCorrecaoExecutar = "correcao_executar"
 
 // Service coordena as correções.
 type Service struct {
@@ -359,6 +364,18 @@ func (s *Service) Iniciar(
 func (s *Service) despachar(
 	ctx context.Context, correcaoID int64, sub gen.GetSubmissaoCorrecaoRow, createdBy int64,
 ) error {
+	return s.despacharInterno(ctx, correcaoID, sub, createdBy, true)
+}
+
+type payloadCorrecaoJob struct {
+	CorrecaoID  int64 `json:"correcao_id"`
+	SubmissaoID int64 `json:"submissao_id"`
+	CreatedBy   int64 `json:"created_by"`
+}
+
+func (s *Service) despacharInterno(
+	ctx context.Context, correcaoID int64, sub gen.GetSubmissaoCorrecaoRow, createdBy int64, enfileirarEmFalha bool,
+) error {
 	// Correção de tarefa: por tarefa da atividade (ordem/valor).
 	tarefasDaAtividade, err := s.store.Q.TarefasDaAtribuicao(ctx, sub.AtribuicaoID)
 	if err != nil {
@@ -377,6 +394,7 @@ func (s *Service) despachar(
 
 	statusEnvio := StatusPendente
 	var itens []judge0.SubmissaoJudge0
+	teveTesteResolvidoLocal := false
 	for _, at := range tarefasDaAtividade {
 		// Correção de tarefa nasce sempre (grade manual funciona mesmo
 		// sem Judge0; com Judge0, recebe os resultados por callback).
@@ -398,10 +416,23 @@ func (s *Service) despachar(
 		if err != nil {
 			return err
 		}
+		codigo := fontes[at.TarefaID]
+		if strings.TrimSpace(codigo) == "" {
+			// Judge0 rejeita source_code em branco com 422; grava reprovação imediata.
+			for _, te := range testes {
+				if err := s.AplicarResultado(ctx, ctID, te.ID, judge0.RespostaJudge0{
+					Status: judge0.RawStatus(judge0.StatusWrongAnswerID),
+				}); err != nil {
+					return err
+				}
+				teveTesteResolvidoLocal = true
+			}
+			continue
+		}
 		for _, te := range testes {
 			itens = append(itens, judge0.SubmissaoJudge0{
 				LanguageID:     lingID,
-				SourceCode:     fontes[at.TarefaID],
+				SourceCode:     codigo,
 				Stdin:          te.Stdin,
 				ExpectedOutput: te.StdoutEsperado,
 				CallbackURL:    s.callbackURL(ctID, te.ID),
@@ -416,7 +447,24 @@ func (s *Service) despachar(
 				Kind:   "correcao.judge0_falhou",
 				Detail: fmt.Sprintf("correcao=%d err=%v", correcaoID, err),
 			})
-			statusEnvio = StatusFalhou
+			if !enfileirarEmFalha {
+				return fmt.Errorf("judge0 indisponível na correção %d: %w", correcaoID, err)
+			}
+			// Judge0 indisponível: armazena na fila persistente para execução posterior.
+			if _, qErr := fila.Agenda(ctx, s.store, KindCorrecaoExecutar, payloadCorrecaoJob{
+				CorrecaoID:  correcaoID,
+				SubmissaoID: sub.ID,
+				CreatedBy:   createdBy,
+			}, 3); qErr == nil {
+				statusEnvio = StatusPendente
+			} else {
+				statusEnvio = StatusFalhou
+			}
+		}
+	} else if s.cfg.Ligada() && teveTesteResolvidoLocal {
+		faltando, errF := s.store.Q.ContarResultadosFaltando(ctx, correcaoID)
+		if errF == nil && faltando == 0 {
+			statusEnvio = StatusConcluida
 		}
 	}
 	if statusEnvio != StatusPendente {
@@ -427,6 +475,46 @@ func (s *Service) despachar(
 		}
 	}
 	return nil
+}
+
+// Handler devolve o worker da fila para reenviar correções pendentes ao Judge0.
+func (s *Service) Handler() fila.Handler {
+	return func(ctx context.Context, payload json.RawMessage) error {
+		var p payloadCorrecaoJob
+		if err := json.Unmarshal(payload, &p); err != nil {
+			return fmt.Errorf("correcao_executar: payload: %w", err)
+		}
+		corRow, err := s.store.Q.GetCorrecaoPorSubmissao(ctx, p.SubmissaoID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
+			}
+			return err
+		}
+		if corRow.ConfirmadaEm.Valid || corRow.PublicadaEm.Valid || corRow.Status == StatusConcluida {
+			return nil
+		}
+		sub, err := s.store.Q.GetSubmissaoCorrecao(ctx, p.SubmissaoID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
+			}
+			return err
+		}
+		return s.despacharInterno(ctx, corRow.ID, sub, p.CreatedBy, false)
+	}
+}
+
+// MarcarFalhaJob marca a correção como 'falhou' quando todas as tentativas da fila se esgotam.
+func (s *Service) MarcarFalhaJob(ctx context.Context, payload json.RawMessage) {
+	var p payloadCorrecaoJob
+	if err := json.Unmarshal(payload, &p); err != nil || p.CorrecaoID == 0 {
+		return
+	}
+	_, _ = s.store.Pool.Exec(ctx, `
+		UPDATE correcoes SET status = 'falhou'
+		WHERE id = $1 AND status IN ('pendente', 'executando') AND confirmada_em IS NULL`,
+		p.CorrecaoID)
 }
 
 // Reexecutar reinicia a avaliação automática da correção (dono|staff).
@@ -521,6 +609,10 @@ func (s *Service) callbackURL(ctID, testeID int64) string {
 func (s *Service) AplicarResultado(
 	ctx context.Context, correcaoTarefaID, testeID int64, r judge0.RespostaJudge0,
 ) error {
+	if r.EmFila() {
+		// Estados transitórios do Judge0 (1=In Queue, 2=Processing) não fecham o teste.
+		return nil
+	}
 	ct, err := s.store.Q.GetCorrecaoTarefa(ctx, correcaoTarefaID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -529,13 +621,16 @@ func (s *Service) AplicarResultado(
 		return err
 	}
 	status := judge0.StatusVeredito(r.StatusID())
+	tempoS := r.Time.String()
+	memS := r.Memory.String()
+	cpuS := r.CPUTime.String()
 	if err := s.store.Q.AplicarResultado(ctx, gen.AplicarResultadoParams{
 		CorrecaoTarefaID: correcaoTarefaID,
 		TesteID:          testeID,
 		Status:           &status,
 		Stdout:           textoL(&r.Stdout), Stderr: textoL(&r.Stderr),
 		CompileOutput: textoL(&r.CompileOutput),
-		Tempo:         textoL(&r.Time), Memoria: textoL(&r.Memory), Cpu: textoL(&r.CPUTime),
+		Tempo:         textoL(&tempoS), Memoria: textoL(&memS), Cpu: textoL(&cpuS),
 	}); err != nil {
 		return err
 	}

@@ -240,7 +240,9 @@ func (s *Service) TestarTarefa(
 	}
 	respostas, err := s.judge0.EnviarBatchSincrono(ctx, itens)
 	if err != nil {
-		return Execucao{}, s.errIndisponivel("Judge0 indisponível; tente de cedo.")
+		return Execucao{}, platform.NewAPIError(
+			http.StatusServiceUnavailable, platform.CodeServiceUnavailable,
+			"O avaliador de código (Judge0) está temporariamente indisponível. Tente novamente em instantes.")
 	}
 	resultados := make([]ResultadoTeste, 0, len(respostas))
 	for i, r := range respostas {
@@ -252,8 +254,8 @@ func (s *Service) TestarTarefa(
 			Status: ptrTexto(statusDe(r.StatusID())),
 			Stdout: ptrTexto(r.Stdout), Stderr: ptrTexto(r.Stderr),
 			CompileOutput: ptrTexto(r.CompileOutput),
-			Tempo:         ptrTexto(r.Time), Memoria: ptrTexto(r.Memory),
-			CPU: ptrTexto(r.CPUTime),
+			Tempo:         ptrTexto(r.Time.String()), Memoria: ptrTexto(r.Memory.String()),
+			CPU: ptrTexto(r.CPUTime.String()),
 		})
 	}
 	venceus, err := json.Marshal(resultados)
@@ -373,7 +375,9 @@ func (s *Service) TestarTarefaProfessor(
 	}
 	respostas, err := s.judge0.EnviarBatchSincrono(ctx, itens)
 	if err != nil {
-		return nil, s.errIndisponivel("Judge0 indisponível; tente de novo.")
+		return nil, platform.NewAPIError(
+			http.StatusServiceUnavailable, platform.CodeServiceUnavailable,
+			"O avaliador de código (Judge0) está temporariamente indisponível. Tente novamente em instantes.")
 	}
 	out := make([]ResultadoTeste, 0, len(respostas))
 	for i, r := range respostas {
@@ -385,8 +389,8 @@ func (s *Service) TestarTarefaProfessor(
 			Status: ptrTexto(statusDe(r.StatusID())),
 			Stdout: ptrTexto(r.Stdout), Stderr: ptrTexto(r.Stderr),
 			CompileOutput: ptrTexto(r.CompileOutput),
-			Tempo:         ptrTexto(r.Time), Memoria: ptrTexto(r.Memory),
-			CPU: ptrTexto(r.CPUTime),
+			Tempo:         ptrTexto(r.Time.String()), Memoria: ptrTexto(r.Memory.String()),
+			CPU: ptrTexto(r.CPUTime.String()),
 		})
 	}
 	return out, nil

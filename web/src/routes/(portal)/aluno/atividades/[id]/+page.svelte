@@ -66,6 +66,9 @@
 </script>
 
 <section class="pre">
+  {#if data.aviso}
+    <p class="aviso erro" role="alert">{data.aviso}</p>
+  {/if}
   {#if data.erro}
     <p class="aviso erro" role="alert">{data.erro}</p>
   {:else if a}

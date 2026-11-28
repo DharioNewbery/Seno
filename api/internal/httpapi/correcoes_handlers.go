@@ -91,6 +91,37 @@ func (d *Dependencies) reexecutarCorrecao(c *gin.Context) {
 	if !ok {
 		return
 	}
+	// Se a submissão pertence a uma atribuição do Monitor (onde residem os testes e a correção
+	// da prova), aciona a reexecução no Monitor mantendo ambos os serviços consistentes.
+	if d.Monitor != nil && d.Monitor.Ligado() {
+		var atID, alID, profID int64
+		var mid *string
+		var confirmada bool
+		if errQ := d.Store.Pool.QueryRow(c.Request.Context(), `
+			SELECT s.atribuicao_id, s.aluno_id, a.monitor_id, t.professor_id,
+			       EXISTS(SELECT 1 FROM correcoes co WHERE co.submissao_id = s.id AND co.confirmada_em IS NOT NULL)
+			FROM submissoes s
+			JOIN atribuicoes a ON a.id = s.atribuicao_id
+			JOIN turmas t ON t.id = a.turma_id
+			WHERE s.id = $1`, id).Scan(&atID, &alID, &mid, &profID, &confirmada); errQ == nil &&
+			(user.IsStaff() || user.ID == profID) && !confirmada && mid != nil && *mid != "" {
+			if errMon := d.Monitor.Reexecutar(c.Request.Context(), *mid, alID); errMon != nil {
+				platform.ErrorBody(c, errMon)
+				return
+			}
+			_, _ = d.Store.Pool.Exec(c.Request.Context(), `
+				UPDATE correcoes SET status = 'executando'
+				WHERE submissao_id = $1 AND confirmada_em IS NULL`, id)
+			_ = d.Monitor.PollEstadoAtribuicao(c.Request.Context(), atID, *mid)
+			visao, err := d.CorrecaoS.VerProfessor(c.Request.Context(), user, id)
+			if err != nil {
+				platform.ErrorBody(c, err)
+				return
+			}
+			c.JSON(http.StatusOK, visao)
+			return
+		}
+	}
 	visao, err := d.CorrecaoS.Reexecutar(c.Request.Context(), user, id)
 	if err != nil {
 		platform.ErrorBody(c, err)
@@ -208,6 +239,9 @@ func (d *Dependencies) callbackJudge0(c *gin.Context) {
 		itens = []judge0.RespostaJudge0{uno}
 	}
 	for _, item := range itens {
+		if c.Request.Method == http.MethodPut {
+			item.DecodificarBase64()
+		}
 		if err := d.CorrecaoS.AplicarResultado(
 			c.Request.Context(), ctID, teID, item,
 		); err != nil {

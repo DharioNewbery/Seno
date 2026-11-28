@@ -1,8 +1,8 @@
 // Package fila implementa a fila de jobs PostgreSQL da API
 // (ARQUITETURA §6): jobs na tabela `jobs`, worker embutido (pool de
 // goroutines), dequeue FOR UPDATE SKIP LOCKED, 5 tentativas com backoff
-// (1/5/15/60/60 min). Portado do Monitor; os status são os do schema da API
-// (scheduled/running/done/failed) e o acesso passa pela camada sqlc (store).
+// (1/5/15/60/60 min), heartbeat ativo e sweeper periódico de órfãos para
+// evitar jobs eternamente presos em 'running' após reinício/queda.
 package fila
 
 import (
@@ -23,6 +23,9 @@ import (
 // Handler executa um job. Erro devolvido agenda retentativa com backoff.
 type Handler func(ctx context.Context, payload json.RawMessage) error
 
+// FailureHook é invocado quando um job esgota todas as tentativas e é marcado como 'failed'.
+type FailureHook func(ctx context.Context, kind string, payload json.RawMessage, err error)
+
 // Backoff das 5 tentativas (ARQUITETURA §6).
 var backoff = []time.Duration{
 	1 * time.Minute,
@@ -32,7 +35,11 @@ var backoff = []time.Duration{
 	60 * time.Minute,
 }
 
-const maxTentativas = 5
+const (
+	maxTentativas      = 5
+	heartbeatIntervalo = 25 * time.Second
+	janelaOrfao        = 2 * time.Minute
+)
 
 // Agenda engata um job na fila. payload deve ser serializável.
 func Agenda(ctx context.Context, st *store.Store, kind string, payload any, prioridade int16) (int64, error) {
@@ -52,25 +59,62 @@ func Agenda(ctx context.Context, st *store.Store, kind string, payload any, prio
 	return id, nil
 }
 
-// Start requeue jobs presos ('running' de um boot anterior) e sobe o pool de
+// Start recupera jobs presos ('running' de um boot anterior) e sobe o pool de
 // workers. Não bloqueia: os loops terminam quando ctx é cancelado.
 func Start(ctx context.Context, st *store.Store, handlers map[string]Handler, workers int) {
-	_, err := st.Pool.Exec(ctx, `UPDATE jobs SET status = 'scheduled', updated_at = now()
-	    WHERE status = 'running' AND updated_at < now() - interval '30 minutes'`)
-	if err != nil {
-		slog.Warn("fila: requeue em boot falhou", "err", err)
-	}
+	StartWithHooks(ctx, st, handlers, workers, nil)
+}
+
+// StartWithHooks recupera jobs presos, inicia o sweeper periódico de órfãos
+// e sobe o pool de workers com callback de falha final.
+func StartWithHooks(
+	ctx context.Context,
+	st *store.Store,
+	handlers map[string]Handler,
+	workers int,
+	onFinalFailure FailureHook,
+) {
+	recuperarOrfaos(ctx, st, 5*time.Second)
+
+	go func() {
+		t := time.NewTicker(30 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				recuperarOrfaos(ctx, st, janelaOrfao)
+			}
+		}
+	}()
+
 	for i := 0; i < workers; i++ {
-		go loop(ctx, st, handlers)
+		go loop(ctx, st, handlers, onFinalFailure)
 	}
 }
 
-func loop(ctx context.Context, st *store.Store, handlers map[string]Handler) {
+func recuperarOrfaos(ctx context.Context, st *store.Store, idade time.Duration) {
+	c, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	interv := fmt.Sprintf("%fs", idade.Seconds())
+	tag, err := st.Pool.Exec(c, `UPDATE jobs SET status = 'scheduled', updated_at = now()
+	    WHERE status = 'running' AND updated_at < now() - $1::interval`, interv)
+	if err != nil {
+		slog.Warn("fila: recuperação de órfãos falhou", "err", err)
+		return
+	}
+	if tag.RowsAffected() > 0 {
+		slog.Info("fila: jobs órfãos reenfileirados", "qtd", tag.RowsAffected())
+	}
+}
+
+func loop(ctx context.Context, st *store.Store, handlers map[string]Handler, onFinalFailure FailureHook) {
 	for {
 		if ctx.Err() != nil {
 			return
 		}
-		achou, err := um(ctx, st, handlers)
+		achou, err := um(ctx, st, handlers, onFinalFailure)
 		if err != nil {
 			slog.Warn("fila: worker", "err", err)
 		}
@@ -86,12 +130,12 @@ func loop(ctx context.Context, st *store.Store, handlers map[string]Handler) {
 
 // um pega um job e executa. Devolve true quando algo foi processado
 // (DequeueJob: FOR UPDATE SKIP LOCKED, prioridade desc, FIFO por id).
-func um(ctx context.Context, st *store.Store, handlers map[string]Handler) (bool, error) {
-	ctxJob, cancel := context.WithTimeout(ctx, 15*time.Minute)
+func um(ctx context.Context, st *store.Store, handlers map[string]Handler, onFinalFailure FailureHook) (bool, error) {
+	ctxJob, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
 	job, err := st.Q.DequeueJob(ctxJob)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) || ctx.Err() != nil {
 		return false, nil
 	}
 	if err != nil {
@@ -99,27 +143,62 @@ func um(ctx context.Context, st *store.Store, handlers map[string]Handler) (bool
 	}
 	h, ok := handlers[job.Kind]
 	if !ok {
-		// kind sem handler é bug de código: falha definitiva imediata.
 		motivo := "sem handler para kind " + job.Kind
 		err := st.Q.MarkJobFailed(ctx, gen.MarkJobFailedParams{ID: job.ID, LastError: &motivo})
 		return true, err
 	}
-	return true, concluir(ctx, st, job.ID, h(ctxJob, job.Payload), int(job.Attempts))
+
+	hbCtx, hbStop := context.WithCancel(ctxJob)
+	go func() {
+		t := time.NewTicker(heartbeatIntervalo)
+		defer t.Stop()
+		for {
+			select {
+			case <-hbCtx.Done():
+				return
+			case <-t.C:
+				_, _ = st.Pool.Exec(hbCtx, `UPDATE jobs SET updated_at = now() WHERE id = $1 AND status = 'running'`, job.ID)
+			}
+		}
+	}()
+
+	errExec := h(ctxJob, job.Payload)
+	hbStop()
+
+	finCtx, finCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer finCancel()
+	return true, concluir(finCtx, st, job.ID, job.Kind, job.Payload, errExec, int(job.Attempts), onFinalFailure)
 }
 
 // concluir resolve o fim do job: concluído / retentativa com backoff / falha.
-func concluir(ctx context.Context, st *store.Store, id int64, errJob error, attempts int) error {
+func concluir(
+	ctx context.Context,
+	st *store.Store,
+	id int64,
+	kind string,
+	payload json.RawMessage,
+	errJob error,
+	attempts int,
+	onFinalFailure FailureHook,
+) error {
 	if errJob == nil {
 		return st.Q.MarkJobDone(ctx, id)
 	}
 	motivo := errJob.Error()
-	// Retentativa com backoff (ou falha definitiva na 5ª).
 	if attempts+1 >= maxTentativas {
-		return st.Q.MarkJobFailed(ctx, gen.MarkJobFailedParams{ID: id, LastError: &motivo})
+		err := st.Q.MarkJobFailed(ctx, gen.MarkJobFailedParams{ID: id, LastError: &motivo})
+		if onFinalFailure != nil {
+			onFinalFailure(ctx, kind, payload, errJob)
+		}
+		return err
+	}
+	idx := attempts
+	if idx >= len(backoff) {
+		idx = len(backoff) - 1
 	}
 	return st.Q.ScheduleJobRetry(ctx, gen.ScheduleJobRetryParams{
 		ID:        id,
-		RunAfter:  pgtype.Timestamptz{Time: time.Now().UTC().Add(backoff[attempts]), Valid: true},
+		RunAfter:  pgtype.Timestamptz{Time: time.Now().UTC().Add(backoff[idx]), Valid: true},
 		LastError: &motivo,
 	})
 }

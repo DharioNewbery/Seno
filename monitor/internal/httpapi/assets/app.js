@@ -249,6 +249,9 @@ function cronometroOff() {
 
 function decodificaVeredito(v) {
   if (v === 'accepted') return { cls: 'passou', curto: 'Passou', texto: 'Passou (Correto)' };
+  if (v === 'erro_avaliador' || v === 'avaliador_indisponivel') {
+    return { cls: 'falhou', curto: 'Avaliador indisponível', texto: 'Avaliador de código temporariamente indisponível. Tente novamente em instantes.' };
+  }
   const m = /^judge0:(\d+)$/.exec(String(v));
   const n = m ? Number(m[1]) : 4;
   const T = {
@@ -1099,7 +1102,7 @@ async function testar(ordem) {
         btnTestar.disabled = false;
         btnTestar.innerHTML = `${ICONES.play} <span>Testar Código</span> <kbd class="atalho-teclado">Ctrl+Enter</kbd>`;
       }
-      aviso('Não foi possível obter o resultado do teste.');
+      aviso(mensagem(q, 'Não foi possível obter o resultado do teste.'));
       renderizarConsoleTestes();
       return;
     }
@@ -1233,6 +1236,10 @@ async function preAvaliar() {
 
   modal.innerHTML = `
     <h2>Relatório de Entrega</h2>
+    ${rel.aviso_avaliador ? `
+      <div class="alerta-arquivo-erro" style="margin-bottom:12px;">
+        ${ICONES.alerta} <span>${esc(rel.aviso_avaliador)}</span>
+      </div>` : ''}
     <p>
       ${rel.resumo.total > 0
         ? `Acertos: <b>${rel.resumo.acertos}</b> de <b>${rel.resumo.total}</b> testes públicos.`
@@ -1241,6 +1248,30 @@ async function preAvaliar() {
     </p>
     <div class="modal-tarefas-lista">
       ${rel.tarefas.map((t) => {
+        if (t.veredito === 'avaliador_indisponivel') {
+          return `
+            <div class="modal-tarefa-card">
+              <div class="modal-tarefa-card-topo">
+                <span>Tarefa ${t.ordem}</span>
+                <span class="falhou" style="display:inline-flex;align-items:center;gap:4px;">
+                  ${ICONES.alerta} Pré-avaliação indisponível (será corrigida após entrega)
+                </span>
+              </div>
+            </div>
+          `;
+        }
+        if (t.veredito === 'sem_testes_publicos') {
+          return `
+            <div class="modal-tarefa-card">
+              <div class="modal-tarefa-card-topo">
+                <span>Tarefa ${t.ordem}</span>
+                <span class="passou" style="display:inline-flex;align-items:center;gap:4px;">
+                  ${ICONES.check} Resposta preenchida (correção após entrega)
+                </span>
+              </div>
+            </div>
+          `;
+        }
         if (t.veredito === 'arquivo_anexado') {
           return `
             <div class="modal-tarefa-card">

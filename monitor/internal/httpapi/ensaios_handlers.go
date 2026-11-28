@@ -69,6 +69,11 @@ func (d *Dependencies) EnsaioResultado(c *gin.Context) {
 	run := c.Param("run_id")
 	estado, err := d.EnsaiosS.Consultar(c.Request.Context(), mid, aluno, run)
 	if err != nil {
+		if errors.Is(err, ensaios.ErrAvaliadorIndisponivel) {
+			respondErro(c, http.StatusServiceUnavailable, contract.CodeAvaliadorIndisponivel,
+				"O avaliador de código (Judge0) está temporariamente indisponível. Tente novamente em instantes.", nil)
+			return
+		}
 		respondErro(c, http.StatusNotFound, contract.CodeEncerrada,
 			"Run não encontrado.", nil)
 		return
@@ -112,12 +117,16 @@ func (d *Dependencies) PreAvaliar(c *gin.Context) {
 		mapearErroTentativa(c, err)
 		return
 	default:
-		c.JSON(http.StatusOK, gin.H{
+		out := gin.H{
 			"pre_id":    rel.PreID,
 			"resumo":    rel.Resumo,
 			"tarefas":   rel.Tarefas,
 			"expira_em": strconv.Itoa(int(time.Duration(d.Cfg.PreAvaTTL).Seconds())) + "s",
-		})
+		}
+		if rel.AvisoAvaliador != "" {
+			out["aviso_avaliador"] = rel.AvisoAvaliador
+		}
+		c.JSON(http.StatusOK, out)
 	}
 }
 

@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -111,10 +112,15 @@ func main() {
 	httpapi.RegisterRoutes(r, deps)
 
 	// Worker embutido da fila PostgreSQL (ARQUITETURA §6): transferência ao
-	// Monitor (Fase 9.2) + poll do estado (Fase 9.3, ticker independente).
-	fila.Start(ctx, st, map[string]fila.Handler{
-		monitor.KindTransferir: monitorSvc.Handler(),
-	}, 4)
+	// Monitor (Fase 9.2), retentativas de correção no Judge0 + poll do estado.
+	fila.StartWithHooks(ctx, st, map[string]fila.Handler{
+		monitor.KindTransferir:         monitorSvc.Handler(),
+		correcoes.KindCorrecaoExecutar: svcCorrecao.Handler(),
+	}, 4, func(fCtx context.Context, kind string, payload json.RawMessage, err error) {
+		if kind == correcoes.KindCorrecaoExecutar {
+			svcCorrecao.MarcarFalhaJob(fCtx, payload)
+		}
+	})
 	go monitorSvc.Ciclo(ctx, cfg.PollEstado)
 
 	// Watchdog de correção (correcoes.FecharPerdidas): callback do Judge0
@@ -142,7 +148,16 @@ func main() {
 	// por 2 anos (default); ciclo diário.
 	platform.LacaRetencao(ctx, pool, cfg.DadosRetencao, 24*time.Hour)
 
-	srv := &http.Server{Addr: cfg.Addr, Handler: r}
+	// Timeouts explícitos no servidor HTTP impedem exaustão de descritores/conexões
+	// (Slowloris ou chamadas travadas) — nenhum cliente ou serviço trava a API indefinidamente.
+	srv := &http.Server{
+		Addr:              cfg.Addr,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      120 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
 	go func() {
 		slog.Info("api escutando", "addr", cfg.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

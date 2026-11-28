@@ -56,11 +56,11 @@ func (d *Dependencies) CriarAtribuicao(c *gin.Context) {
 		platform.ErrorBody(c, err)
 		return
 	}
-	if err := d.Monitor.Transferir(c.Request.Context(), atribuicao.ID); err != nil {
+	if _, err := d.Monitor.TransferirOuEnfileirar(c.Request.Context(), atribuicao.ID); err != nil {
 		if delErr := d.AtribuicaoS.Excluir(c.Request.Context(), user, atribuicao.ID); delErr != nil {
-			slog.Error("atribuicao: rollback após falha no Monitor", "atribuicao", atribuicao.ID, "err", delErr)
+			slog.Error("atribuicao: rollback após falha de validação no Monitor", "atribuicao", atribuicao.ID, "err", delErr)
 		}
-		slog.Error("atribuicao: falha ao disponibilizar no Monitor", "atribuicao", atribuicao.ID, "err", err)
+		slog.Error("atribuicao: falha ao validar para o Monitor", "atribuicao", atribuicao.ID, "err", err)
 		erroTransferenciaMonitor(c, err)
 		return
 	}
@@ -116,7 +116,7 @@ func (d *Dependencies) EditarAtribuicao(c *gin.Context) {
 		platform.ErrorBody(c, err)
 		return
 	}
-	if err := d.Monitor.Transferir(c.Request.Context(), atribuicao.ID); err != nil {
+	if _, err := d.Monitor.TransferirOuEnfileirar(c.Request.Context(), atribuicao.ID); err != nil {
 		if errAntes == nil {
 			if _, revErr := d.AtribuicaoS.Editar(c.Request.Context(), user, id, atribuicoes.CadastroAtribuicao{
 				Autocomplete: &antes.Autocomplete,
@@ -125,10 +125,10 @@ func (d *Dependencies) EditarAtribuicao(c *gin.Context) {
 				DuracaoSeg:   antes.DuracaoSeg,
 				PodeAtrasado: &antes.PodeAtrasado,
 			}); revErr != nil {
-				slog.Error("atribuicao: rollback de edição após falha no Monitor", "atribuicao", id, "err", revErr)
+				slog.Error("atribuicao: rollback de edição após falha de validação no Monitor", "atribuicao", id, "err", revErr)
 			}
 		}
-		slog.Error("atribuicao: falha ao atualizar no Monitor", "atribuicao", atribuicao.ID, "err", err)
+		slog.Error("atribuicao: falha ao validar edição para o Monitor", "atribuicao", atribuicao.ID, "err", err)
 		erroTransferenciaMonitor(c, err)
 		return
 	}
@@ -152,14 +152,14 @@ func (d *Dependencies) ViewAluno(c *gin.Context) {
 }
 
 // EntrarMonitor: GET /v1/atribuicoes/:id/entrar — emite `st` + URL do
-// Monitor (Fase 9.1; regras no serviço — student + matrícula + transferida).
+// Monitor (Fase 9.1; regras no serviço — student + matrícula + saúde do Monitor).
 func (d *Dependencies) EntrarMonitor(c *gin.Context) {
 	user, _ := currentUser(c)
 	id, ok := idDaRota(c)
 	if !ok {
 		return
 	}
-	url, err := d.Monitor.Entrar(c.Request.Context(), user, id)
+	url, err := d.Monitor.EntrarVerificado(c.Request.Context(), user, id)
 	if err != nil {
 		platform.ErrorBody(c, err)
 		return

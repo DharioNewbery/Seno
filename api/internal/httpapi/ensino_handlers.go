@@ -306,6 +306,9 @@ func (d *Dependencies) MatricularTurma(c *gin.Context) {
 		platform.ErrorBody(c, err)
 		return
 	}
+	if d.Monitor != nil && mat.Aluno.Status == domain.StatusActive {
+		d.Monitor.EnfileirarPorTurma(c.Request.Context(), id)
+	}
 	c.JSON(http.StatusCreated, mat)
 }
 
@@ -360,9 +363,14 @@ func (d *Dependencies) EncerrarMatricula(c *gin.Context) {
 	if !ok {
 		return
 	}
+	var turmaID int64
+	_ = d.Store.Pool.QueryRow(c.Request.Context(), `SELECT turma_id FROM matriculas WHERE id = $1`, id).Scan(&turmaID)
 	if err := d.Ensino.EncerrarMatricula(c.Request.Context(), user, id); err != nil {
 		platform.ErrorBody(c, err)
 		return
+	}
+	if d.Monitor != nil && turmaID > 0 {
+		d.Monitor.EnfileirarPorTurma(c.Request.Context(), turmaID)
 	}
 	c.Status(http.StatusNoContent)
 }

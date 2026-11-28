@@ -47,5 +47,12 @@ export async function apiFetch(
     (method === "GET" || method === "HEAD" ? undefined : await request.text());
   if (corpo !== undefined) headers.set("Content-Type", "application/json");
 
-  return fetch(`${API_URL}${path}`, { ...init, method, body: corpo, headers });
+  const signal = init.signal ?? AbortSignal.timeout(30_000);
+  return fetch(`${API_URL}${path}`, {
+    ...init,
+    method,
+    body: corpo,
+    headers,
+    signal,
+  });
 }

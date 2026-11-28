@@ -83,15 +83,29 @@ func montaMonitorJudge0(t *testing.T, pool *pgxpool.Pool) (*Dependencies, *gin.E
 	// fila real no teste (worker embutido); lookup corrente: deps apoteará
 	ctx, stop := context.WithCancel(context.Background())
 	t.Cleanup(stop)
-	fila.Start(ctx, pool, map[string]fila.Handler{
+	fila.StartWithHooks(ctx, pool, map[string]fila.Handler{
 		ensaios.KindEnsaio: func(ctx context.Context, payload json.RawMessage) error {
 			return deps.EnsaiosS.Handler()(ctx, payload)
 		},
 		submissoes.KindCorrecao: func(ctx context.Context, payload json.RawMessage) error {
 			return deps.SubmissaoS.Handler()(ctx, payload)
 		},
-	}, 4)
+		submissoes.KindNotificarAPI: func(ctx context.Context, payload json.RawMessage) error {
+			return deps.SubmissaoS.NotificarAPIHandler()(ctx, payload)
+		},
+	}, 4, func(fCtx context.Context, kind string, payload json.RawMessage, err error) {
+		switch kind {
+		case ensaios.KindEnsaio:
+			deps.EnsaiosS.MarcarFalhaJob(fCtx, payload)
+		case submissoes.KindCorrecao:
+			deps.SubmissaoS.MarcarFalhaJob(fCtx, payload)
+		}
+	})
 	return deps, r
+}
+
+func newEnsaiosParaTeste(pool *pgxpool.Pool, j0 *judge0.Client, tent *tentativas.Service) *ensaios.Service {
+	return ensaios.New(pool, j0, tent, "http://127.0.0.1:8081", callbackKeyTest, 5, 7*24*time.Hour)
 }
 
 // callbackBody é o corpo exato que o Judge0 entrega (probe ao vivo, §5.3).

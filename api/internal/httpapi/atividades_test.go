@@ -79,7 +79,7 @@ func TestAtividades(t *testing.T) {
 		t.Errorf("lista do não-dono: %v", corpo["total"])
 	}
 	w, corpo = chama(t, r, "GET", "/v1/atividades", "", autenticado(tokSuper))
-	if intOf(corpo["total"]) != 1 {
+	if intOf(corpo["total"]) != 2 {
 		t.Errorf("staff vê todas: %v", corpo["total"])
 	}
 

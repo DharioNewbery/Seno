@@ -18,6 +18,11 @@ POSTGRES_DB=judge0
 POSTGRES_USER=judge0
 POSTGRES_PASSWORD=troque-isto-dentro-do-judge0.conf-gitignored
 
+# --- Callbacks (resiliência quando API ou Monitor reiniciam) ---
+ENABLE_CALLBACKS=true
+CALLBACKS_MAX_TRIES=5
+CALLBACKS_TIMEOUT=5
+
 # --- Sandbox: limites default do judge0 (ver docs oficiais) ---
 CPU_TIME_LIMIT=
 WALL_TIME_LIMIT=

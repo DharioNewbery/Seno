@@ -3,21 +3,20 @@
 // exata via expected_output do Judge0 (status 3 = accepted), grava
 // pre_avaliacao com revisao_ref e expira em SENO_PRE_AVA_TTL_S.
 //
-// Nota de extração à instância real (PROBES.md): o batch com wait=true do
-// Judge0 1.13 NÃO devolve resultados inline — a pré-avaliação roda
-// sequencialmente por POST /submissions?wait=true (cada item <5 s com os
-// limites default; teto do relatório é SENO_PRE_AVA_TTL_S = 15 min).
-// Não entra no histórico de ensaios (nenhuma linha em execucao).
+// Resiliência: caso o Judge0 esteja desligado ou temporariamente fora do ar,
+// a pré-avaliação NÃO bloqueia a entrega da prova — grava o relatório com
+// veredito "avaliador_indisponivel" e aviso explícito ao aluno, permitindo
+// confirmar e salvar a submissão com segurança para correção posterior na fila.
 package preavaliacao
 
 import (
 	"context"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -39,7 +38,7 @@ func New(pool *pgxpool.Pool, j0 *judge0.Client, janela *tentativas.Service, ttl 
 	return &Service{pool: pool, j0: j0, janela: janela, ttl: ttl}
 }
 
-// Erros mapeados (403 要求 no spec: sem tentativa/janela expirada).
+// Erros mapeados (403 no spec: sem tentativa/janela expirada).
 var (
 	ErrSemTentativa = errors.New("sem tentativa aberta")
 )
@@ -66,10 +65,13 @@ type Relatorio struct {
 		Acertos int `json:"acertos"`
 		Total   int `json:"total"`
 	} `json:"resumo"`
-	Tarefas []TarefaPre `json:"tarefas"`
+	Tarefas        []TarefaPre `json:"tarefas"`
+	AvisoAvaliador string      `json:"aviso_avaliador,omitempty"`
 }
 
-// Avaliar roda a pré-avaliação sincronizada e devolve o relatório.
+const avisoJudge0Offline = "O avaliador automático está temporariamente indisponível. Você pode confirmar sua entrega normalmente — suas respostas serão salvas com segurança e corrigidas automaticamente assim que o avaliador voltar."
+
+// Avaliar roda a pré-avaliação sincronizada com orçamento de tempo limitado e devolve o relatório.
 func (s *Service) Avaliar(ctx context.Context, mid string, aluno int64, agora time.Time) (*Relatorio, error) {
 	if _, err := s.janela.VerificarJanela(ctx, mid, aluno, agora); err != nil {
 		return nil, err
@@ -102,6 +104,11 @@ func (s *Service) Avaliar(ctx context.Context, mid string, aluno int64, agora ti
 		return nil, fmt.Errorf("preavaliacao: id: %w", err)
 	}
 
+	// Orçamento máximo total para chamadas ao Judge0 na pré-avaliação (evita travar a rota).
+	j0BudgetCtx, cancelBudget := context.WithTimeout(ctx, 25*time.Second)
+	defer cancelBudget()
+	judge0Indisponivel := s.j0 == nil || !s.j0.Ligada()
+
 	rel := &Relatorio{PreID: preID}
 	for _, tarefa := range t.Carga.Tarefas {
 		tipo := contract.NormalizarTipoTarefa(tarefa.Tipo)
@@ -126,26 +133,40 @@ func (s *Service) Avaliar(ctx context.Context, mid string, aluno int64, agora ti
 			}
 			continue
 		}
+
+		// Conta testes públicos da tarefa.
+		temPublico := false
+		for _, te := range tarefa.Testes {
+			if te.Publico {
+				temPublico = true
+				break
+			}
+		}
 		codigo := codigoPara(respostas, tarefa.Ordem)
+		if !temPublico {
+			veredito := "sem_testes_publicos"
+			if strings.TrimSpace(codigo) == "" {
+				veredito = "wrong_answer"
+			}
+			rel.Tarefas = append(rel.Tarefas, TarefaPre{
+				Ordem: tarefa.Ordem, Veredito: veredito,
+			})
+			continue
+		}
 		if strings.TrimSpace(codigo) == "" {
-			// resposta vazia: Judge0 rejeita source_code blank (422); relata
-			// "wrong_answer" sem submissão (caminho real do aluno: não avaliar
-			// código que não existe).
 			rel.Tarefas = append(rel.Tarefas, TarefaPre{
 				Ordem: tarefa.Ordem, Veredito: "wrong_answer",
 			})
 			continue
 		}
-		if strings.TrimSpace(codigo) == "" {
-			// resposta vazia: teste roda sinalizando "sem resposta" (status
-			// "wrong_answer" com stdout null) — o Judge0 rejeita source blank
-			// (422), então não há submissão real a fazer.
+		if judge0Indisponivel {
+			rel.AvisoAvaliador = avisoJudge0Offline
 			rel.Tarefas = append(rel.Tarefas, TarefaPre{
-				Ordem: tarefa.Ordem, Veredito: "wrong_answer",
-				Testes: nil, // nenhum teste público entregue
+				Ordem: tarefa.Ordem, Veredito: "avaliador_indisponivel",
 			})
 			continue
 		}
+
 		lim := tarefa.Limites
 		if lim == nil {
 			lim = &contract.Limites{TempoCPUMs: 5000, TempoTotalMs: 10000, MemoriaMB: 128}
@@ -158,12 +179,13 @@ func (s *Service) Avaliar(ctx context.Context, mid string, aluno int64, agora ti
 		tp := TarefaPre{Ordem: tarefa.Ordem, Veredito: "accepted"}
 		acertosTarefa := 0
 		totalTarefa := 0
+		falhouJudge0 := false
 		for i, te := range tarefa.Testes {
 			if !te.Publico {
 				continue
 			}
-			totalTarefa++
-			r, err := s.j0.EnviarSync(ctx, judge0.Submissao{
+			callCtx, cancelCall := context.WithTimeout(j0BudgetCtx, 10*time.Second)
+			r, err := s.j0.EnviarSync(callCtx, judge0.Submissao{
 				LanguageID:     idLinguagem,
 				SourceCode:     codigo,
 				Stdin:          te.Stdin,
@@ -172,26 +194,35 @@ func (s *Service) Avaliar(ctx context.Context, mid string, aluno int64, agora ti
 				WallTimeSec:    float64(lim.TempoTotalMs) / 1000,
 				MemoriaKB:      lim.MemoriaMB * 1024,
 			})
+			cancelCall()
 			if err != nil {
-				return nil, fmt.Errorf("preavaliacao: judge0 (tarefa %d, teste %d): %w",
-					tarefa.Ordem, i+1, err)
+				slog.Warn("preavaliacao: Judge0 indisponível; liberando entrega com aviso",
+					"monitor_id", mid, "aluno", aluno, "tarefa", tarefa.Ordem, "err", err)
+				judge0Indisponivel = true
+				falhouJudge0 = true
+				rel.AvisoAvaliador = avisoJudge0Offline
+				break
 			}
-			stdout := deB64(r.Stdout)
+			totalTarefa++
+			stdout := r.Stdout // base64_encoded=false no EnviarSync já devolve texto cru
 			item := TestePre{Ordem: i + 1, Status: "judge0:" + fmt.Sprint(r.StatusID()), Tempo: tempo(r.Time)}
 			if r.StatusID() == judge0.StatusAcceptedID {
 				item.Status = "accepted"
 				acertosTarefa++
 			} else {
 				tp.Veredito = item.Status
-				if item.Status != "accepted" {
-					item.StdoutObtido = &stdout
-				}
+				item.StdoutObtido = &stdout
 			}
 			item.Memoria = memoria(r.Memory)
 			tp.Testes = append(tp.Testes, item)
 			rel.Resumo.Total++
 		}
-		if acertosTarefa == totalTarefa {
+		if falhouJudge0 {
+			tp.Veredito = "avaliador_indisponivel"
+			rel.Tarefas = append(rel.Tarefas, tp)
+			continue
+		}
+		if totalTarefa > 0 && acertosTarefa == totalTarefa {
 			rel.Resumo.Acertos += acertosTarefa
 		}
 		rel.Tarefas = append(rel.Tarefas, tp)
@@ -209,8 +240,6 @@ func (s *Service) Avaliar(ctx context.Context, mid string, aluno int64, agora ti
 	}
 	return rel, nil
 }
-
-// Dias usados no entregar? a confirmar na Fase 6: o confirmar valida pre_id não expirado.
 
 func codigoPara(respostas map[string]any, ordem int) string {
 	if v, ok := respostas[fmt.Sprint(ordem)]; ok {
@@ -235,16 +264,6 @@ func memoria(m judge0.NumStr) int {
 		return n
 	}
 	return 0
-}
-
-func deB64(s string) string {
-	if s == "" {
-		return ""
-	}
-	if b, err := base64.StdEncoding.DecodeString(s); err == nil {
-		return string(b)
-	}
-	return s
 }
 
 func novoPreID() (string, error) {

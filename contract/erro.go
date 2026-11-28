@@ -13,15 +13,17 @@ const (
 	CodeInternal        = "ERRO_INTERNO"
 
 	// Flags de aluno no Monitor (Fase 4+):
-	CodeConflito        = "CONFLITO_DE_ESTADO" // revisão divergente (409)
-	CodeAtualizada      = "ATUALIZADA"         // rev, pré-avaliação desatualizada
-	CodeFinalizada      = "FINALIZADA"         // cota de submissões atingida (403)
-	CodeInicioFuturo    = "INICIO"             // 409 {erro:"inicio"}
-	CodeRateLimited    = "LIMITE_EXCEDIDO"
-	CodeSemPermissao   = "SEM_PERMISSAO"    // aluno de fora do snapshot (403)
-	CodeNaoEncontrado  = "NAO_ENCONTRADO"   // monitor_id/rota ausente (404)
-	CodeEncerrada       = "ENCERRADA"     // janela sem entrega atrasada possível (410)
-	CodeRevisaoObsoleta = "REVISAO_OBSOLETA" // autosave com revisão antiga (409)
+	CodeConflito              = "CONFLITO_DE_ESTADO" // revisão divergente (409)
+	CodeAtualizada            = "ATUALIZADA"         // rev, pré-avaliação desatualizada
+	CodeFinalizada            = "FINALIZADA"         // cota de submissões atingida (403)
+	CodeInicioFuturo          = "INICIO"             // 409 {erro:"inicio"}
+	CodeRateLimited           = "LIMITE_EXCEDIDO"
+	CodeSemPermissao          = "SEM_PERMISSAO"          // aluno de fora do snapshot (403)
+	CodeNaoEncontrado         = "NAO_ENCONTRADO"         // monitor_id/rota ausente (404)
+	CodeEncerrada             = "ENCERRADA"              // janela sem entrega atrasada possível (410)
+	CodeRevisaoObsoleta       = "REVISAO_OBSOLETA"       // autosave com revisão antiga (409)
+	CodeServicoIndisponivel   = "SERVICO_INDISPONIVEL"   // dependência externa fora do ar (503)
+	CodeAvaliadorIndisponivel = "AVALIADOR_INDISPONIVEL" // Judge0 indisponível no ensaio (503)
 )
 
 // ErroEnvelope é o JSON completo no fio: {"erro": {...}}.
