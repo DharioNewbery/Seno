@@ -59,9 +59,11 @@ WHERE email = 'prof.stress@seno.dev'
 ON CONFLICT DO NOTHING;
 
 -- 3. Alunos numerados: stress.aluno001@seno.dev .. stress.alunoNNN@seno.dev
+SELECT set_config('seno.stress_alunos', (:'total_alunos')::text, true);
+
 DO $$
 DECLARE
-    v_total int := current_setting('seno.stress_alunos', true)::int;
+    v_total int := COALESCE(current_setting('seno.stress_alunos', true)::int, 100);
     v_hash  text;
     v_email text;
     v_pid   bigint;
@@ -73,7 +75,7 @@ BEGIN
         RAISE EXCEPTION 'super@seno.dev não encontrado no banco. Suba a API uma vez antes do seed.';
     END IF;
 
-    FOR i IN 1..COALESCE(v_total, 100) LOOP
+    FOR i IN 1..v_total LOOP
         v_email := format('stress.aluno%s@seno.dev', lpad(i::text, 3, '0'));
         SELECT id INTO v_uid FROM users WHERE email = v_email;
         IF v_uid IS NULL THEN
@@ -88,38 +90,6 @@ BEGIN
             UPDATE users SET status = 'active', password_hash = v_hash WHERE id = v_uid;
         END IF;
 
-        INSERT INTO user_roles (user_id, role)
-        VALUES (v_uid, 'student')
-        ON CONFLICT DO NOTHING;
-    END LOOP;
-END;
-$$;
-
--- Aplica o parâmetro :total_alunos caso venha via psql -v total_alunos=N
-SELECT set_config('seno.stress_alunos', (:'total_alunos')::text, true);
-
-DO $$
-DECLARE
-    v_total int := current_setting('seno.stress_alunos', true)::int;
-    v_hash  text;
-    v_email text;
-    v_pid   bigint;
-    v_uid   bigint;
-    i       int;
-BEGIN
-    SELECT password_hash INTO v_hash FROM users WHERE email = 'super@seno.dev';
-    FOR i IN 1..v_total LOOP
-        v_email := format('stress.aluno%s@seno.dev', lpad(i::text, 3, '0'));
-        SELECT id INTO v_uid FROM users WHERE email = v_email;
-        IF v_uid IS NULL THEN
-            INSERT INTO persons (first_name, last_name)
-            VALUES ('Aluno', format('Estresse %s', lpad(i::text, 3, '0')))
-            RETURNING id INTO v_pid;
-
-            INSERT INTO users (person_id, email, password_hash, status)
-            VALUES (v_pid, v_email, v_hash, 'active')
-            RETURNING id INTO v_uid;
-        END IF;
         INSERT INTO user_roles (user_id, role)
         VALUES (v_uid, 'student')
         ON CONFLICT DO NOTHING;

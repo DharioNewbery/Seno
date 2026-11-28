@@ -28,3 +28,4 @@ web/vite.config.ts.timestamp-*
 *.log
 .DS_Store
 Thumbs.db
+deploy/stress/resultados/
