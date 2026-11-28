@@ -383,6 +383,26 @@ func (s *Service) Handler() fila.Handler {
 			if lim == nil {
 				lim = &contract.Limites{TempoCPUMs: 5000, TempoTotalMs: 10000, MemoriaMB: 128}
 			}
+			itens := make([]judge0.Submissao, len(tarefa.Testes))
+			for i, te := range tarefa.Testes {
+				itens[i] = judge0.Submissao{
+					LanguageID:     idLinguagem,
+					SourceCode:     codigo,
+					Stdin:          te.Stdin,
+					ExpectedOutput: te.StdoutEsperado,
+					CPUTimeSec:     float64(lim.TempoCPUMs) / 1000,
+					WallTimeSec:    float64(lim.TempoTotalMs) / 1000,
+					MemoriaKB:      lim.MemoriaMB * 1024,
+				}
+			}
+			callCtx, cancelCall := context.WithTimeout(ctx, 30*time.Second)
+			resps, err := s.j0.EnviarBatchSincrono(callCtx, itens)
+			cancelCall()
+			if err != nil {
+				reverterPendente()
+				return fmt.Errorf("correcao: judge0 (tarefa %d): %w", tarefa.Ordem, err)
+			}
+
 			r := resultadoCOR{
 				Ordem:       tarefa.Ordem,
 				TarefaAPIID: tarefa.TarefaAPIID,
@@ -391,21 +411,7 @@ func (s *Service) Handler() fila.Handler {
 			acertos, total := 0, 0
 			for i, te := range tarefa.Testes {
 				total++
-				callCtx, cancelCall := context.WithTimeout(ctx, 15*time.Second)
-				resp, err := s.j0.EnviarSync(callCtx, judge0.Submissao{
-					LanguageID:     idLinguagem,
-					SourceCode:     codigo,
-					Stdin:          te.Stdin,
-					ExpectedOutput: te.StdoutEsperado,
-					CPUTimeSec:     float64(lim.TempoCPUMs) / 1000,
-					WallTimeSec:    float64(lim.TempoTotalMs) / 1000,
-					MemoriaKB:      lim.MemoriaMB * 1024,
-				})
-				cancelCall()
-				if err != nil {
-					reverterPendente()
-					return fmt.Errorf("correcao: judge0 (tarefa %d, teste %d): %w", tarefa.Ordem, i+1, err)
-				}
+				resp := resps[i]
 				st := "judge0:" + strconv.Itoa(resp.StatusID())
 				if resp.StatusID() == judge0.StatusAcceptedID {
 					st = "accepted"

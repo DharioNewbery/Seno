@@ -12,12 +12,12 @@ import (
 	"github.com/seno-project/seno/api/internal/testar"
 )
 
-// fakeJudge0 simula o Judge0 com wait=true: devolve um resultado
-// aceito por item (individual em /submissions ou lote em /submissions/batch).
+// fakeJudge0 simula o Judge0: devolve um resultado aceito por item
+// (individual em /submissions ou lote em /submissions/batch).
 func fakeJudge0(t *testing.T) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if req.URL.Path == "/submissions" && req.URL.Query().Get("wait") == "true" {
+		if req.URL.Path == "/submissions" {
 			var item judge0.SubmissaoJudge0
 			_ = json.NewDecoder(req.Body).Decode(&item)
 			w.Header().Set("Content-Type", "application/json")
@@ -28,11 +28,13 @@ func fakeJudge0(t *testing.T) *httptest.Server {
 			})
 			return
 		}
-		if req.URL.Path == "/submissions/batch" && req.URL.Query().Get("wait") == "true" {
-			var itens []judge0.SubmissaoJudge0
-			_ = json.NewDecoder(req.Body).Decode(&itens)
-			out := make([]map[string]any, 0, len(itens))
-			for range itens {
+		if req.URL.Path == "/submissions/batch" {
+			var env struct {
+				Submissions []judge0.SubmissaoJudge0 `json:"submissions"`
+			}
+			_ = json.NewDecoder(req.Body).Decode(&env)
+			out := make([]map[string]any, 0, len(env.Submissions))
+			for range env.Submissions {
 				out = append(out, map[string]any{
 					"status": 3, "stdout": "3\n", "stderr": "",
 					"time": "0.001", "memory": 3240, "cpu_time": "0.001",

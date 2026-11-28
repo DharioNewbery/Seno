@@ -169,8 +169,8 @@ func (c *Client) Saude(ctx context.Context) error {
 	return c.call(pingCtx, "/system_info", nil, &info)
 }
 
-// EnviarSync cria submissão individual e espera o resultado (inline garantido
-// pela instância — PROBES.md). Usado na pré-avaliação (§5.4) e correção.
+// EnviarSync cria submissão individual assíncrona (sem ?wait=true para não
+// prender threads do servidor HTTP do Judge0) e faz polling curto até concluir.
 func (c *Client) EnviarSync(ctx context.Context, s Submissao) (Resposta, error) {
 	var r Resposta
 	if !c.Ligada() {
@@ -179,10 +179,120 @@ func (c *Client) EnviarSync(ctx context.Context, s Submissao) (Resposta, error) 
 	if strings.TrimSpace(s.SourceCode) == "" {
 		return Resposta{Status: RawStatus(StatusWrongAnswerID)}, nil
 	}
-	if err := c.call(ctx, `/submissions?wait=true&base64_encoded=false`, s, &r); err != nil {
+	if err := c.call(ctx, `/submissions?base64_encoded=false`, s, &r); err != nil {
 		return r, err
 	}
-	return r, nil
+	if r.StatusID() > 2 {
+		return r, nil
+	}
+	if r.Token == "" {
+		return r, fmt.Errorf("judge0 sync: resposta sem token e status=%d", r.StatusID())
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return r, ctx.Err()
+		case <-time.After(150 * time.Millisecond):
+		}
+		res, err := c.umaVez(ctx, r.Token)
+		if err != nil {
+			return res, err
+		}
+		r = res
+		if r.StatusID() > 2 {
+			return r, nil
+		}
+	}
+}
+
+// MaxBatchSize é o limite máximo por chamada /submissions/batch no Judge0 1.13.
+const MaxBatchSize = 20
+
+// EnviarBatchSincrono envia todos os itens em lote (POST /submissions/batch,
+// fatiado em até 20 itens) e faz polling em lote (GET /submissions/batch?tokens=...)
+// até todos concluírem. Reduz drasticamente o tempo por aluno evitando execução em série.
+func (c *Client) EnviarBatchSincrono(ctx context.Context, itens []Submissao) ([]Resposta, error) {
+	if len(itens) == 0 {
+		return nil, nil
+	}
+	if !c.Ligada() {
+		return nil, ErrDesligado
+	}
+	out := make([]Resposta, len(itens))
+	var pendentesIdx []int
+	var pendentes []Submissao
+	for i, it := range itens {
+		if strings.TrimSpace(it.SourceCode) == "" {
+			out[i] = Resposta{Status: RawStatus(StatusWrongAnswerID)}
+			continue
+		}
+		pendentesIdx = append(pendentesIdx, i)
+		pendentes = append(pendentes, it)
+	}
+	for inicio := 0; inicio < len(pendentes); inicio += MaxBatchSize {
+		fim := inicio + MaxBatchSize
+		if fim > len(pendentes) {
+			fim = len(pendentes)
+		}
+		fatia := pendentes[inicio:fim]
+		fatiaIdx := pendentesIdx[inicio:fim]
+
+		var postResps []Resposta
+		envelope := struct {
+			Submissions []Submissao `json:"submissions"`
+		}{Submissions: fatia}
+		if err := c.call(ctx, `/submissions/batch?base64_encoded=false`, envelope, &postResps); err != nil {
+			return nil, err
+		}
+		if len(postResps) != len(fatia) {
+			return nil, fmt.Errorf("judge0 batch: esperado %d itens, recebido %d", len(fatia), len(postResps))
+		}
+		todosProntos := true
+		tokens := make([]string, len(fatia))
+		for k, r := range postResps {
+			out[fatiaIdx[k]] = r
+			tokens[k] = r.Token
+			if r.StatusID() <= 2 {
+				todosProntos = false
+			}
+		}
+		if todosProntos {
+			continue
+		}
+		for _, tok := range tokens {
+			if tok == "" {
+				return nil, fmt.Errorf("judge0 batch: item sem token")
+			}
+		}
+		tokensParam := strings.Join(tokens, ",")
+		for {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(150 * time.Millisecond):
+			}
+			var batchGet struct {
+				Submissions []Resposta `json:"submissions"`
+			}
+			if err := c.call(ctx, "/submissions/batch?tokens="+tokensParam+"&base64_encoded=false", nil, &batchGet); err != nil {
+				return nil, err
+			}
+			if len(batchGet.Submissions) != len(fatia) {
+				return nil, fmt.Errorf("judge0 batch get: esperado %d itens, recebido %d", len(fatia), len(batchGet.Submissions))
+			}
+			prontos := true
+			for k, r := range batchGet.Submissions {
+				out[fatiaIdx[k]] = r
+				if r.StatusID() <= 2 {
+					prontos = false
+				}
+			}
+			if prontos {
+				break
+			}
+		}
+	}
+	return out, nil
 }
 
 // EnviarAsync cria submissão individual para callback (ensaio, §5.3).

@@ -119,3 +119,67 @@ func TestClientDesligadoCodigoVazioESemTravamento(t *testing.T) {
 		t.Fatalf("ObterUmaVez bloqueou por %v", dur)
 	}
 }
+
+func TestEnviarBatchSincronoPolling(t *testing.T) {
+	polls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/submissions/batch" && r.Method == http.MethodPost {
+			var env struct {
+				Submissions []Submissao `json:"submissions"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&env); err != nil {
+				t.Fatalf("decode post batch: %v", err)
+			}
+			if len(env.Submissions) != 2 {
+				t.Fatalf("esperava 2 itens não vazios no batch, obteve %d", len(env.Submissions))
+			}
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"token": "tok-1"},
+				{"token": "tok-2"},
+			})
+			return
+		}
+		if r.URL.Path == "/submissions/batch" && r.Method == http.MethodGet {
+			polls++
+			if r.URL.Query().Get("tokens") != "tok-1,tok-2" {
+				t.Fatalf("tokens inesperados: %s", r.URL.Query().Get("tokens"))
+			}
+			st := 2 // Processing na 1ª consulta
+			if polls >= 2 {
+				st = StatusAcceptedID
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"submissions": []map[string]any{
+					{"token": "tok-1", "status": map[string]any{"id": st}, "stdout": "8\n"},
+					{"token": "tok-2", "status": map[string]any{"id": st}, "stdout": "10\n"},
+				},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	cli := NewClient(CarregarConfig(srv.URL, ""))
+	resps, err := cli.EnviarBatchSincrono(context.Background(), []Submissao{
+		{LanguageID: PythonID, SourceCode: "print(8)"},
+		{LanguageID: PythonID, SourceCode: "  "},
+		{LanguageID: PythonID, SourceCode: "print(10)"},
+	})
+	if err != nil {
+		t.Fatalf("EnviarBatchSincrono falhou: %v", err)
+	}
+	if len(resps) != 3 {
+		t.Fatalf("esperava 3 respostas, obteve %d", len(resps))
+	}
+	if resps[0].StatusID() != StatusAcceptedID || resps[0].Stdout != "8\n" {
+		t.Fatalf("item 0 inesperado: %+v", resps[0])
+	}
+	if resps[1].StatusID() != StatusWrongAnswerID {
+		t.Fatalf("item 1 (vazio) inesperado: %+v", resps[1])
+	}
+	if resps[2].StatusID() != StatusAcceptedID || resps[2].Stdout != "10\n" {
+		t.Fatalf("item 2 inesperado: %+v", resps[2])
+	}
+}

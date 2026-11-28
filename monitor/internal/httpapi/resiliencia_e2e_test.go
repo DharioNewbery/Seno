@@ -42,9 +42,25 @@ func TestMonitorResilienciaJudge0EAPIOffline(t *testing.T) {
 			_, _ = w.Write([]byte(`{"ok":true}`))
 			return
 		}
-		if req.URL.Path == "/submissions" && req.URL.Query().Get("wait") == "true" {
+		if req.URL.Path == "/submissions" {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"stdout":"6\n","time":"0.01","memory":3200,"status":{"id":3,"description":"Accepted"}}`))
+			return
+		}
+		if req.URL.Path == "/submissions/batch" {
+			var env struct {
+				Submissions []json.RawMessage `json:"submissions"`
+			}
+			_ = json.NewDecoder(req.Body).Decode(&env)
+			out := make([]map[string]any, 0, len(env.Submissions))
+			for range env.Submissions {
+				out = append(out, map[string]any{
+					"stdout": "6\n", "time": "0.01", "memory": 3200,
+					"status": map[string]any{"id": 3, "description": "Accepted"},
+				})
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(out)
 			return
 		}
 		http.NotFound(w, req)

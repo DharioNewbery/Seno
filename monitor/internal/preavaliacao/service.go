@@ -109,6 +109,14 @@ func (s *Service) Avaliar(ctx context.Context, mid string, aluno int64, agora ti
 	defer cancelBudget()
 	judge0Indisponivel := s.j0 == nil || !s.j0.Ligada()
 
+	type preItem struct {
+		tarefaIdx  int
+		testeOrdem int
+	}
+	var batchItens []judge0.Submissao
+	var batchMap []preItem
+	var pendentesIdx []int
+
 	rel := &Relatorio{PreID: preID}
 	for _, tarefa := range t.Carga.Tarefas {
 		tipo := contract.NormalizarTipoTarefa(tarefa.Tipo)
@@ -176,16 +184,14 @@ func (s *Service) Avaliar(ctx context.Context, mid string, aluno int64, agora ti
 			return nil, fmt.Errorf("preavaliacao: linguagem %s", tarefa.Linguagem)
 		}
 
-		tp := TarefaPre{Ordem: tarefa.Ordem, Veredito: "accepted"}
-		acertosTarefa := 0
-		totalTarefa := 0
-		falhouJudge0 := false
+		tIdx := len(rel.Tarefas)
+		rel.Tarefas = append(rel.Tarefas, TarefaPre{Ordem: tarefa.Ordem, Veredito: "accepted"})
+		pendentesIdx = append(pendentesIdx, tIdx)
 		for i, te := range tarefa.Testes {
 			if !te.Publico {
 				continue
 			}
-			callCtx, cancelCall := context.WithTimeout(j0BudgetCtx, 10*time.Second)
-			r, err := s.j0.EnviarSync(callCtx, judge0.Submissao{
+			batchItens = append(batchItens, judge0.Submissao{
 				LanguageID:     idLinguagem,
 				SourceCode:     codigo,
 				Stdin:          te.Stdin,
@@ -194,38 +200,49 @@ func (s *Service) Avaliar(ctx context.Context, mid string, aluno int64, agora ti
 				WallTimeSec:    float64(lim.TempoTotalMs) / 1000,
 				MemoriaKB:      lim.MemoriaMB * 1024,
 			})
-			cancelCall()
-			if err != nil {
-				slog.Warn("preavaliacao: Judge0 indisponível; liberando entrega com aviso",
-					"monitor_id", mid, "aluno", aluno, "tarefa", tarefa.Ordem, "err", err)
-				judge0Indisponivel = true
-				falhouJudge0 = true
-				rel.AvisoAvaliador = avisoJudge0Offline
-				break
+			batchMap = append(batchMap, preItem{tarefaIdx: tIdx, testeOrdem: i + 1})
+		}
+	}
+
+	if len(batchItens) > 0 {
+		callCtx, cancelCall := context.WithTimeout(j0BudgetCtx, 15*time.Second)
+		resps, err := s.j0.EnviarBatchSincrono(callCtx, batchItens)
+		cancelCall()
+		if err != nil {
+			slog.Warn("preavaliacao: Judge0 indisponível; liberando entrega com aviso",
+				"monitor_id", mid, "aluno", aluno, "err", err)
+			rel.AvisoAvaliador = avisoJudge0Offline
+			for _, tIdx := range pendentesIdx {
+				rel.Tarefas[tIdx].Veredito = "avaliador_indisponivel"
+				rel.Tarefas[tIdx].Testes = nil
 			}
-			totalTarefa++
-			stdout := r.Stdout // base64_encoded=false no EnviarSync já devolve texto cru
-			item := TestePre{Ordem: i + 1, Status: "judge0:" + fmt.Sprint(r.StatusID()), Tempo: tempo(r.Time)}
-			if r.StatusID() == judge0.StatusAcceptedID {
-				item.Status = "accepted"
-				acertosTarefa++
-			} else {
-				tp.Veredito = item.Status
-				item.StdoutObtido = &stdout
+		} else {
+			acertosPorTarefa := make(map[int]int, len(pendentesIdx))
+			totaisPorTarefa := make(map[int]int, len(pendentesIdx))
+			for k, r := range resps {
+				m := batchMap[k]
+				totaisPorTarefa[m.tarefaIdx]++
+				stdout := r.Stdout // base64_encoded=false já devolve texto cru
+				item := TestePre{Ordem: m.testeOrdem, Status: "judge0:" + fmt.Sprint(r.StatusID()), Tempo: tempo(r.Time)}
+				if r.StatusID() == judge0.StatusAcceptedID {
+					item.Status = "accepted"
+					acertosPorTarefa[m.tarefaIdx]++
+				} else {
+					rel.Tarefas[m.tarefaIdx].Veredito = item.Status
+					item.StdoutObtido = &stdout
+				}
+				item.Memoria = memoria(r.Memory)
+				rel.Tarefas[m.tarefaIdx].Testes = append(rel.Tarefas[m.tarefaIdx].Testes, item)
+				rel.Resumo.Total++
 			}
-			item.Memoria = memoria(r.Memory)
-			tp.Testes = append(tp.Testes, item)
-			rel.Resumo.Total++
+			for _, tIdx := range pendentesIdx {
+				tot := totaisPorTarefa[tIdx]
+				ac := acertosPorTarefa[tIdx]
+				if tot > 0 && ac == tot {
+					rel.Resumo.Acertos += ac
+				}
+			}
 		}
-		if falhouJudge0 {
-			tp.Veredito = "avaliador_indisponivel"
-			rel.Tarefas = append(rel.Tarefas, tp)
-			continue
-		}
-		if totalTarefa > 0 && acertosTarefa == totalTarefa {
-			rel.Resumo.Acertos += acertosTarefa
-		}
-		rel.Tarefas = append(rel.Tarefas, tp)
 	}
 
 	relatorio, err := json.Marshal(rel)
@@ -238,6 +255,8 @@ func (s *Service) Avaliar(ctx context.Context, mid string, aluno int64, agora ti
 		preID, mid, aluno, revisao, string(relatorio), agora, agora.Add(s.ttl)); err != nil {
 		return nil, fmt.Errorf("preavaliacao: gravando: %w", err)
 	}
+	slog.Info("pré-avaliação concluída", "monitor_id", mid, "aluno", aluno, "pre_id", preID,
+		"acertos", rel.Resumo.Acertos, "total", rel.Resumo.Total, "degradada", rel.AvisoAvaliador != "")
 	return rel, nil
 }
 

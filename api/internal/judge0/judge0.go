@@ -267,8 +267,8 @@ func (cli *Client) EnviarBatch(ctx context.Context, itens []SubmissaoJudge0) err
 	return nil
 }
 
-// EnviarSync cria uma submissão individual e aguarda o resultado inline
-// (POST /submissions?wait=true&base64_encoded=false, conforme PROBES.md).
+// EnviarSync cria submissão individual assíncrona (sem ?wait=true para não
+// prender threads do servidor HTTP do Judge0) e faz polling curto até concluir.
 func (cli *Client) EnviarSync(ctx context.Context, item SubmissaoJudge0) (RespostaJudge0, error) {
 	if strings.TrimSpace(item.SourceCode) == "" {
 		return RespostaJudge0{Status: RawStatus(StatusWrongAnswerID)}, nil
@@ -283,9 +283,37 @@ func (cli *Client) EnviarSync(ctx context.Context, item SubmissaoJudge0) (Respos
 	callCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
+	out, err := cli.postSubmissao(callCtx, body)
+	if err != nil {
+		return RespostaJudge0{}, err
+	}
+	if out.StatusID() > 2 {
+		return out, nil
+	}
+	if out.Token == "" {
+		return RespostaJudge0{}, fmt.Errorf("judge0 sync: resposta sem token e status=%d", out.StatusID())
+	}
+	for {
+		select {
+		case <-callCtx.Done():
+			return out, callCtx.Err()
+		case <-time.After(150 * time.Millisecond):
+		}
+		res, err := cli.getSubmissao(callCtx, out.Token)
+		if err != nil {
+			return out, err
+		}
+		out = res
+		if out.StatusID() > 2 {
+			return out, nil
+		}
+	}
+}
+
+func (cli *Client) postSubmissao(ctx context.Context, body []byte) (RespostaJudge0, error) {
 	req, err := http.NewRequestWithContext(
-		callCtx, http.MethodPost,
-		cli.base+"/submissions?wait=true&base64_encoded=false", bytes.NewReader(body),
+		ctx, http.MethodPost,
+		cli.base+"/submissions?base64_encoded=false", bytes.NewReader(body),
 	)
 	if err != nil {
 		return RespostaJudge0{}, err
@@ -294,6 +322,24 @@ func (cli *Client) EnviarSync(ctx context.Context, item SubmissaoJudge0) (Respos
 	if cli.token != "" {
 		req.Header.Set("X-Auth-Token", cli.token)
 	}
+	return cli.executarReq(req)
+}
+
+func (cli *Client) getSubmissao(ctx context.Context, token string) (RespostaJudge0, error) {
+	req, err := http.NewRequestWithContext(
+		ctx, http.MethodGet,
+		cli.base+"/submissions/"+token+"?base64_encoded=false", nil,
+	)
+	if err != nil {
+		return RespostaJudge0{}, err
+	}
+	if cli.token != "" {
+		req.Header.Set("X-Auth-Token", cli.token)
+	}
+	return cli.executarReq(req)
+}
+
+func (cli *Client) executarReq(req *http.Request) (RespostaJudge0, error) {
 	resp, err := cli.httpDo.Do(req)
 	if err != nil {
 		return RespostaJudge0{}, err
@@ -313,10 +359,9 @@ func (cli *Client) EnviarSync(ctx context.Context, item SubmissaoJudge0) (Respos
 	return out, nil
 }
 
-// EnviarBatchSincrono executa cada item sincronamente via /submissions?wait=true
-// (no Judge0 1.13 o endpoint /submissions/batch?wait=true devolve apenas tokens,
-// não resultados inline — ver PROBES.md). Aplica orçamento total de tempo para
-// impedir travamento da API quando há vários casos de teste.
+// EnviarBatchSincrono envia todos os itens em lote (POST /submissions/batch,
+// fatiado em até MaxBatchSize=20) e faz polling em lote (GET /submissions/batch?tokens=...)
+// até todos concluírem, sem prender threads do servidor Judge0 com wait=true.
 func (cli *Client) EnviarBatchSincrono(
 	ctx context.Context, itens []SubmissaoJudge0,
 ) ([]RespostaJudge0, error) {
@@ -329,15 +374,131 @@ func (cli *Client) EnviarBatchSincrono(
 	totalCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	out := make([]RespostaJudge0, 0, len(itens))
-	for _, it := range itens {
-		r, err := cli.EnviarSync(totalCtx, it)
+	out := make([]RespostaJudge0, len(itens))
+	var pendentesIdx []int
+	var pendentes []SubmissaoJudge0
+	for i, it := range itens {
+		if strings.TrimSpace(it.SourceCode) == "" {
+			out[i] = RespostaJudge0{Status: RawStatus(StatusWrongAnswerID)}
+			continue
+		}
+		pendentesIdx = append(pendentesIdx, i)
+		pendentes = append(pendentes, it)
+	}
+
+	for inicio := 0; inicio < len(pendentes); inicio += MaxBatchSize {
+		fim := inicio + MaxBatchSize
+		if fim > len(pendentes) {
+			fim = len(pendentes)
+		}
+		fatia := pendentes[inicio:fim]
+		fatiaIdx := pendentesIdx[inicio:fim]
+
+		envelope := struct {
+			Submissions []SubmissaoJudge0 `json:"submissions"`
+		}{Submissions: fatia}
+		body, err := json.Marshal(envelope)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, r)
+		req, err := http.NewRequestWithContext(
+			totalCtx, http.MethodPost, cli.base+"/submissions/batch?base64_encoded=false", bytes.NewReader(body),
+		)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if cli.token != "" {
+			req.Header.Set("X-Auth-Token", cli.token)
+		}
+		dados, err := cli.executarReqRaw(req)
+		if err != nil {
+			return nil, err
+		}
+		var postResps []RespostaJudge0
+		if err := json.Unmarshal(dados, &postResps); err != nil {
+			return nil, err
+		}
+		if len(postResps) != len(fatia) {
+			return nil, fmt.Errorf("judge0 batch: esperado %d itens, recebido %d", len(fatia), len(postResps))
+		}
+
+		todosProntos := true
+		tokens := make([]string, len(fatia))
+		for k, r := range postResps {
+			out[fatiaIdx[k]] = r
+			tokens[k] = r.Token
+			if r.StatusID() <= 2 {
+				todosProntos = false
+			}
+		}
+		if todosProntos {
+			continue
+		}
+		for _, tok := range tokens {
+			if tok == "" {
+				return nil, fmt.Errorf("judge0 batch: item sem token")
+			}
+		}
+		tokensParam := strings.Join(tokens, ",")
+		for {
+			select {
+			case <-totalCtx.Done():
+				return nil, totalCtx.Err()
+			case <-time.After(150 * time.Millisecond):
+			}
+			getReq, err := http.NewRequestWithContext(
+				totalCtx, http.MethodGet,
+				cli.base+"/submissions/batch?tokens="+tokensParam+"&base64_encoded=false", nil,
+			)
+			if err != nil {
+				return nil, err
+			}
+			if cli.token != "" {
+				getReq.Header.Set("X-Auth-Token", cli.token)
+			}
+			getDados, err := cli.executarReqRaw(getReq)
+			if err != nil {
+				return nil, err
+			}
+			var batchGet struct {
+				Submissions []RespostaJudge0 `json:"submissions"`
+			}
+			if err := json.Unmarshal(getDados, &batchGet); err != nil {
+				return nil, err
+			}
+			if len(batchGet.Submissions) != len(fatia) {
+				return nil, fmt.Errorf("judge0 batch get: esperado %d itens, recebido %d", len(fatia), len(batchGet.Submissions))
+			}
+			prontos := true
+			for k, r := range batchGet.Submissions {
+				out[fatiaIdx[k]] = r
+				if r.StatusID() <= 2 {
+					prontos = false
+				}
+			}
+			if prontos {
+				break
+			}
+		}
 	}
 	return out, nil
+}
+
+func (cli *Client) executarReqRaw(req *http.Request) ([]byte, error) {
+	resp, err := cli.httpDo.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	dados, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode/100 != 2 {
+		return nil, fmt.Errorf("judge0 sync: status %d: %s", resp.StatusCode, dados)
+	}
+	return dados, nil
 }
 
 // Saude ping simples com timeout curto para diagnóstico / verificação prévia.
