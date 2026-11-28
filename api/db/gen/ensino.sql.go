@@ -294,6 +294,28 @@ func (q *Queries) GetTurma(ctx context.Context, id int64) (GetTurmaRow, error) {
 	return i, err
 }
 
+const hasMatriculaAtiva = `-- name: HasMatriculaAtiva :one
+SELECT EXISTS (
+  SELECT 1
+  FROM matriculas
+  WHERE turma_id = $1
+    AND aluno_id = $2
+    AND saida_em IS NULL
+)
+`
+
+type HasMatriculaAtivaParams struct {
+	TurmaID int64 `json:"turma_id"`
+	AlunoID int64 `json:"aluno_id"`
+}
+
+func (q *Queries) HasMatriculaAtiva(ctx context.Context, arg HasMatriculaAtivaParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasMatriculaAtiva, arg.TurmaID, arg.AlunoID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const insertMateria = `-- name: InsertMateria :one
 
 
@@ -469,7 +491,7 @@ type ListMatriculasRow struct {
 	AlunoStatus     string             `json:"aluno_status"`
 	AlunoFirstName  string             `json:"aluno_first_name"`
 	AlunoLastName   string             `json:"aluno_last_name"`
-	ConviteExpirado bool               `json:"convite_expirado"`
+	ConviteExpirado pgtype.Bool        `json:"convite_expirado"`
 }
 
 func (q *Queries) ListMatriculas(ctx context.Context, arg ListMatriculasParams) ([]ListMatriculasRow, error) {
@@ -500,28 +522,6 @@ func (q *Queries) ListMatriculas(ctx context.Context, arg ListMatriculasParams) 
 		return nil, err
 	}
 	return items, nil
-}
-
-const hasMatriculaAtiva = `-- name: HasMatriculaAtiva :one
-SELECT EXISTS (
-  SELECT 1
-  FROM matriculas
-  WHERE turma_id = $1
-    AND aluno_id = $2
-    AND saida_em IS NULL
-)
-`
-
-type HasMatriculaAtivaParams struct {
-	TurmaID int64 `json:"turma_id"`
-	AlunoID int64 `json:"aluno_id"`
-}
-
-func (q *Queries) HasMatriculaAtiva(ctx context.Context, arg HasMatriculaAtivaParams) (bool, error) {
-	row := q.db.QueryRow(ctx, hasMatriculaAtiva, arg.TurmaID, arg.AlunoID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
 }
 
 const listPeriodos = `-- name: ListPeriodos :many

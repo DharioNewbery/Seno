@@ -125,6 +125,7 @@ type MonitorEstadoAluno struct {
 	CorrecaoStatus *string            `json:"correcao_status"`
 	PrazoEfetivo   pgtype.Timestamptz `json:"prazo_efetivo"`
 	AtualizadoEm   pgtype.Timestamptz `json:"atualizado_em"`
+	IniciadaEm     pgtype.Timestamptz `json:"iniciada_em"`
 }
 
 type OneTimeToken struct {

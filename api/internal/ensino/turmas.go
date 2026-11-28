@@ -455,7 +455,7 @@ func (s *Service) ListarMatriculas(ctx context.Context, actor domain.User, turma
 				FirstName:       row.AlunoFirstName,
 				LastName:        row.AlunoLastName,
 				Status:          row.AlunoStatus,
-				ConviteExpirado: row.ConviteExpirado,
+				ConviteExpirado: row.ConviteExpirado.Valid && row.ConviteExpirado.Bool,
 			},
 			EntradaEm: row.EntradaEm.Time,
 			SaidaEm:   saida,
