@@ -96,16 +96,10 @@ export function nomeMateriaAtividade(
 }
 
 export type EtapaTimelineId =
-  | "inicio"
-  | "em_progresso"
-  | "entregue"
-  | "corrigida";
+  "inicio" | "em_progresso" | "entregue" | "corrigida";
 
 export type EstadoEtapaTimeline =
-  | "concluida"
-  | "atual"
-  | "pendente"
-  | "expirada";
+  "concluida" | "atual" | "pendente" | "expirada";
 
 export interface EtapaTimeline {
   id: EtapaTimelineId;
@@ -157,11 +151,7 @@ export function timelineAtividadeAluno(
   }
 
   const estadoInicio: EstadoEtapaTimeline =
-    entregue || emProgresso
-      ? "concluida"
-      : jaAbriu
-        ? "atual"
-        : "pendente";
+    entregue || emProgresso ? "concluida" : jaAbriu ? "atual" : "pendente";
 
   const estadoEmProgresso: EstadoEtapaTimeline = entregue
     ? "concluida"
@@ -234,10 +224,7 @@ export interface SetorData<T> {
  * Determina a chave de data principal de uma atribuição para agrupamento em setores.
  */
 export function chaveDataAtividade(
-  a: Pick<
-    AtribuicaoDoAluno,
-    "prazo" | "inicio" | "entregue" | "entregue_em"
-  >,
+  a: Pick<AtribuicaoDoAluno, "prazo" | "inicio" | "entregue" | "entregue_em">,
 ): string {
   const bruto = a.entregue
     ? (a.entregue_em ?? a.prazo ?? a.inicio)
@@ -251,7 +238,12 @@ export function chaveDataAtividade(
 export function agruparAtividadesPorData<
   T extends Pick<
     AtribuicaoDoAluno,
-    "prazo" | "inicio" | "entregue" | "entregue_em" | "em_andamento" | "iniciada_em"
+    | "prazo"
+    | "inicio"
+    | "entregue"
+    | "entregue_em"
+    | "em_andamento"
+    | "iniciada_em"
   > & { turma_ativa?: boolean },
 >(lista: T[] | null | undefined, mostrarEntregues = false): SetorData<T>[] {
   const filtradas = filtrarAtividadesAluno(lista, mostrarEntregues);

@@ -105,7 +105,9 @@ export function montarAgenda<T extends AtribuicaoAgenda>(
     });
 }
 
-export interface ResumoPainelAluno<T extends AtribuicaoDoAluno = AtribuicaoDoAluno> {
+export interface ResumoPainelAluno<
+  T extends AtribuicaoDoAluno = AtribuicaoDoAluno,
+> {
   paraHoje: number;
   pendentes: number;
   atrasadasEntregaveis: number;

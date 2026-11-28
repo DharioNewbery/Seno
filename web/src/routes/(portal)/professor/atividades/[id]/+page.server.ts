@@ -37,7 +37,11 @@ export const load: PageServerLoad = async ({
     return {
       id,
       atividade:
-        (ra.body as { nome?: string; bloqueada?: boolean; tarefas?: unknown[] } | null) ?? null,
+        (ra.body as {
+          nome?: string;
+          bloqueada?: boolean;
+          tarefas?: unknown[];
+        } | null) ?? null,
       tarefas:
         (
           rt.body as {

@@ -72,9 +72,21 @@ describe("Portal do Aluno — Atividades", () => {
   });
 
   it("filtra atividades por mostrarEntregues (false/true) e omite turmas encerradas", () => {
-    const naoIniciada = criarAtividadeMock({ id: 1, em_andamento: false, entregue: false });
-    const emProgresso = criarAtividadeMock({ id: 2, em_andamento: true, entregue: false });
-    const entregue = criarAtividadeMock({ id: 3, em_andamento: false, entregue: true });
+    const naoIniciada = criarAtividadeMock({
+      id: 1,
+      em_andamento: false,
+      entregue: false,
+    });
+    const emProgresso = criarAtividadeMock({
+      id: 2,
+      em_andamento: true,
+      entregue: false,
+    });
+    const entregue = criarAtividadeMock({
+      id: 3,
+      em_andamento: false,
+      entregue: true,
+    });
     const turmaEncerradaAtual = criarAtividadeMock({
       id: 4,
       em_andamento: false,
@@ -89,13 +101,25 @@ describe("Portal do Aluno — Atividades", () => {
     });
 
     const apenasPendentes = filtrarAtividadesAluno(
-      [naoIniciada, emProgresso, entregue, turmaEncerradaAtual, turmaEncerradaEntregue],
+      [
+        naoIniciada,
+        emProgresso,
+        entregue,
+        turmaEncerradaAtual,
+        turmaEncerradaEntregue,
+      ],
       false,
     );
     expect(apenasPendentes.map((a) => a.id)).toEqual([2, 1]);
 
     const comEntregues = filtrarAtividadesAluno(
-      [naoIniciada, emProgresso, entregue, turmaEncerradaAtual, turmaEncerradaEntregue],
+      [
+        naoIniciada,
+        emProgresso,
+        entregue,
+        turmaEncerradaAtual,
+        turmaEncerradaEntregue,
+      ],
       true,
     );
     expect(comEntregues.map((a) => a.id)).toEqual([2, 1, 3]);
@@ -205,9 +229,18 @@ describe("Portal do Aluno — Atividades", () => {
   });
 
   it("agrupa atividades por data em ordem cronológica e encontra o dia mais atual", () => {
-    const a1 = criarAtividadeMock({ id: 1, prazo: "2026-11-25T18:00:00-03:00" });
-    const a2 = criarAtividadeMock({ id: 2, prazo: "2026-11-21T18:00:00-03:00" });
-    const a3 = criarAtividadeMock({ id: 3, prazo: "2026-11-25T21:00:00-03:00" });
+    const a1 = criarAtividadeMock({
+      id: 1,
+      prazo: "2026-11-25T18:00:00-03:00",
+    });
+    const a2 = criarAtividadeMock({
+      id: 2,
+      prazo: "2026-11-21T18:00:00-03:00",
+    });
+    const a3 = criarAtividadeMock({
+      id: 3,
+      prazo: "2026-11-25T21:00:00-03:00",
+    });
 
     const setores = agruparAtividadesPorData([a1, a2, a3], false);
     expect(setores.map((s) => s.chave)).toEqual(["2026-11-21", "2026-11-25"]);

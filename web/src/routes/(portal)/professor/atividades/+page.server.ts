@@ -35,7 +35,10 @@ export const actions: Actions = {
     const form = await evento.request.formData();
     const nome = String(form.get("nome") ?? "").trim();
     if (!nome) {
-      return fail(422, { erroCriar: "Informe o nome da atividade.", nomeCriar: "" });
+      return fail(422, {
+        erroCriar: "Informe o nome da atividade.",
+        nomeCriar: "",
+      });
     }
     const r = await criarAtividade(evento.request, token, {
       nome,

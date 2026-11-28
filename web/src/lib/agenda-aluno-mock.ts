@@ -177,8 +177,8 @@ export function atribuicoesMock(agora = new Date()): AtribuicaoDoAluno[] {
     // +2d: um item
     mk(iso(2, 15), "PRG101", { atividade_nome: "Recursão e Busca Binária" }),
     // +4d: muitas atividades no mesmo dia
-    ...["MAT101", "FIS201", "PRG101", "EST301", "BIO110", "QUI120"].map((m, i) =>
-      mk(iso(4, 8 + i), m, i % 2 ? noPrazo : {}),
+    ...["MAT101", "FIS201", "PRG101", "EST301", "BIO110", "QUI120"].map(
+      (m, i) => mk(iso(4, 8 + i), m, i % 2 ? noPrazo : {}),
     ),
     // turma inativa: não deve aparecer
     mk(iso(1, 10), "INATIVA", { turma_ativa: false }),

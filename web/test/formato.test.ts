@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { dataHora, deCampoDataHora, paraCampoDataHora } from "../src/lib/formato";
+import {
+  dataHora,
+  deCampoDataHora,
+  paraCampoDataHora,
+} from "../src/lib/formato";
 
 describe("formato de data/hora para atribuições", () => {
   it("converte ISO UTC para datetime-local em America/Belem (-03:00) e volta sem deslocamento", () => {

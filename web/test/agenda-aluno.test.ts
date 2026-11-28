@@ -129,7 +129,14 @@ describe("Agenda e painel inicial do aluno (/aluno)", () => {
     ];
 
     const colunas = montarAgenda(lista, agora);
-    expect(colunas.map((c) => ({ dia: c.dia, tom: c.tom, entregues: c.entregues, total: c.total }))).toEqual([
+    expect(
+      colunas.map((c) => ({
+        dia: c.dia,
+        tom: c.tom,
+        entregues: c.entregues,
+        total: c.total,
+      })),
+    ).toEqual([
       { dia: "2026-11-18", tom: "passado", entregues: 1, total: 2 },
       { dia: "2026-11-19", tom: "passado-aberto", entregues: 0, total: 1 },
       { dia: "2026-11-20", tom: "hoje", entregues: 0, total: 1 },

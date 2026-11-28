@@ -64,7 +64,9 @@ export function paraCampoDataHora(
 export function deCampoDataHora(bruto: string | null | undefined): Date | null {
   const texto = (bruto ?? "").trim();
   if (!texto) return null;
-  const comFuso = /(?:Z|[+-]\d{2}:\d{2})$/.test(texto) ? texto : `${texto}-03:00`;
+  const comFuso = /(?:Z|[+-]\d{2}:\d{2})$/.test(texto)
+    ? texto
+    : `${texto}-03:00`;
   const d = new Date(comFuso);
   return Number.isNaN(d.getTime()) ? null : d;
 }
