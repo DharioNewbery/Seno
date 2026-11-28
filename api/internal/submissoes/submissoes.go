@@ -406,7 +406,7 @@ func (s *Service) listarEntregasMonitor(
 		       COALESCE(NULLIF(TRIM(p.first_name || ' ' || p.last_name), ''), u.email),
 		       ma.entregue_em,
 		       COALESCE(ma.entregue_em > ma.prazo_efetivo, false),
-		       ma.nota_auto::float8, ma.correcao_status,
+		       ma.nota_auto::float8, COALESCE(ma.correcao_status, ''),
 		       ma.estado, ma.prazo_efetivo
 		FROM monitor_estado_aluno ma
 		JOIN users u ON u.id = ma.aluno_id

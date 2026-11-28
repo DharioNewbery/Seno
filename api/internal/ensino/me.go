@@ -22,30 +22,30 @@ import (
 // AtribuicaoDoAluno é a atribuição na visão do aluno, com o estado do
 // rascunho (sem submissões ainda, "em andamento" = tentativa aberta).
 type AtribuicaoDoAluno struct {
-	ID            int64      `json:"id"`
-	TurmaID       int64      `json:"turma_id"`
-	AtividadeID   int64      `json:"atividade_id"`
-	Autocomplete  bool       `json:"autocomplete"`
-	Inicio        *time.Time `json:"inicio,omitempty"`
-	Prazo         *time.Time `json:"prazo,omitempty"`
-	DuracaoSeg    *int32     `json:"duracao_seg,omitempty"`
-	PodeAtrasado  bool       `json:"pode_atrasado"`
+	ID              int64      `json:"id"`
+	TurmaID         int64      `json:"turma_id"`
+	AtividadeID     int64      `json:"atividade_id"`
+	Autocomplete    bool       `json:"autocomplete"`
+	Inicio          *time.Time `json:"inicio,omitempty"`
+	Prazo           *time.Time `json:"prazo,omitempty"`
+	DuracaoSeg      *int32     `json:"duracao_seg,omitempty"`
+	PodeAtrasado    bool       `json:"pode_atrasado"`
 	MateriaCodigo   string     `json:"materia_codigo"`
 	MateriaNome     string     `json:"materia_nome"`
 	TurmaTitulo     string     `json:"turma_titulo,omitempty"`
 	TurmaAtiva      bool       `json:"turma_ativa"`
 	AtividadeNome   string     `json:"atividade_nome"`
 	PontuacaoMaxima int32      `json:"pontuacao_maxima"`
-	EmAndamento   bool       `json:"em_andamento"`
-	IniciadaEm    *time.Time `json:"iniciada_em,omitempty"`
-	MinhaRevisao  int32      `json:"minha_revisao,omitempty"`
-	GravadoEm     *time.Time `json:"gravado_em,omitempty"`
-	Entregue      bool       `json:"entregue"`
-	EntregueEm    *time.Time `json:"entregue_em,omitempty"`
-	Atrasada      bool       `json:"atrasada"`
-	SubmissaoID   *int64     `json:"submissao_id,omitempty"`
-	PublicadaEm   *time.Time `json:"publicada_em,omitempty"`
-	NotaFinal     *int32     `json:"nota_final,omitempty"`
+	EmAndamento     bool       `json:"em_andamento"`
+	IniciadaEm      *time.Time `json:"iniciada_em,omitempty"`
+	MinhaRevisao    int32      `json:"minha_revisao,omitempty"`
+	GravadoEm       *time.Time `json:"gravado_em,omitempty"`
+	Entregue        bool       `json:"entregue"`
+	EntregueEm      *time.Time `json:"entregue_em,omitempty"`
+	Atrasada        bool       `json:"atrasada"`
+	SubmissaoID     *int64     `json:"submissao_id,omitempty"`
+	PublicadaEm     *time.Time `json:"publicada_em,omitempty"`
+	NotaFinal       *int32     `json:"nota_final,omitempty"`
 }
 
 // TurmaDoAluno é a turma na visão do aluno.
@@ -244,29 +244,29 @@ func (s *Service) MinhasAtribuicoes(
 	out := make([]AtribuicaoDoAluno, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, AtribuicaoDoAluno{
-			ID:            row.ID,
-			TurmaID:       row.TurmaID,
-			AtividadeID:   row.AtividadeID,
-			Autocomplete:  row.Autocomplete,
-			Inicio:        horaPtr(row.Inicio),
-			Prazo:         horaPtr(row.Prazo),
-			DuracaoSeg:    intSegPtr(row.DuracaoSeg),
-			PodeAtrasado:  row.PodeAtrasado,
+			ID:              row.ID,
+			TurmaID:         row.TurmaID,
+			AtividadeID:     row.AtividadeID,
+			Autocomplete:    row.Autocomplete,
+			Inicio:          horaPtr(row.Inicio),
+			Prazo:           horaPtr(row.Prazo),
+			DuracaoSeg:      intSegPtr(row.DuracaoSeg),
+			PodeAtrasado:    row.PodeAtrasado,
 			MateriaCodigo:   row.MateriaCodigo,
 			MateriaNome:     row.MateriaNome,
 			TurmaTitulo:     tituloDe(row.TurmaTitulo),
 			TurmaAtiva:      !row.TurmaEncerradoEm.Valid,
 			AtividadeNome:   row.AtividadeNome,
 			PontuacaoMaxima: row.PontuacaoMaxima,
-			EmAndamento:   row.MinhaRevisao.Valid,
-			MinhaRevisao:  row.MinhaRevisao.Int32,
-			GravadoEm:     horaPtr(row.MeuGravadoEm),
-			Entregue:      row.MinhaEntrega.Valid,
-			EntregueEm:    horaPtr(row.MinhaEntrega),
-			Atrasada:      row.MinhaAtrasada.Bool,
-			SubmissaoID:   idPtr64(row.MinhaSubmissaoID),
-			PublicadaEm:   horaPtr(row.PublicadaEm),
-			NotaFinal:     notaPtrMeu(row.MinhaNotaTexto, row.PublicadaEm),
+			EmAndamento:     row.MinhaRevisao.Valid,
+			MinhaRevisao:    row.MinhaRevisao.Int32,
+			GravadoEm:       horaPtr(row.MeuGravadoEm),
+			Entregue:        row.MinhaEntrega.Valid,
+			EntregueEm:      horaPtr(row.MinhaEntrega),
+			Atrasada:        row.MinhaAtrasada.Bool,
+			SubmissaoID:     idPtr64(row.MinhaSubmissaoID),
+			PublicadaEm:     horaPtr(row.PublicadaEm),
+			NotaFinal:       notaPtrMeu(row.MinhaNotaTexto, row.PublicadaEm),
 		})
 	}
 	aplicaEstadoMonitor(ctx, s.store, actor.ID, out)
