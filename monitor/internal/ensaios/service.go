@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -174,6 +175,7 @@ func (s *Service) Agendar(ctx context.Context, mid string, aluno int64,
 	}, prioridadeTop); err != nil {
 		return "", fmt.Errorf("ensaios: agendando: %w", err)
 	}
+	slog.Info("ensaio agendado", "run", run, "monitor_id", mid, "aluno", aluno, "tarefa", ordem, "testes", len(testes))
 	return run, nil
 }
 
@@ -411,8 +413,9 @@ func (s *Service) registra(ctx context.Context, run string, testeOrdem int, r ju
 	if err != nil {
 		return fmt.Errorf("ensaios: callback: %w", err)
 	}
-	// disparo perdido: run inexistente (não bloqueia, só registra)
-	_ = ct
+	if ct.RowsAffected() > 0 {
+		slog.Info("ensaio resultado", "run", run, "teste", testeOrdem, "veredito", veredito, "tempo_seg", t)
+	}
 	return nil
 }
 
