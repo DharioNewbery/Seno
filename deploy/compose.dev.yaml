@@ -47,6 +47,8 @@ services:
       context: ..
       dockerfile: api/Dockerfile
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
     env_file: .env
     environment:
       SENO_DATABASE_URL: postgres://seno:seno@postgres:5432/seno?sslmode=disable
