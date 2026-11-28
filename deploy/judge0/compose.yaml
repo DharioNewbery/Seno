@@ -17,7 +17,8 @@ x-logging: &default-logging
 
 services:
   server:
-    image: mrkushalsm/judge0:cgv2
+    image: seno-judge0:cgv2
+    build: .
     volumes:
       - ./judge0.conf:/judge0.conf:ro
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -39,7 +40,8 @@ services:
     restart: always
 
   workers:
-    image: mrkushalsm/judge0:cgv2
+    image: seno-judge0:cgv2
+    build: .
     command: ["./scripts/workers"]
     volumes:
       - ./judge0.conf:/judge0.conf:ro
